@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Ticket, User, Phone } from 'lucide-react';
+import { Ticket, User, Phone, ArrowLeft } from 'lucide-react';
 
-export default function HomePage() {
+export default function GetTicketPage() {
     const router = useRouter();
     const [services, setServices] = useState<Service[]>([]);
     const [agencyName, setAgencyName] = useState('Hệ thống quản lý hàng đợi');
@@ -104,12 +104,22 @@ export default function HomePage() {
         );
     }
 
-    // BƯỚC 2: Chọn hình thức lấy số
     if (selectedService) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12">
                 <Card className="w-full max-w-md">
                     <CardHeader className="text-center">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mb-2 -ml-2 w-fit"
+                            onClick={() => {
+                                setSelectedService(null);
+                                setMode(null);
+                            }}
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại
+                        </Button>
                         <div
                             className="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white font-bold text-2xl mb-4"
                             style={{ backgroundColor: selectedService.color }}
@@ -135,17 +145,6 @@ export default function HomePage() {
                             disabled={isCreating}
                         >
                             <User className="w-5 h-5 mr-2" /> Lấy số có thông tin
-                        </Button>
-
-                        <Button
-                            variant="ghost"
-                            className="w-full"
-                            onClick={() => {
-                                setSelectedService(null);
-                                setMode(null);
-                            }}
-                        >
-                            Quay lại
                         </Button>
 
                         {mode === 'form' && (
@@ -202,13 +201,12 @@ export default function HomePage() {
         );
     }
 
-    // BƯỚC 1: Chọn dịch vụ
     return (
         <div className="min-h-screen bg-zinc-50 px-4 py-12">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-10">
                     <h1 className="text-4xl font-bold tracking-tight">{agencyName}</h1>
-                    <p className="text-muted-foreground mt-2 text-lg">Vui lòng chọn dịch vụ bạn cần sử dụng</p>
+                    <p className="text-muted-foreground mt-2 text-lg">Chọn dịch vụ để lấy số</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
