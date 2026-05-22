@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Ticket, Service, TicketStatus } from '@prisma/client';
+import { Ticket, Service } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, UserCheck, AlertCircle, CheckCircle2, MonitorPlay } from 'lucide-react';

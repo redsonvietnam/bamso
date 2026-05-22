@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { createTicket } from '@/lib/ticket-service';
-import { TicketStatus } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 
 export async function POST(request: Request) {

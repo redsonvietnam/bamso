@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { TicketStatus } from '@prisma/client';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,10 +14,13 @@ import {
     UserPlus,
     Monitor,
     History,
-    AlertCircle
+    AlertCircle,
+    Volume2,
+    VolumeX
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueueStore } from '@/stores/queue.store';
+import { useSpeech } from '@/hooks/useSpeech';
 
 interface QueuePanelProps {
     serviceId: string;
@@ -27,6 +30,8 @@ interface QueuePanelProps {
 export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
     const { tickets, isConnected, connectSSE, disconnectSSE } = useQueueStore();
     const [isLoading, setIsLoading] = useState(false);
+    const [soundEnabled, setSoundEnabled] = useState(true);
+    const { speak } = useSpeech();
 
     useEffect(() => {
         connectSSE(serviceId);
@@ -44,9 +49,34 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
         return tickets.filter(t => t.status === TicketStatus.PENDING);
     }, [tickets]);
 
+    const nextPendingTicket = useMemo(() => {
+        return pendingTickets.length > 0 ? pendingTickets[0] : null;
+    }, [pendingTickets]);
+
     const missedTickets = useMemo(() => {
         return tickets.filter(t => t.status === TicketStatus.MISSED);
     }, [tickets]);
+
+    // Speak when current ticket changes (i.e., after call-next)
+    useEffect(() => {
+        if (currentTicket && soundEnabled) {
+            speak(`Mời số ${currentTicket.ticketNumber} đến ${pos} để phục vụ`);
+        }
+        // only run when currentTicket.id changes (new ticket called)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTicket?.id, pos, soundEnabled]);
+
+    // Speak next pending ticket when current changes
+    useEffect(() => {
+        if (nextPendingTicket && currentTicket && soundEnabled) {
+            // Small delay so this announcement comes after the current ticket call
+            const timer = setTimeout(() => {
+                speak(`Số ${nextPendingTicket.ticketNumber} chuẩn bị`);
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTicket?.id, nextPendingTicket?.id, soundEnabled]);
 
     const handleAction = async (url: string, method: string, body: object, successMsg: string) => {
         setIsLoading(true);
@@ -86,9 +116,18 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                 <Monitor className="w-5 h-5 text-primary" />
                                 {pos} - Đang phục vụ
                             </CardTitle>
-                            <Badge variant={isConnected ? "secondary" : "destructive"}>
-                                {isConnected ? 'Real-time On' : 'Disconnected'}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setSoundEnabled(!soundEnabled)}
+                                    className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+                                    title={soundEnabled ? 'Tắt âm thanh thông báo' : 'Bật âm thanh thông báo'}
+                                >
+                                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                                </button>
+                                <Badge variant={isConnected ? "secondary" : "destructive"}>
+                                    {isConnected ? 'Real-time On' : 'Disconnected'}
+                                </Badge>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent className="pt-8 pb-8 text-center">

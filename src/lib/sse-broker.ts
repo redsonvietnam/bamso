@@ -78,8 +78,13 @@ class SSEBroker {
         }
     }
 
-    broadcastDisplayCall(ticketNumber: string, pos: string) {
-        const payload = JSON.stringify({ type: 'DISPLAY_CALL', ticketNumber, pos });
+    broadcastDisplayCall(ticketNumber: string, pos: string, nextTicketNumber?: string) {
+        const payload = JSON.stringify({
+            type: 'DISPLAY_CALL',
+            ticketNumber,
+            pos,
+            ...(nextTicketNumber && { nextTicketNumber }),
+        });
         const message = `data: ${payload}\n\n`;
 
         for (const client of this.displayClients) {
@@ -87,6 +92,17 @@ class SSEBroker {
                 client.controller.enqueue(encoder.encode(message));
             } catch {
                 this.unsubscribeDisplay(client.id);
+            }
+        }
+
+        // Also broadcast to queue clients so waiting dashboards can update
+        const queuePayload = JSON.stringify({ type: 'DISPLAY_CALL', ticketNumber, pos, nextTicketNumber });
+        const queueMessage = `data: ${queuePayload}\n\n`;
+        for (const client of this.queueClients) {
+            try {
+                client.controller.enqueue(encoder.encode(queueMessage));
+            } catch {
+                this.unsubscribeQueue(client.id);
             }
         }
     }
@@ -109,4 +125,3 @@ export const subscribeDisplay = sseBroker.subscribeDisplay.bind(sseBroker);
 export const unsubscribeDisplay = sseBroker.unsubscribeDisplay.bind(sseBroker);
 export const broadcastQueueUpdate = sseBroker.broadcastQueueUpdate.bind(sseBroker);
 export const broadcastDisplayCall = sseBroker.broadcastDisplayCall.bind(sseBroker);
-

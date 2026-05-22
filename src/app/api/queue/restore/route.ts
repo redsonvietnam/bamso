@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { restoreTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
+import { requireRole } from '@/lib/api-auth';
 
 export async function PUT(request: Request) {
     try {
+        const auth = await requireRole('STAFF', 'ADMIN');
+        if ('error' in auth) return auth.error;
+
         const body = await request.json();
         const { ticketId } = body;
 

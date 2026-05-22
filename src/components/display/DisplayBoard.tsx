@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Ticket, TicketStatus } from '@prisma/client';
+import { Ticket } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Monitor, Users, Volume2 } from 'lucide-react';
@@ -12,6 +13,7 @@ interface DisplayCallEvent {
     type: 'DISPLAY_CALL';
     ticketNumber: string;
     pos: string;
+    nextTicketNumber?: string;
 }
 
 interface QueueUpdateEvent {
@@ -51,13 +53,20 @@ export default function DisplayBoard() {
             try {
                 const data: DisplayCallEvent = JSON.parse(event.data);
                 if (data.type === 'DISPLAY_CALL') {
-                    const newCall: CurrentCall = { ...data, timestamp: Date.now() };
+                    const newCall: CurrentCall = { ticketNumber: data.ticketNumber, pos: data.pos, timestamp: Date.now() };
                     setCurrentCalls(prev => ({ ...prev, [data.pos]: newCall }));
                     setLastCalledTicket(newCall);
                     audioRef.current?.play().catch(e => console.error("Error playing sound:", e));
-                    
+
                     // Announce the ticket call via TTS
-                    speak(`Mời số ${data.ticketNumber} đến ${data.pos}`);
+                    speak(`Mời số ${data.ticketNumber} đến ${data.pos} để phục vụ`);
+
+                    // Announce the next ticket if available (after a short delay)
+                    if (data.nextTicketNumber) {
+                        setTimeout(() => {
+                            speak(`Số ${data.nextTicketNumber} chuẩn bị`);
+                        }, 3000);
+                    }
 
                     // Clear highlight after a few seconds
                     setTimeout(() => setLastCalledTicket(null), 5000);
@@ -107,8 +116,8 @@ export default function DisplayBoard() {
                             <Card
                                 key={call.pos}
                                 className={`bg-gray-800 border-2 ${lastCalledTicket?.pos === call.pos && lastCalledTicket?.ticketNumber === call.ticketNumber
-                                        ? 'border-yellow-400 shadow-yellow-500/50 animate-pulse-once'
-                                        : 'border-gray-700'
+                                    ? 'border-yellow-400 shadow-yellow-500/50 animate-pulse-once'
+                                    : 'border-gray-700'
                                     } transition-all duration-500 flex flex-col justify-center items-center p-6`}
                             >
                                 <CardTitle className="text-4xl font-bold text-gray-300 mb-4">

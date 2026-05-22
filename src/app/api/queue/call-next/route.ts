@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { callNextTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
+import { requireRole } from '@/lib/api-auth';
+import prisma from '@/lib/db';
+import { TicketStatus } from '@/lib/constants';
 
 export async function POST(request: Request) {
     try {
+        const auth = await requireRole('STAFF', 'ADMIN');
+        if ('error' in auth) return auth.error;
+
         const body = await request.json();
         const { serviceId, pos } = body;
 
@@ -16,9 +22,24 @@ export async function POST(request: Request) {
 
         const ticket = await callNextTicket(serviceId, pos);
 
-        // SSE Broadcast
+        // Find the next pending ticket for the same service (for "chuẩn bị" announcement)
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        const nextPending = await prisma.ticket.findFirst({
+            where: {
+                serviceId,
+                status: TicketStatus.PENDING,
+                createdAt: { gte: startOfDay, lte: endOfDay },
+                id: { not: ticket.id },
+            },
+            orderBy: { position: 'asc' },
+        });
+
+        // SSE Broadcast with next ticket info
         broadcastQueueUpdate(ticket.serviceId);
-        broadcastDisplayCall(ticket.ticketNumber, pos);
+        broadcastDisplayCall(ticket.ticketNumber, pos, nextPending?.ticketNumber);
 
         return NextResponse.json(ticket);
     } catch (error) {

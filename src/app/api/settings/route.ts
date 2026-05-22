@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { requireRole } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
     try {
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
     try {
+        const auth = await requireRole('ADMIN');
+        if ('error' in auth) return auth.error;
+
         const body = await request.json();
         const { key, value } = body;
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { Ticket, Service, TicketStatus } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
+import type { Ticket, Service } from '@prisma/client';
 
 type ExtendedTicket = Ticket & { service: Service };
 

@@ -54,6 +54,32 @@ export default function HomePage() {
         return regex.test(value);
     };
 
+    const handleQuickTicket = async () => {
+        if (!selectedService) return;
+
+        setIsCreating(true);
+        try {
+            const res = await fetch('/api/tickets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceId: selectedService.id }),
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Lỗi tạo vé.');
+            }
+
+            const ticket = await res.json();
+            toast.success('Lấy số thành công!');
+            router.push(`/track?ticketId=${ticket.id}`);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
     const handleCreateTicket = async () => {
         if (!selectedService) return;
 
@@ -99,7 +125,7 @@ export default function HomePage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
+            <div className="min-h-screen px-4 py-12">
                 <div className="max-w-4xl mx-auto">
                     <div className="text-center mb-10">
                         <Skeleton className="h-10 w-64 mx-auto mb-3" />
@@ -126,8 +152,8 @@ export default function HomePage() {
     // BƯỚC 2: Chọn hình thức lấy số
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
-                <Card className="w-full max-w-md">
+            <div className="flex min-h-screen items-center justify-center px-4 py-12">
+                <Card className="w-full max-w-md shadow-md">
                     <CardHeader className="text-center">
                         <div
                             className="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white font-bold text-2xl mb-4"
@@ -141,10 +167,10 @@ export default function HomePage() {
                     <CardContent className="space-y-4">
                         <Button
                             className="w-full h-12 text-lg font-medium"
-                            onClick={() => setMode('quick')}
+                            onClick={() => handleQuickTicket()}
                             disabled={isCreating}
                         >
-                            <Ticket className="w-5 h-5 mr-2" /> Lấy số nhanh
+                            <Ticket className="w-5 h-5 mr-2" /> {isCreating ? 'Đang lấy số...' : 'Lấy số nhanh'}
                         </Button>
 
                         <Button
@@ -201,20 +227,6 @@ export default function HomePage() {
                             </div>
                         )}
 
-                        {mode === 'quick' && (
-                            <div className="pt-4 border-t mt-4 text-center space-y-4">
-                                <p className="text-muted-foreground">
-                                    Bạn có muốn lấy số ngay cho dịch vụ <strong>{selectedService.name}</strong>?
-                                </p>
-                                <Button
-                                    className="w-full h-12 text-lg font-medium"
-                                    onClick={handleCreateTicket}
-                                    disabled={isCreating}
-                                >
-                                    {isCreating ? 'Đang tạo...' : 'Xác nhận lấy số'}
-                                </Button>
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -223,7 +235,7 @@ export default function HomePage() {
 
     // BƯỚC 1: Chọn dịch vụ
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
+        <div className="min-h-screen px-4 py-12">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-10">
                     <h1 className="text-4xl font-bold tracking-tight text-foreground">{agencyName}</h1>
@@ -234,7 +246,7 @@ export default function HomePage() {
                     {services.map((service) => (
                         <Card
                             key={service.id}
-                            className="cursor-pointer hover:shadow-xl transition-all border-2 hover:border-primary/50"
+                            className="cursor-pointer hover:shadow-xl transition-all border-2 hover:border-primary/50 shadow-md"
                             onClick={() => setSelectedService(service)}
                         >
                             <CardHeader>

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { TicketStatus } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
+import { requireRole } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
     try {
+        const auth = await requireRole('ADMIN');
+        if ('error' in auth) return auth.error;
+
         const { searchParams } = new URL(request.url);
         const dateParam = searchParams.get('date');
 

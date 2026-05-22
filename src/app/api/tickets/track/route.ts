@@ -26,6 +26,7 @@ export async function GET(request: Request) {
                 OR: [
                     { ticketNumber: query },
                     { phone: query },
+                    { id: query }, // Support lookup by UUID (used by /waiting page)
                 ],
             },
             include: {

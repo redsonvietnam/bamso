@@ -43,3 +43,10 @@ next-env.d.ts
 # local postgres database
 /pgdata
 
+# local sqlite database
+*.db
+*.db-journal
+
+# scratch / test files
+/scratch/
+

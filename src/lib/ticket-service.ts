@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import { TicketStatus } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
 
 export async function createTicket(data: {
     serviceId: string;

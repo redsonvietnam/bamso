@@ -6,24 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
-enum UserRole {
-  ADMIN
-  STAFF
-  KIOSK
-  DISPLAY
-}
-
-enum TicketStatus {
-  PENDING
-  CALLED
-  IN_PROGRESS
-  COMPLETED
-  MISSED
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -31,7 +15,7 @@ model User {
   username     String   @unique
   passwordHash String
   name         String
-  role         UserRole
+  role         String   @default("STAFF")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -54,17 +38,17 @@ model Ticket {
   id           String       @id @default(uuid())
   ticketNumber String       // e.g., A-001, B-002
   serviceId    String
-  service      Service      @relation(fields: [serviceId], references: [id])
+  service      Service  @relation(fields: [serviceId], references: [id])
   customerName String?
   phone        String?
-  status       TicketStatus @default(PENDING)
-  position     Int          // For queue ordering
-  missCount    Int          @default(0)
-  pos          String?      // Counter name/number (e.g. Quầy 1)
-  createdAt    DateTime     @default(now())
+  status       String   @default("PENDING")
+  position     Int      // For queue ordering
+  missCount    Int      @default(0)
+  pos          String?  // Counter name/number (e.g. Quầy 1)
+  createdAt    DateTime @default(now())
   calledAt     DateTime?
   completedAt  DateTime?
-  date         DateTime     @default(now()) // Date the ticket is for, defaults to creation date
+  date         DateTime @default(now()) // Date the ticket is for, defaults to creation date
 }
 
 model Settings {

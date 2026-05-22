@@ -10,7 +10,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const baseStyles = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer";
 
     let variantStyles = "bg-primary text-primary-foreground shadow hover:bg-primary/90";
-    if (variant === "outline") variantStyles = "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground";
+    if (variant === "outline") variantStyles = "border-2 border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground";
     if (variant === "ghost") variantStyles = "hover:bg-accent hover:text-accent-foreground";
     if (variant === "destructive") variantStyles = "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90";
 

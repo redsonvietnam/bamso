@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import { TicketStatus } from '@prisma/client';
+import { TicketStatus } from '@/lib/constants';
 
 /**
  * Helper to get the start and end of the current day.
@@ -60,7 +60,7 @@ export async function callNextTicket(serviceId: string, pos: string) {
                 service: true,
             },
         });
-    });
+    }, { timeout: 15000 });
 }
 
 /**
@@ -204,7 +204,7 @@ export async function skipTicket(ticketId: string) {
                 service: true,
             },
         });
-    });
+    }, { timeout: 15000 });
 }
 
 /**
@@ -255,5 +255,5 @@ export async function restoreTicket(ticketId: string) {
                 service: true,
             },
         });
-    });
+    }, { timeout: 15000 });
 }

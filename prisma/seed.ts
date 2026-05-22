@@ -1,4 +1,5 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { UserRole } from '../src/lib/constants';
 import { hashPassword } from '../src/lib/password';
 
 const prisma = new PrismaClient();
@@ -11,6 +12,8 @@ async function main() {
     const adminPasswordHash = hashPassword('admin@2026');
     const staff1PasswordHash = hashPassword('staff1@2026');
     const staff2PasswordHash = hashPassword('staff2@2026');
+    const kiosk1PasswordHash = hashPassword('kiosk@2026');
+    const display1PasswordHash = hashPassword('display@2026');
 
     const admin = await prisma.user.upsert({
         where: { username: 'admin' },
@@ -53,6 +56,34 @@ async function main() {
         },
     });
     console.log(`Created staff2 user with id: ${staff2.id}`);
+
+    const kiosk1 = await prisma.user.upsert({
+        where: { username: 'kiosk1' },
+        update: {
+            passwordHash: kiosk1PasswordHash,
+        },
+        create: {
+            username: 'kiosk1',
+            passwordHash: kiosk1PasswordHash,
+            name: 'Kiosk User',
+            role: UserRole.KIOSK,
+        },
+    });
+    console.log(`Created kiosk1 user with id: ${kiosk1.id}`);
+
+    const display1 = await prisma.user.upsert({
+        where: { username: 'display1' },
+        update: {
+            passwordHash: display1PasswordHash,
+        },
+        create: {
+            username: 'display1',
+            passwordHash: display1PasswordHash,
+            name: 'Display User',
+            role: UserRole.DISPLAY,
+        },
+    });
+    console.log(`Created display1 user with id: ${display1.id}`);
 
     // --- Services ---
     const serviceA = await prisma.service.upsert({

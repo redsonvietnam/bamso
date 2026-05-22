@@ -2,10 +2,8 @@ import { SignJWT, jwtVerify } from 'jose';
 
 // --- JWT Utility ---
 const getJwtSecret = () => {
-    if (!process.env.JWT_SECRET) {
-        throw new Error('JWT_SECRET is not defined in environment variables.');
-    }
-    return new TextEncoder().encode(process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'your-default-fallback-jwt-secret-key-change-me-in-production';
+    return new TextEncoder().encode(secret);
 };
 
 export async function signJWT(payload: { userId: string, role: string }): Promise<string> {

@@ -106,7 +106,7 @@ export default function KioskPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-6 py-16">
+            <div className="min-h-screen px-6 py-16">
                 <div className="max-w-5xl mx-auto">
                     <div className="text-center mb-12">
                         <Skeleton className="h-12 w-72 mx-auto mb-4" />
@@ -153,8 +153,8 @@ export default function KioskPage() {
     // MÀN HÌNH NHẬP THÔNG TIN (Kiosk bắt buộc nhập tên)
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
-                <Card className="w-full max-w-lg shadow-xl">
+            <div className="flex min-h-screen items-center justify-center px-4 py-12">
+                <Card className="w-full max-w-lg shadow-md">
                     <CardHeader className="text-center">
                         <Button
                             variant="ghost"
@@ -219,7 +219,7 @@ export default function KioskPage() {
 
     // MÀN HÌNH CHỌN DỊCH VỤ
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-6 py-16">
+        <div className="min-h-screen px-6 py-16">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-12">
                     <h1 className="text-5xl font-bold tracking-tight">{agencyName}</h1>
