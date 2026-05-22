@@ -21,11 +21,12 @@ export async function POST(request: Request) {
         broadcastDisplayCall(ticket.ticketNumber, pos);
 
         return NextResponse.json(ticket);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Call next error:', error);
-        const isNoTickets = error.message.includes('Không còn số thứ tự');
+        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
+        const isNoTickets = errorMessage.includes('Không còn số thứ tự');
         return NextResponse.json(
-            { error: error.message || 'Lỗi hệ thống', code: isNoTickets ? 'QUEUE_EMPTY' : 'INTERNAL_ERROR' },
+            { error: errorMessage, code: isNoTickets ? 'QUEUE_EMPTY' : 'INTERNAL_ERROR' },
             { status: isNoTickets ? 404 : 500 }
         );
     }

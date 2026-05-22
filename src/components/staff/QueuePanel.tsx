@@ -63,8 +63,8 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
             }
 
             toast.success(successMsg);
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Thao tác thất bại');
         } finally {
             setIsLoading(false);
         }

@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Ticket, User, Phone, ArrowLeft } from 'lucide-react';
+import { Ticket, User, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function GetTicketPage() {
     const router = useRouter();
@@ -69,7 +70,7 @@ export default function GetTicketPage() {
 
         setIsCreating(true);
         try {
-            const body: Record<string, any> = { serviceId: selectedService.id };
+            const body: Record<string, string> = { serviceId: selectedService.id };
             if (mode === 'form') {
                 body.customerName = customerName.trim();
                 body.phone = phone.trim();
@@ -89,8 +90,8 @@ export default function GetTicketPage() {
             const ticket = await res.json();
             toast.success('Lấy số thành công!');
             router.push(`/track?ticketId=${ticket.id}`);
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
         } finally {
             setIsCreating(false);
         }
@@ -98,15 +99,33 @@ export default function GetTicketPage() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-                <p className="text-muted-foreground">Đang tải...</p>
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
+                <div className="max-w-4xl mx-auto">
+                    <div className="text-center mb-10">
+                        <Skeleton className="h-10 w-64 mx-auto mb-3" />
+                        <Skeleton className="h-5 w-80 mx-auto" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {[1, 2].map((i) => (
+                            <div key={i} className="rounded-lg border bg-card p-6">
+                                <div className="flex items-center gap-4">
+                                    <Skeleton className="w-14 h-14 rounded-full" />
+                                    <div className="flex-1 space-y-2">
+                                        <Skeleton className="h-5 w-40" />
+                                        <Skeleton className="h-4 w-24" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12">
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
                 <Card className="w-full max-w-md">
                     <CardHeader className="text-center">
                         <Button
@@ -202,10 +221,10 @@ export default function GetTicketPage() {
     }
 
     return (
-        <div className="min-h-screen bg-zinc-50 px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-10">
-                    <h1 className="text-4xl font-bold tracking-tight">{agencyName}</h1>
+                    <h1 className="text-4xl font-bold tracking-tight text-foreground">{agencyName}</h1>
                     <p className="text-muted-foreground mt-2 text-lg">Chọn dịch vụ để lấy số</p>
                 </div>
 

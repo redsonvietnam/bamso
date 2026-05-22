@@ -32,8 +32,8 @@ export default function AdminPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-zinc-50">
-            <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
+        <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-orange-50">
+            <header className="bg-white/80 backdrop-blur-sm border-b px-6 py-4 flex justify-between items-center shadow-sm">
                 <div>
                     <h1 className="text-xl font-bold">Admin — Quản trị hệ thống</h1>
                     <p className="text-sm text-muted-foreground">Xin chào, {user?.name}</p>

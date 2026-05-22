@@ -26,11 +26,12 @@ export async function POST(request: Request) {
         broadcastQueueUpdate(ticket.serviceId);
 
         return NextResponse.json(ticket, { status: 201 });
-    } catch (error: any) {
+    } catch (error) {
         console.error('Ticket creation error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống khi tạo vé';
         return NextResponse.json(
-            { error: error.message || 'Lỗi hệ thống khi tạo vé', code: 'INTERNAL_ERROR' },
-            { status: error.message.includes('không tồn tại') ? 400 : 500 }
+            { error: errorMessage, code: 'INTERNAL_ERROR' },
+            { status: errorMessage.includes('không tồn tại') ? 400 : 500 }
         );
     }
 }

@@ -97,7 +97,7 @@ export async function PUT(request: Request) {
             );
         }
 
-        const updateData: Record<string, any> = { ...data };
+        const updateData: Record<string, unknown> = { ...data };
         if (password) {
             updateData.passwordHash = hashPassword(password);
         }
@@ -115,8 +115,8 @@ export async function PUT(request: Request) {
         });
 
         return NextResponse.json(user);
-    } catch (error: any) {
-        if (error.code === 'P2025') {
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
             return NextResponse.json(
                 { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
                 { status: 404 }
@@ -144,8 +144,8 @@ export async function DELETE(request: Request) {
 
         await prisma.user.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch (error: any) {
-        if (error.code === 'P2025') {
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
             return NextResponse.json(
                 { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
                 { status: 404 }

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Check } from 'lucide-react';
 
@@ -20,7 +19,7 @@ export default function SettingsPanel() {
                 if (res.ok) {
                     const data = await res.json();
                     const map: Record<string, string> = {};
-                    data.forEach((s: any) => { map[s.key] = s.value; });
+                    data.forEach((s: { key: string; value: string }) => { map[s.key] = s.value; });
                     setSettings(map);
                 }
             } catch (error) {
@@ -45,8 +44,8 @@ export default function SettingsPanel() {
             if (!res.ok) throw new Error('Lỗi lưu cài đặt.');
 
             toast.success('Đã lưu cài đặt.');
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi lưu cài đặt.');
         } finally {
             setIsSaving(false);
         }

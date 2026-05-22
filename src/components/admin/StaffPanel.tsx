@@ -37,7 +37,10 @@ export default function StaffPanel() {
         }
     };
 
-    useEffect(() => { fetchStaff(); }, []);
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchStaff();
+    }, []);
 
     const handleCreate = async () => {
         if (!formData.username || !formData.password || !formData.name || !formData.role) {
@@ -61,8 +64,8 @@ export default function StaffPanel() {
             setIsCreating(false);
             setFormData({ username: '', password: '', name: '', role: 'STAFF' });
             fetchStaff();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi tạo nhân viên.');
         }
     };
 
@@ -70,7 +73,7 @@ export default function StaffPanel() {
         if (!editingStaff) return;
 
         try {
-            const body: Record<string, any> = { id: editingStaff.id, name: formData.name, role: formData.role };
+            const body: Record<string, unknown> = { id: editingStaff.id, name: formData.name, role: formData.role };
             if (formData.password) {
                 body.password = formData.password;
             }
@@ -90,8 +93,8 @@ export default function StaffPanel() {
             setEditingStaff(null);
             setFormData({ username: '', password: '', name: '', role: 'STAFF' });
             fetchStaff();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi cập nhật.');
         }
     };
 
@@ -104,8 +107,8 @@ export default function StaffPanel() {
 
             toast.success('Đã xóa nhân viên.');
             fetchStaff();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi xóa nhân viên.');
         }
     };
 
@@ -218,7 +221,7 @@ export default function StaffPanel() {
 
 function StaffForm({ formData, setFormData, onSave, onCancel, saveLabel, isNew }: {
     formData: { username: string; password: string; name: string; role: string };
-    setFormData: (d: any) => void;
+    setFormData: React.Dispatch<React.SetStateAction<{ username: string; password: string; name: string; role: string }>>;
     onSave: () => void;
     onCancel: () => void;
     saveLabel: string;

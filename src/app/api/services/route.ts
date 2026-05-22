@@ -80,8 +80,8 @@ export async function PUT(request: Request) {
         });
 
         return NextResponse.json(service);
-    } catch (error: any) {
-        if (error.code === 'P2025') {
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
             return NextResponse.json(
                 { error: 'Không tìm thấy dịch vụ', code: 'NOT_FOUND' },
                 { status: 404 }
@@ -123,8 +123,8 @@ export async function DELETE(request: Request) {
 
         await prisma.service.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch (error: any) {
-        if (error.code === 'P2025') {
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
             return NextResponse.json(
                 { error: 'Không tìm thấy dịch vụ', code: 'NOT_FOUND' },
                 { status: 404 }

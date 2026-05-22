@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Monitor, UserPlus, LayoutGrid, Smartphone, RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DemoPage() {
     const [isSettingUp, setIsSettingUp] = useState(true);
@@ -91,14 +92,30 @@ export default function DemoPage() {
 
     if (isSettingUp) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-                <p className="text-muted-foreground">Đang chuẩn bị demo...</p>
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-12">
+                <div className="max-w-5xl mx-auto">
+                    <div className="text-center mb-10">
+                        <Skeleton className="h-10 w-96 mx-auto mb-3" />
+                        <Skeleton className="h-5 w-64 mx-auto" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="rounded-lg border bg-card p-6">
+                                <div className="flex items-center gap-3">
+                                    <Skeleton className="w-6 h-6" />
+                                    <Skeleton className="h-5 w-40" />
+                                </div>
+                                <Skeleton className="h-4 w-56 mt-3" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-zinc-50 px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-12">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-10">
                     <h1 className="text-4xl font-bold tracking-tight">Demo — Hệ thống quản lý hàng đợi</h1>

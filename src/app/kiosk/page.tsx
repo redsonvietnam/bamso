@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Ticket, User, Phone, ArrowLeft } from 'lucide-react';
+import { Ticket, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function KioskPage() {
     const [services, setServices] = useState<Service[]>([]);
@@ -96,8 +97,8 @@ export default function KioskPage() {
             const ticket = await res.json();
             setCreatedTicket(ticket.ticketNumber);
             toast.success('Lấy số thành công!');
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
         } finally {
             setIsCreating(false);
         }
@@ -105,8 +106,26 @@ export default function KioskPage() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-                <p className="text-2xl text-muted-foreground">Đang tải...</p>
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-6 py-16">
+                <div className="max-w-5xl mx-auto">
+                    <div className="text-center mb-12">
+                        <Skeleton className="h-12 w-72 mx-auto mb-4" />
+                        <Skeleton className="h-6 w-96 mx-auto" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {[1, 2].map((i) => (
+                            <div key={i} className="rounded-lg border bg-card p-10">
+                                <div className="flex items-center gap-6">
+                                    <Skeleton className="w-20 h-20 rounded-full" />
+                                    <div className="flex-1 space-y-3">
+                                        <Skeleton className="h-8 w-44" />
+                                        <Skeleton className="h-5 w-28" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -114,7 +133,7 @@ export default function KioskPage() {
     // MÀN HÌNH HIỂN THỊ SỐ PHIẾU SAU KHI LẤY
     if (createdTicket) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5 px-4">
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 px-4">
                 <Card className="w-full max-w-2xl text-center shadow-2xl border-4 border-primary/20">
                     <CardContent className="pt-16 pb-16 space-y-8">
                         <p className="text-3xl text-muted-foreground font-medium">Số phiếu của bạn là</p>
@@ -134,7 +153,7 @@ export default function KioskPage() {
     // MÀN HÌNH NHẬP THÔNG TIN (Kiosk bắt buộc nhập tên)
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12">
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12">
                 <Card className="w-full max-w-lg shadow-xl">
                     <CardHeader className="text-center">
                         <Button
@@ -200,7 +219,7 @@ export default function KioskPage() {
 
     // MÀN HÌNH CHỌN DỊCH VỤ
     return (
-        <div className="min-h-screen bg-zinc-50 px-6 py-16">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-6 py-16">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-12">
                     <h1 className="text-5xl font-bold tracking-tight">{agencyName}</h1>

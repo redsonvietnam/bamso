@@ -50,7 +50,7 @@ export default function TrackPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50 py-12 px-4 sm:px-6 lg:px-8">
             {foundTicket ? (
                 <div className="space-y-6">
                     <LiveTracker initialTicket={foundTicket} />

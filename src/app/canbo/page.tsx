@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/auth.store';
 import QueuePanel from '@/components/staff/QueuePanel';
 import { LogOut, ArrowLeft, Monitor } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 
 export default function CanboPage() {
@@ -50,8 +51,29 @@ export default function CanboPage() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50">
-                <p className="text-muted-foreground">Đang tải...</p>
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-12">
+                <div className="max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center mb-8">
+                        <div className="space-y-2">
+                            <Skeleton className="h-8 w-72" />
+                            <Skeleton className="h-4 w-40" />
+                        </div>
+                        <Skeleton className="h-9 w-28" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="rounded-lg border bg-card p-6">
+                                <div className="flex items-center gap-3">
+                                    <Skeleton className="w-10 h-10 rounded-full" />
+                                    <div className="flex-1 space-y-2">
+                                        <Skeleton className="h-5 w-32" />
+                                        <Skeleton className="h-4 w-20" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -59,8 +81,8 @@ export default function CanboPage() {
     // TRẠNG THÁI B: Đã chọn service và quầy → Hiển thị QueuePanel
     if (selectedService && selectedPos) {
         return (
-            <div className="min-h-screen bg-zinc-50">
-                <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+                <header className="bg-white/80 backdrop-blur-sm border-b px-6 py-4 flex justify-between items-center shadow-sm">
                     <div className="flex items-center gap-4">
                         <Button
                             variant="ghost"
@@ -91,7 +113,7 @@ export default function CanboPage() {
     // TRẠNG THÁI A2: Đã chọn service → Chọn quầy
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4">
                 <Card className="w-full max-w-md">
                     <CardHeader>
                         <Button
@@ -150,7 +172,7 @@ export default function CanboPage() {
 
     // TRẠNG THÁI A1: Chọn dịch vụ
     return (
-        <div className="min-h-screen bg-zinc-50 px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-12">
             <div className="max-w-4xl mx-auto">
                 <div className="flex justify-between items-center mb-8">
                     <div>

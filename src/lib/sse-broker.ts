@@ -1,5 +1,4 @@
 import prisma from '@/lib/db';
-import { TicketStatus } from '@prisma/client';
 
 const encoder = new TextEncoder();
 

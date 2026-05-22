@@ -51,7 +51,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 font-sans dark:bg-black">
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-12 font-sans">
             <Card className="w-full max-w-md border border-zinc-200/80 shadow-md dark:border-zinc-800">
                 <CardHeader className="space-y-1 text-center">
                     <CardTitle className="text-2xl font-bold tracking-tight">Đăng nhập hệ thống</CardTitle>

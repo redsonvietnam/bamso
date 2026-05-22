@@ -29,7 +29,10 @@ export default function ServicesPanel() {
         }
     };
 
-    useEffect(() => { fetchServices(); }, []);
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchServices();
+    }, []);
 
     const handleCreate = async () => {
         if (!formData.code || !formData.name || !formData.color || !formData.prefix) {
@@ -53,8 +56,8 @@ export default function ServicesPanel() {
             setIsCreating(false);
             setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 });
             fetchServices();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi tạo dịch vụ.');
         }
     };
 
@@ -76,8 +79,8 @@ export default function ServicesPanel() {
             toast.success('Cập nhật thành công!');
             setEditingService(null);
             fetchServices();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi cập nhật.');
         }
     };
 
@@ -90,8 +93,8 @@ export default function ServicesPanel() {
 
             toast.success('Đã xóa dịch vụ.');
             fetchServices();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi xóa dịch vụ.');
         }
     };
 
@@ -206,7 +209,7 @@ export default function ServicesPanel() {
 
 function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
     formData: { code: string; name: string; description: string; color: string; prefix: string; order: number };
-    setFormData: (d: any) => void;
+    setFormData: React.Dispatch<React.SetStateAction<{ code: string; name: string; description: string; color: string; prefix: string; order: number }>>;
     onSave: () => void;
     onCancel: () => void;
     saveLabel: string;

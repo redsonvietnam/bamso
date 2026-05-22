@@ -19,11 +19,12 @@ export async function PUT(request: Request) {
         broadcastQueueUpdate(ticket.serviceId);
 
         return NextResponse.json(ticket);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Complete ticket error:', error);
-        const isClientError = error.message.includes('Không tìm thấy') || error.message.includes('không ở trạng thái');
+        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
+        const isClientError = errorMessage.includes('Không tìm thấy') || errorMessage.includes('không ở trạng thái');
         return NextResponse.json(
-            { error: error.message || 'Lỗi hệ thống', code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
+            { error: errorMessage, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
             { status: isClientError ? 400 : 500 }
         );
     }

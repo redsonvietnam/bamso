@@ -52,7 +52,7 @@ model Service {
 
 model Ticket {
   id           String       @id @default(uuid())
-  ticketNumber String       @unique // e.g., A-001, B-002
+  ticketNumber String       // e.g., A-001, B-002
   serviceId    String
   service      Service      @relation(fields: [serviceId], references: [id])
   customerName String?

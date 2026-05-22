@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Ticket, TicketStatus, Service } from '@prisma/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Ticket, TicketStatus } from '@prisma/client';
+import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Monitor, Users, Volume2 } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
@@ -87,7 +87,7 @@ export default function DisplayBoard() {
             displayEventSource.close();
             queueEventSource.close();
         };
-    }, []);
+    }, [speak]);
 
     // Sort current calls by position name (e.g., Quầy 1, Quầy 2)
     const sortedCurrentCalls = useMemo(() => {
