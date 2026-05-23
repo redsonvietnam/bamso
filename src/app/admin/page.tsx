@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
-import { LogOut, Settings, Users, ListChecks, BarChart3 } from 'lucide-react';
+import { LogOut, Settings, Users, ListChecks, BarChart3, Volume2 } from 'lucide-react';
 import ServicesPanel from '@/components/admin/ServicesPanel';
 import StaffPanel from '@/components/admin/StaffPanel';
 import SettingsPanel from '@/components/admin/SettingsPanel';
 import StatsPanel from '@/components/admin/StatsPanel';
+import TtsPanel from '@/components/admin/TtsPanel';
 
-type Tab = 'services' | 'staff' | 'settings' | 'stats';
+type Tab = 'services' | 'staff' | 'settings' | 'stats' | 'tts';
 
 export default function AdminPage() {
     const { user, fetchMe, logout } = useAuthStore();
@@ -29,6 +30,7 @@ export default function AdminPage() {
         { id: 'staff', label: 'Nhân viên', icon: <Users className="w-4 h-4" /> },
         { id: 'stats', label: 'Thống kê', icon: <BarChart3 className="w-4 h-4" /> },
         { id: 'settings', label: 'Cài đặt', icon: <Settings className="w-4 h-4" /> },
+        { id: 'tts', label: 'Giọng nói', icon: <Volume2 className="w-4 h-4" /> },
     ];
 
     return (
@@ -62,6 +64,7 @@ export default function AdminPage() {
                 {activeTab === 'staff' && <StaffPanel />}
                 {activeTab === 'stats' && <StatsPanel />}
                 {activeTab === 'settings' && <SettingsPanel />}
+                {activeTab === 'tts' && <TtsPanel />}
             </div>
         </div>
     );

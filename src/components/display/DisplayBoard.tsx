@@ -40,7 +40,7 @@ export default function DisplayBoard() {
     const [isConnected, setIsConnected] = useState(false);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const { speak, isAudioUnlocked, unlockAudio } = useSpeech();
+    const { speak, speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
     const isProcessedRef = useRef(false);
 
     // Fetch initial data: counters list + active tickets
@@ -94,11 +94,11 @@ export default function DisplayBoard() {
                     // Play chime sound (will be silent until user unlocks audio)
                     audioRef.current?.play().catch(e => console.warn("Chime play skipped (may need user interaction):", e));
 
-                    const namePart = data.customerName ? ` quý khách ${data.customerName}` : '';
-                    speak(`Mời${namePart}, số ${data.ticketNumber} đến ${data.pos} để phục vụ`);
+                    speakAnnouncement(data.ticketNumber, data.pos);
 
                     if (data.nextTicketNumber) {
-                        setTimeout(() => speak(`Số ${data.nextTicketNumber} chuẩn bị`), 3000);
+                        // Queue sẽ phát tuần tự: câu "chuẩn bị" chỉ phát sau khi câu trên kết thúc
+                        speakPrepare(data.nextTicketNumber);
                     }
 
                     setTimeout(() => setLastCalledTicket(null), 5000);
@@ -146,7 +146,7 @@ export default function DisplayBoard() {
             displayEventSource.close();
             queueEventSource.close();
         };
-    }, [speak]);
+    }, [speak, speakAnnouncement, speakPrepare]);
 
     // Handle user interaction to unlock audio
     const handleUserInteraction = () => {
@@ -157,7 +157,7 @@ export default function DisplayBoard() {
             // Replay chime if audio just got unlocked
             if (audioRef.current) {
                 audioRef.current.currentTime = 0;
-                audioRef.current.play().catch(() => {});
+                audioRef.current.play().catch(() => { });
             }
         }
     };

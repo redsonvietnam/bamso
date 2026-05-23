@@ -135,6 +135,26 @@ async function main() {
     });
     console.log(`Created setting: ${counters.key} = ${counters.value}`);
 
+    // --- TTS Settings ---
+    const ttsSettings = [
+        { key: 'tts_enabled', value: 'true' },
+        { key: 'tts_speed', value: '0.9' },
+        { key: 'tts_volume', value: '1' },
+        { key: 'tts_provider', value: 'google' },
+        { key: 'tts_edge_voice', value: 'vi-VN-HoaiMyNeural' },
+        { key: 'tts_announcement_template', value: 'Mời số {ticketNumber} đến {pos} để phục vụ' },
+        { key: 'tts_prepare_template', value: 'Số {ticketNumber} chuẩn bị' },
+    ];
+
+    for (const s of ttsSettings) {
+        const setting = await prisma.settings.upsert({
+            where: { key: s.key },
+            update: { value: s.value },
+            create: s,
+        });
+        console.log(`Created setting: ${setting.key} = ${setting.value}`);
+    }
+
     console.log('Seeding finished.');
 }
 

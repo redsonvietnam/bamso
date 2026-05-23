@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 
 const DIGIT_MAP: Record<string, string> = {
     '0': 'không',
@@ -15,15 +15,115 @@ const DIGIT_MAP: Record<string, string> = {
     '9': 'chín',
 };
 
+export interface TtsSettings {
+    tts_enabled: string;
+    tts_speed: string;
+    tts_volume: string;
+    tts_provider: string;
+    tts_edge_voice: string;
+    tts_announcement_template: string;
+    tts_prepare_template: string;
+}
+
+const DEFAULT_TTS_SETTINGS: TtsSettings = {
+    tts_enabled: 'true',
+    tts_speed: '0.9',
+    tts_volume: '1',
+    tts_provider: 'google',
+    tts_edge_voice: 'vi-VN-HoaiMyNeural',
+    tts_announcement_template: 'Mời số {ticketNumber} đến {pos} để phục vụ',
+    tts_prepare_template: 'Số {ticketNumber} chuẩn bị',
+};
+
+// Voices list for Edge TTS
+export const EDGE_VI_VOICES = [
+    { id: 'vi-VN-HoaiMyNeural', name: 'Hoài My (Nữ)' },
+    { id: 'vi-VN-NamMinhNeural', name: 'Nam Minh (Nam)' },
+    { id: 'vi-VN-LanAnhNeural', name: 'Lan Anh (Nữ, Tự nhiên)' },
+    { id: 'vi-VN-NguyenBaoNeural', name: 'Nguyên Bảo (Nam, Tự nhiên)' },
+    { id: 'vi-VN-MyDuyenNeural', name: 'My Duyên (Nữ)' },
+    { id: 'vi-VN-MyLinhNeural', name: 'My Linh (Nữ, Tự nhiên)' },
+    { id: 'vi-VN-QuynhChiNeural', name: 'Quỳnh Chi (Nữ)' },
+    { id: 'vi-VN-BichNgocNeural', name: 'Bích Ngọc (Nữ, Tự nhiên)' },
+    { id: 'vi-VN-ThiLeNeural', name: 'Thi Lệ (Nữ, Tự nhiên)' },
+];
+
+let cachedSettings: TtsSettings | null = null;
+let settingsFetchPromise: Promise<TtsSettings> | null = null;
+
+async function fetchTtsSettings(): Promise<TtsSettings> {
+    if (cachedSettings) return cachedSettings;
+    if (settingsFetchPromise) return settingsFetchPromise;
+
+    settingsFetchPromise = (async () => {
+        try {
+            const res = await fetch('/api/settings');
+            if (res.ok) {
+                const data = await res.json();
+                const map: Record<string, string> = {};
+                data.forEach((s: { key: string; value: string }) => {
+                    map[s.key] = s.value;
+                });
+                const settings: TtsSettings = { ...DEFAULT_TTS_SETTINGS };
+                (Object.keys(DEFAULT_TTS_SETTINGS) as (keyof TtsSettings)[]).forEach((key) => {
+                    if (map[key] !== undefined) {
+                        (settings as unknown as Record<string, string>)[key] = map[key];
+                    }
+                });
+                cachedSettings = settings;
+                return settings;
+            }
+        } catch {
+            // Fallback to defaults
+        }
+        return DEFAULT_TTS_SETTINGS;
+    })();
+
+    return settingsFetchPromise;
+}
+
+/**
+ * Tìm giọng tiếng Việt có sẵn trong Web Speech API
+ * Hiện tại hầu hết browser Windows: Edge có "Microsoft HoaiMy Online (Natural)" (~vi-VN),
+ * Chrome chỉ có giọng Anh -> fallback mặc định.
+ */
+function getVietnameseVoice(): SpeechSynthesisVoice | null {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    // Ưu tiên giọng có locale vi-VN
+    const viVoice = voices.find(v =>
+        v.lang.startsWith('vi') || v.lang === 'vi-VN'
+    );
+    if (viVoice) return viVoice;
+    // Fallback: tìm bất kỳ giọng nào có tên chứa "Vietnamese"
+    const namedVi = voices.find(v =>
+        v.name.toLowerCase().includes('vietnamese') ||
+        v.name.toLowerCase().includes('hoai') ||
+        v.name.toLowerCase().includes('an')
+    );
+    return namedVi || null;
+}
+
 /**
  * Hook useSpeech
  * Xử lý phát âm thanh thông báo với cơ chế tự động tách số và fallback sang Web Speech API.
  * Hỗ trợ queuing: các lời nói được gọi trước khi audio unlocked sẽ được xếp hàng và phát sau.
+ * Đọc cài đặt TTS (tốc độ, âm lượng, provider, voice, template) từ DB qua API /api/settings.
  */
 export function useSpeech() {
     const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+    const [settings, setSettings] = useState<TtsSettings>(DEFAULT_TTS_SETTINGS);
     const queueRef = useRef<string[]>([]);
     const processingRef = useRef(false);
+    const settingsRef = useRef<TtsSettings>(DEFAULT_TTS_SETTINGS);
+
+    // Fetch settings on mount
+    useEffect(() => {
+        fetchTtsSettings().then((s) => {
+            setSettings(s);
+            settingsRef.current = s;
+        });
+    }, []);
 
     /**
      * Định dạng văn bản: Chỉ xử lý các CHỮ SỐ (0-9), giữ nguyên chữ cái và dấu câu.
@@ -40,22 +140,48 @@ export function useSpeech() {
     };
 
     /**
-     * Fallback: Sử dụng Web Speech API có sẵn trong trình duyệt.
+     * Áp dụng template để tạo câu thông báo.
      */
-    const speakWithWebSpeech = (text: string) => {
+    const applyTemplate = useCallback((template: string, ticketNumber: string, pos: string) => {
+        return template
+            .replace('{ticketNumber}', ticketNumber)
+            .replace('{pos}', pos);
+    }, []);
+
+    /**
+     * Fallback: Sử dụng Web Speech API có sẵn trong trình duyệt.
+     * Đã cải thiện: tự động chọn giọng tiếng Việt nếu có.
+     */
+    const speakWithWebSpeech = (text: string, onComplete?: () => void) => {
         if (typeof window !== 'undefined' && window.speechSynthesis) {
             // Hủy các câu đang đọc dở để tránh chồng lấn
             window.speechSynthesis.cancel();
 
+            const rate = parseFloat(settingsRef.current.tts_speed || '0.9');
+            const volume = parseFloat(settingsRef.current.tts_volume || '1');
+
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'vi-VN';
-            utterance.rate = 0.9; // Đọc chậm một chút để rõ ràng hơn
+            utterance.rate = rate;
+            utterance.volume = volume;
+
+            // Tự động chọn giọng tiếng Việt có sẵn (nếu có)
+            const viVoice = getVietnameseVoice();
+            if (viVoice) {
+                utterance.voice = viVoice;
+            }
+
+            utterance.onend = onComplete || (() => { });
             window.speechSynthesis.speak(utterance);
+        } else {
+            onComplete?.();
         }
     };
 
     /**
      * Xử lý từng item trong queue.
+     * Dùng onended để đảm bảo mỗi câu nói kết thúc hoàn toàn 
+     * trước khi chuyển sang câu tiếp theo, tránh chồng lấn âm thanh.
      */
     const processQueue = useCallback(() => {
         if (processingRef.current || queueRef.current.length === 0) return;
@@ -63,18 +189,53 @@ export function useSpeech() {
 
         const text = queueRef.current.shift()!;
         const formattedText = formatTextForSpeech(text);
+
+        const onComplete = () => {
+            processingRef.current = false;
+            processQueue();
+        };
+
+        const provider = settingsRef.current.tts_provider || 'google';
+        const volume = parseFloat(settingsRef.current.tts_volume || '1');
+
+        // Web Speech API
+        if (provider === 'webspeech') {
+            speakWithWebSpeech(formattedText, onComplete);
+            return;
+        }
+
+        // Microsoft Edge TTS (via server-side proxy)
+        if (provider === 'edge') {
+            const edgeVoice = settingsRef.current.tts_edge_voice || 'vi-VN-HoaiMyNeural';
+            const url = `/api/tts?provider=edge&voice=${encodeURIComponent(edgeVoice)}&text=${encodeURIComponent(formattedText)}`;
+            const audio = new Audio(url);
+            audio.volume = volume;
+            audio.onended = onComplete;
+            audio.onerror = () => {
+                console.warn('Edge TTS failed, falling back to Web Speech API');
+                speakWithWebSpeech(formattedText, onComplete);
+            };
+            audio.play().catch((err) => {
+                console.warn('Edge TTS play failed, falling back to Web Speech API:', err);
+                speakWithWebSpeech(formattedText, onComplete);
+            });
+            return;
+        }
+
+        // Default: Google TTS via proxy
         const audioUrl = `/api/tts?text=${encodeURIComponent(formattedText)}`;
 
         const audio = new Audio(audioUrl);
-        audio.play().then(() => {
-            processingRef.current = false;
-            // Process next item in queue
-            processQueue();
-        }).catch((err) => {
-            console.warn('Google TTS Proxy failed, falling back to Web Speech API:', err);
-            speakWithWebSpeech(formattedText);
-            processingRef.current = false;
-            processQueue();
+        audio.volume = volume;
+        audio.onended = onComplete;
+        audio.onerror = () => {
+            console.warn('Google TTS Proxy failed, falling back to Web Speech API');
+            speakWithWebSpeech(formattedText, onComplete);
+        };
+
+        audio.play().catch((err) => {
+            console.warn('Google TTS play failed, falling back to Web Speech API:', err);
+            speakWithWebSpeech(formattedText, onComplete);
         });
     }, []);
 
@@ -100,8 +261,14 @@ export function useSpeech() {
 
     /**
      * Phát âm thanh thông báo. Tự động xếp hàng nếu chưa unlock audio.
+     * Nếu TTS bị tắt (tts_enabled = false) thì không phát gì cả.
      */
     const speak = useCallback((text: string) => {
+        // Check if TTS is enabled globally
+        if (settingsRef.current.tts_enabled !== 'true') {
+            return;
+        }
+
         if (!isAudioUnlocked) {
             // Chưa unlock → xếp hàng để phát sau
             queueRef.current.push(text);
@@ -112,10 +279,31 @@ export function useSpeech() {
         processQueue();
     }, [isAudioUnlocked, processQueue]);
 
+    /**
+     * Phát thông báo sử dụng template từ settings.
+     */
+    const speakAnnouncement = useCallback((ticketNumber: string, pos: string) => {
+        const template = settingsRef.current.tts_announcement_template || DEFAULT_TTS_SETTINGS.tts_announcement_template;
+        const text = applyTemplate(template, ticketNumber, pos);
+        speak(text);
+    }, [speak, applyTemplate]);
+
+    /**
+     * Phát thông báo chuẩn bị đến lượt.
+     */
+    const speakPrepare = useCallback((ticketNumber: string) => {
+        const template = settingsRef.current.tts_prepare_template || DEFAULT_TTS_SETTINGS.tts_prepare_template;
+        const text = template.replace('{ticketNumber}', ticketNumber).replace('{pos}', '');
+        speak(text);
+    }, [speak]);
+
     return {
         speak,
+        speakAnnouncement,
+        speakPrepare,
         formatTextForSpeech,
         isAudioUnlocked,
         unlockAudio,
+        settings,
     };
 }
