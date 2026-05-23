@@ -48,13 +48,14 @@ class SSEBroker {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        const tickets = await prisma.ticket.findMany({
+        // Always query ALL tickets today so that display clients (no serviceId filter)
+        // receive the full picture. Per-client filtering is done in-memory below.
+        const allTickets = await prisma.ticket.findMany({
             where: {
                 createdAt: {
                     gte: startOfDay,
                     lte: endOfDay,
                 },
-                ...(serviceId && { serviceId }),
             },
             orderBy: {
                 position: 'asc',
@@ -64,11 +65,17 @@ class SSEBroker {
             },
         });
 
-        const payload = JSON.stringify({ type: 'QUEUE_UPDATE', tickets });
-        const message = `data: ${payload}\n\n`;
-
+        // Build per-client payload based on their serviceId filter
         for (const client of this.queueClients) {
+            const filtered = client.serviceId
+                ? allTickets.filter(t => t.serviceId === client.serviceId)
+                : allTickets;
+
+            // Only send if the triggered serviceId matches this client's filter,
+            // or if we're broadcasting to clients without a filter (display board)
             if (!serviceId || !client.serviceId || client.serviceId === serviceId) {
+                const payload = JSON.stringify({ type: 'QUEUE_UPDATE', tickets: filtered });
+                const message = `data: ${payload}\n\n`;
                 try {
                     client.controller.enqueue(encoder.encode(message));
                 } catch {
@@ -78,11 +85,12 @@ class SSEBroker {
         }
     }
 
-    broadcastDisplayCall(ticketNumber: string, pos: string, nextTicketNumber?: string) {
+    broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
         const payload = JSON.stringify({
             type: 'DISPLAY_CALL',
             ticketNumber,
             pos,
+            customerName: customerName || null,
             ...(nextTicketNumber && { nextTicketNumber }),
         });
         const message = `data: ${payload}\n\n`;

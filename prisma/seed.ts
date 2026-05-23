@@ -125,6 +125,16 @@ async function main() {
     });
     console.log(`Created setting: ${skipRules.key} = ${skipRules.value}`);
 
+    const counters = await prisma.settings.upsert({
+        where: { key: 'counters' },
+        update: { value: 'Quầy 1, Quầy 2, Quầy 3, Quầy 4' },
+        create: {
+            key: 'counters',
+            value: 'Quầy 1, Quầy 2, Quầy 3, Quầy 4',
+        },
+    });
+    console.log(`Created setting: ${counters.key} = ${counters.value}`);
+
     console.log('Seeding finished.');
 }
 

@@ -37,9 +37,9 @@ export async function POST(request: Request) {
             orderBy: { position: 'asc' },
         });
 
-        // SSE Broadcast with next ticket info
+        // SSE Broadcast with next ticket info + customer name
         broadcastQueueUpdate(ticket.serviceId);
-        broadcastDisplayCall(ticket.ticketNumber, pos, nextPending?.ticketNumber);
+        broadcastDisplayCall(ticket.ticketNumber, pos, ticket.customerName, nextPending?.ticketNumber);
 
         return NextResponse.json(ticket);
     } catch (error) {

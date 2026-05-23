@@ -1,0 +1,86 @@
+
+> bamso@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.148:3000
+- Environments: .env
+✓ Ready in 431ms
+
+○ Compiling / ...
+JWT verification failed: JWSSignatureVerificationFailed: signature verification failed
+    at async verifyJWT (src\lib\auth.ts:21:29)
+    at async proxy (src\proxy.ts:75:25)
+  19 |     const JWT_SECRET_BYTES = getJwtSecret();
+  20 |     try {
+> 21 |         const { payload } = await jwtVerify(token, JWT_SECRET_BYTES, { algorithms: ['HS256...
+     |                             ^
+  22 |         return payload as { userId: string, role: string };
+  23 |     } catch (error) {
+  24 |         console.error('JWT verification failed:', error); {
+  code: 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'
+}
+
+
+#
+# Fatal error in , line 0
+# Out of memory: HashMap::Initialize
+#
+#
+#
+#FailureMessage Object: 0000007A159FB6A0
+----- Native stack trace -----
+
+ 1: 00007FF665C77487 node::SetCppgcReference+16583
+ 2: 00007FF665B4CA6F node::TriggerNodeReport+74655
+ 3: 00007FF666DB2185 V8_Fatal+197
+ 4: 00007FF66672A473 v8::SharedValueConveyor::SharedValueConveyor+507411
+ 5: 00007FF666729F06 v8::SharedValueConveyor::SharedValueConveyor+506022
+ 6: 00007FF66672A1AC v8::SharedValueConveyor::SharedValueConveyor+506700
+ 7: 00007FF66672A048 v8::SharedValueConveyor::SharedValueConveyor+506344
+ 8: 00007FF6662F36E0 v8::base::Thread::StartSynchronously+9968
+ 9: 00007FF66632C119 v8::base::Thread::StartSynchronously+241961
+10: 00007FF6663299E9 v8::base::Thread::StartSynchronously+231929
+11: 00007FF66631E214 v8::base::Thread::StartSynchronously+184868
+12: 00007FF66632B784 v8::base::Thread::StartSynchronously+239508
+13: 00007FF66632ADBA v8::base::Thread::StartSynchronously+237002
+14: 00007FF66632A9C1 v8::base::Thread::StartSynchronously+235985
+15: 00007FF66632C2FA v8::base::Thread::StartSynchronously+242442
+16: 00007FF6663299E9 v8::base::Thread::StartSynchronously+231929
+17: 00007FF66631E214 v8::base::Thread::StartSynchronously+184868
+18: 00007FF66632B784 v8::base::Thread::StartSynchronously+239508
+19: 00007FF66632ADBA v8::base::Thread::StartSynchronously+237002
+20: 00007FF66632A9C1 v8::base::Thread::StartSynchronously+235985
+21: 00007FF66632C2FA v8::base::Thread::StartSynchronously+242442
+22: 00007FF6663299E9 v8::base::Thread::StartSynchronously+231929
+23: 00007FF66631E214 v8::base::Thread::StartSynchronously+184868
+24: 00007FF666331759 v8::base::Thread::StartSynchronously+264041
+25: 00007FF666331AB5 v8::base::Thread::StartSynchronously+264901
+26: 00007FF666326F68 v8::base::Thread::StartSynchronously+221048
+27: 00007FF666326267 v8::base::Thread::StartSynchronously+217719
+28: 00007FF66632798A v8::base::Thread::StartSynchronously+223642
+29: 00007FF666318E2D v8::base::Thread::StartSynchronously+163389
+30: 00007FF66632C97D v8::base::Thread::StartSynchronously+244109
+31: 00007FF666311E9C v8::base::Thread::StartSynchronously+134828
+32: 00007FF6666B40C0 v8::SharedValueConveyor::SharedValueConveyor+23136
+33: 00007FF6666B9BE4 v8::SharedValueConveyor::SharedValueConveyor+46468
+34: 00007FF66673371D v8::ScriptCompiler::CompileFunctionInternal+669
+35: 00007FF666733474 v8::ScriptCompiler::CompileFunction+84
+36: 00007FF665BE8A5D node::OnFatalError+55405
+37: 00007FF665BE8FC7 node::OnFatalError+56791
+38: 00007FF666769A58 v8::PropertyDescriptor::writable+80488
+39: 00007FF666767D12 v8::PropertyDescriptor::writable+72994
+40: 00007FF666767D12 v8::PropertyDescriptor::writable+72994
+41: 00007FF666767D12 v8::PropertyDescriptor::writable+72994
+42: 00007FF666767D12 v8::PropertyDescriptor::writable+72994
+43: 00007FF5E699697F 
+
+thread 'tokio-runtime-worker' (13484) panicked at C:\Users\runneradmin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tokio-1.43.0\src\io\blocking.rs:76:46:
+OS can't spawn worker thread: Insufficient system resources exist to complete the requested service. (os error 1450)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+<--- Last few GCs --->
+
+[65556:0000029092C1A000]     3035 ms: Scavenge 6.4 (8.0) -> 5.7 (10.0) MB, pooled: 0 MB, 95.23 / 0.00 ms  (average mu = 1.000, current mu = 1.000) allocation failure; 
+[?25h

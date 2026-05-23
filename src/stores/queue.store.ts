@@ -19,7 +19,7 @@ interface QueueState {
     serviceId: string | null;
     setTickets: (tickets: ExtendedTicket[]) => void;
     setConnected: (connected: boolean) => void;
-    connectSSE: (serviceId: string) => void;
+    connectSSE: (serviceId: string) => Promise<void>;
     disconnectSSE: () => void;
 }
 
@@ -44,13 +44,26 @@ export const useQueueStore = create<QueueState>((set, get) => ({
         set({ tickets, snapshot: buildSnapshot(tickets) });
     },
     setConnected: (connected) => set({ isConnected: connected }),
-    connectSSE: (serviceId: string) => {
+    connectSSE: async (serviceId: string) => {
         // Disconnect existing if any
         if (currentEventSource) {
             currentEventSource.close();
         }
 
         set({ serviceId });
+
+        // Load initial tickets via REST API before connecting SSE
+        try {
+            const res = await fetch(`/api/tickets?serviceId=${serviceId}`);
+            if (res.ok) {
+                const tickets = await res.json();
+                if (Array.isArray(tickets)) {
+                    get().setTickets(tickets);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching initial tickets:', error);
+        }
 
         currentEventSource = new EventSource(`/api/sse/queue?serviceId=${serviceId}`);
 

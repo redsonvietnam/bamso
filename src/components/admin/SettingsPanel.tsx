@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 
 export default function SettingsPanel() {
     const [settings, setSettings] = useState<Record<string, string>>({});
@@ -106,6 +106,40 @@ export default function SettingsPanel() {
                     <p className="text-sm text-muted-foreground mt-2">
                         Mặc định: <code className="bg-muted px-1 py-0.5 rounded">1,3,5,MISSED</code> — Lần 1 đẩy sau 1 vé, lần 2 đẩy sau 3 vé, lần 3 đẩy sau 5 vé, lần 4 → MISSED
                     </p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Danh sách quầy</CardTitle>
+                    <CardDescription>
+                        Các quầy mà cán bộ có thể chọn khi trực. Mỗi quầy cách nhau bằng dấu phẩy (ví dụ: Quầy 1, Quầy 2, Quầy 3).
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex gap-3">
+                        <Input
+                            value={settings['counters'] || ''}
+                            onChange={(e) => setSettings({ ...settings, counters: e.target.value })}
+                            placeholder="Quầy 1, Quầy 2, Quầy 3"
+                            className="max-w-md"
+                        />
+                        <Button
+                            onClick={() => handleSave('counters', settings['counters'] || '')}
+                            disabled={isSaving}
+                        >
+                            <Check className="w-4 h-4 mr-1" /> Lưu
+                        </Button>
+                    </div>
+                    {settings['counters'] && settings['counters'].split(',').filter(Boolean).length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {settings['counters'].split(',').map((counter, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                                    {counter.trim()}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

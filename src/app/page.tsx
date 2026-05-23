@@ -72,7 +72,7 @@ export default function HomePage() {
 
             const ticket = await res.json();
             toast.success('Lấy số thành công!');
-            router.push(`/track?ticketId=${ticket.id}`);
+            router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
         } finally {
@@ -115,7 +115,7 @@ export default function HomePage() {
 
             const ticket = await res.json();
             toast.success('Lấy số thành công!');
-            router.push(`/track?ticketId=${ticket.id}`);
+            router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
         } finally {

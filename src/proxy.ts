@@ -7,86 +7,112 @@ const COOKIE_NAME = 'auth_token';
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    const isLoginPage = pathname.startsWith('/login');
-
-    // Handle /login redirect if user is already logged in
-    if (isLoginPage) {
+    // =====================
+    // 1. LOGIN PAGE: Nếu đã có token hợp lệ, redirect theo role
+    // =====================
+    if (pathname.startsWith('/login')) {
         const token = request.cookies.get(COOKIE_NAME)?.value;
         if (token) {
             const payload = await verifyJWT(token);
             if (payload) {
-                if (payload.role === 'ADMIN') {
-                    return NextResponse.redirect(new URL('/admin', request.url));
-                }
-                if (payload.role === 'STAFF') {
-                    return NextResponse.redirect(new URL('/canbo', request.url));
-                }
-                if (payload.role === 'KIOSK') {
-                    return NextResponse.redirect(new URL('/kiosk', request.url));
-                }
-                if (payload.role === 'DISPLAY') {
-                    return NextResponse.redirect(new URL('/display', request.url));
+                const roleRedirect: Record<string, string> = {
+                    ADMIN: '/admin',
+                    STAFF: '/canbo',
+                    KIOSK: '/kiosk',
+                    DISPLAY: '/display',
+                };
+                const redirect = roleRedirect[payload.role];
+                if (redirect) {
+                    return NextResponse.redirect(new URL(redirect, request.url));
                 }
             }
         }
         return NextResponse.next();
     }
 
-    const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/api/admin');
-    const isStaffRoute = pathname.startsWith('/canbo') || pathname.startsWith('/api/queue');
+    // =====================
+    // 2. PUBLIC ROUTES: Cho phép truy cập tự do
+    // =====================
+    const publicRoutes = ['/', '/get-ticket', '/track', '/waiting', '/demo', '/display', '/kiosk'];
+    const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
+    const isPublicApiRoute = pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/api/services') ||
+        pathname.startsWith('/api/tickets') ||
+        pathname.startsWith('/api/tickets/track') ||
+        pathname.startsWith('/api/settings') ||
+        pathname.startsWith('/api/health') ||
+        pathname.startsWith('/api/tts') ||
+        pathname.startsWith('/api/sse') ||
+        pathname.startsWith('/api/demo-token');
 
-    // Allow non-protected routes
-    if (!isAdminRoute && !isStaffRoute) {
+    if (isPublicRoute || isPublicApiRoute) {
         return NextResponse.next();
     }
 
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (!token) {
-        if (pathname.startsWith('/api')) {
-            return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+    // =====================
+    // 3. PROTECTED ROUTES: Yêu cầu token hợp lệ + role-based access
+    // =====================
+    const protectedRoutes = [
+        { prefix: '/admin', roles: ['ADMIN'] },
+        { prefix: '/canbo', roles: ['STAFF', 'ADMIN'] },
+        { prefix: '/api/admin', roles: ['ADMIN'] },
+        { prefix: '/api/queue', roles: ['STAFF', 'ADMIN'] },
+        { prefix: '/api/staff', roles: ['ADMIN'] },
+        { prefix: '/api/stats', roles: ['ADMIN'] },
+    ];
+
+    const matchedRoute = protectedRoutes.find(route => pathname.startsWith(route.prefix));
+
+    if (matchedRoute) {
+        const token = request.cookies.get(COOKIE_NAME)?.value;
+        if (!token) {
+            if (pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+            }
+            return NextResponse.redirect(new URL('/login', request.url));
         }
-        return NextResponse.redirect(new URL('/login', request.url));
+
+        const payload = await verifyJWT(token);
+        if (!payload) {
+            if (pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+            }
+            const response = NextResponse.redirect(new URL('/login', request.url));
+            response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
+            return response;
+        }
+
+        // Role-based access control
+        if (!matchedRoute.roles.includes(payload.role)) {
+            if (pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+            }
+            // Redirect user to their appropriate dashboard
+            const roleRedirect: Record<string, string> = {
+                ADMIN: '/admin',
+                STAFF: '/canbo',
+                KIOSK: '/kiosk',
+                DISPLAY: '/display',
+            };
+            const redirect = roleRedirect[payload.role] || '/login';
+            return NextResponse.redirect(new URL(redirect, request.url));
+        }
+
+        return NextResponse.next();
     }
 
-    const payload = await verifyJWT(token);
-    if (!payload) {
-        if (pathname.startsWith('/api')) {
-            return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
-        }
-        const response = NextResponse.redirect(new URL('/login', request.url));
-        response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
-        return response;
-    }
-
-    const role = payload.role;
-
-    // Authorization checks
-    if (isAdminRoute && role !== 'ADMIN') {
-        if (pathname.startsWith('/api')) {
-            return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-        }
-        if (role === 'STAFF') {
-            return NextResponse.redirect(new URL('/canbo', request.url));
-        }
-        return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    if (isStaffRoute && role !== 'STAFF' && role !== 'ADMIN') {
-        if (pathname.startsWith('/api')) {
-            return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
-        }
-        return NextResponse.redirect(new URL('/login', request.url));
-    }
-
+    // Default: allow through
     return NextResponse.next();
 }
 
 export const config = {
     matcher: [
+        '/login',
         '/admin/:path*',
         '/canbo/:path*',
         '/api/admin/:path*',
         '/api/queue/:path*',
-        '/login',
+        '/api/staff/:path*',
+        '/api/stats/:path*',
     ],
 };

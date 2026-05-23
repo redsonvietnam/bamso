@@ -16,7 +16,8 @@ import {
     Bell,
     BellRing,
     ExternalLink,
-    Volume2
+    Volume2,
+    VolumeX,
 } from 'lucide-react';
 
 interface WaitingTrackerProps {
@@ -37,7 +38,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
     const [isConnected, setIsConnected] = useState(false);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [lastSpokenLevel, setLastSpokenLevel] = useState<ProximityLevel>(0);
-    const { speak } = useSpeech();
+    const { speak, isAudioUnlocked, unlockAudio } = useSpeech();
 
     // Connect to SSE for real-time updates
     useEffect(() => {
@@ -170,6 +171,15 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
         }
     }, [ticket.status, proximityLevel]);
 
+    // Handle sound toggle
+    const handleToggleSound = useCallback(() => {
+        const newEnabled = !soundEnabled;
+        setSoundEnabled(newEnabled);
+        if (newEnabled) {
+            unlockAudio();
+        }
+    }, [soundEnabled, unlockAudio]);
+
     return (
         <div className="w-full max-w-md mx-auto space-y-4 px-4 py-6">
             {/* Header: Service name + connection status + sound toggle */}
@@ -185,11 +195,11 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
                 </div>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        onClick={handleToggleSound}
                         className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
                         title={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
                     >
-                        {soundEnabled ? <Volume2 className="w-4 h-4" /> : <Volume2 className="w-4 h-4 opacity-40" />}
+                        {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                     </button>
                     <div
                         className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
@@ -197,6 +207,21 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
                     />
                 </div>
             </div>
+
+            {/* Audio unlock prompt (nếu user chưa click để kích hoạt âm thanh) */}
+            {!isAudioUnlocked && soundEnabled && (
+                <div
+                    className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center cursor-pointer hover:bg-yellow-100 transition-colors"
+                    onClick={unlockAudio}
+                >
+                    <p className="text-sm font-medium text-yellow-800">
+                        🔇 Chạm để kích hoạt âm thanh thông báo
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                        Nhấn vào đây để nhận thông báo bằng giọng nói khi đến lượt
+                    </p>
+                </div>
+            )}
 
             {/* Main ticket card */}
             <Card className={`border-2 transition-all duration-500 ${proximityStyle.bg} ${proximityStyle.border} shadow-lg`}>
@@ -279,6 +304,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
                     <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
             </div>
+
         </div>
     );
 }

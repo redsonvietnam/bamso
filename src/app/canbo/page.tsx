@@ -4,17 +4,24 @@ import React, { useState, useEffect } from 'react';
 import { Service } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/auth.store';
 import QueuePanel from '@/components/staff/QueuePanel';
 import { LogOut, ArrowLeft, Monitor } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 export default function CanboPage() {
     const { user, logout, fetchMe } = useAuthStore();
     const [services, setServices] = useState<Service[]>([]);
+    const [counters, setCounters] = useState<string[]>([]);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [selectedPos, setSelectedPos] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
@@ -24,24 +31,41 @@ export default function CanboPage() {
     }, [fetchMe]);
 
     useEffect(() => {
-        const fetchServices = async () => {
+        const fetchData = async () => {
             try {
-                const res = await fetch('/api/services');
-                if (res.ok) {
-                    const data = await res.json();
-                    setServices(data);
+                // Fetch services
+                const servicesRes = await fetch('/api/services');
+                let servicesData: Service[] = [];
+                if (servicesRes.ok) {
+                    servicesData = await servicesRes.json();
+                    setServices(servicesData);
                 } else {
                     toast.error('Không thể tải danh sách dịch vụ.');
                 }
+
+                // Fetch counters from settings
+                const settingsRes = await fetch('/api/settings?key=counters');
+                if (settingsRes.ok) {
+                    const settingsData = await settingsRes.json();
+                    if (settingsData.value) {
+                        const counterList = settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean);
+                        setCounters(counterList);
+                        // Auto-select first counter if available
+                        if (!selectedPos && counterList.length > 0) {
+                            setSelectedPos(counterList[0]);
+                        }
+                    }
+                }
             } catch (error) {
-                console.error('Error fetching services:', error);
-                toast.error('Lỗi kết nối khi tải dịch vụ.');
+                console.error('Error fetching data:', error);
+                toast.error('Lỗi kết nối khi tải dữ liệu.');
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchServices();
+        fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleLogout = async () => {
@@ -134,29 +158,40 @@ export default function CanboPage() {
                             onSubmit={(e) => {
                                 e.preventDefault();
                                 if (!selectedPos.trim()) {
-                                    toast.error('Vui lòng nhập tên quầy.');
+                                    toast.error('Vui lòng chọn tên quầy.');
                                     return;
                                 }
                             }}
                             className="space-y-4"
                         >
                             <div className="space-y-2">
-                                <Label htmlFor="pos">Tên quầy (ví dụ: Quầy 1)</Label>
-                                <Input
-                                    id="pos"
-                                    type="text"
-                                    placeholder="Quầy 1"
-                                    value={selectedPos}
-                                    onChange={(e) => setSelectedPos(e.target.value)}
-                                    className="h-10"
-                                />
+                                <Label htmlFor="pos">Tên quầy</Label>
+                                {counters.length > 0 ? (
+                                    <Select value={selectedPos} onValueChange={setSelectedPos}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue placeholder="Chọn quầy" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {counters.map((counter) => (
+                                                <SelectItem key={counter} value={counter}>
+                                                    {counter}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground italic">
+                                        Chưa có quầy nào được cấu hình. Vui lòng liên hệ Admin để thiết lập trong phần Cài đặt.
+                                    </p>
+                                )}
                             </div>
                             <Button
                                 type="submit"
                                 className="w-full h-10 font-medium"
+                                disabled={!selectedPos.trim()}
                                 onClick={(e) => {
                                     if (!selectedPos.trim()) {
-                                        toast.error('Vui lòng nhập tên quầy.');
+                                        toast.error('Vui lòng chọn tên quầy.');
                                         e.preventDefault();
                                     }
                                 }}
