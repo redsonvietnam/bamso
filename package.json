@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" next dev",
     "build": "next build",
+    "build:limited": "cross-env NODE_OPTIONS=\"--max-old-space-size=2048\" next build",
+    "build:prod": "next build",
+    "clean": "if exist .next rmdir /s /q .next && if exist out rmdir /s /q out",
+    "rebuild": "npm run clean && npm run build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -22,6 +26,7 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
+    "ws": "^8.21.0",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
@@ -31,11 +36,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "6.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typeui.sh": "^0.7.1"
   }
 }

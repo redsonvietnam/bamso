@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -45,13 +45,29 @@ export default function LoginPage() {
         const result = await login(username.trim(), password);
         if (result.ok) {
             toast.success('Đăng nhập thành công!');
+            // Lấy trực tiếp user state từ store (đã được cập nhật từ login payload)
+            // Bỏ qua việc gọi await fetchMe() để tránh lỗi delay cookie trên trình duyệt mobile
+            const currentUser = useAuthStore.getState().user;
+            if (currentUser) {
+                if (currentUser.role === 'ADMIN') {
+                    router.replace('/admin');
+                } else if (currentUser.role === 'STAFF') {
+                    router.replace('/canbo');
+                } else if (currentUser.role === 'KIOSK') {
+                    router.replace('/kiosk');
+                } else if (currentUser.role === 'DISPLAY') {
+                    router.replace('/display');
+                }
+            } else {
+                // Fallback nếu state chưa kịp cập nhật: giữ ở trang login và báo lỗi rõ ràng
+                toast.error('Không thể xác định quyền người dùng. Vui lòng thử đăng nhập lại.');
+            }
         } else {
             toast.error(result.error || 'Đăng nhập thất bại.');
         }
     };
 
-    return (
-        <div className="flex min-h-screen items-center justify-center px-4 py-12 font-sans">
+    return (<div className="flex min-h-screen items-center justify-center px-4 py-12 font-sans">
             <Card className="w-full max-w-md shadow-md">
                 <CardHeader className="space-y-1 text-center">
                     <CardTitle className="text-2xl font-bold tracking-tight">Đăng nhập hệ thống</CardTitle>

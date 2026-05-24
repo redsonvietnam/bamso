@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyJWT } from '@/lib/auth';
 
 const COOKIE_NAME = 'auth_token';
 
 export async function proxy(request: NextRequest) {
+    console.log('[DEBUG] Proxy request:', request.nextUrl.pathname);
     const { pathname } = request.nextUrl;
 
     // =====================
@@ -25,6 +26,10 @@ export async function proxy(request: NextRequest) {
                 if (redirect) {
                     return NextResponse.redirect(new URL(redirect, request.url));
                 }
+            } else {
+                const response = NextResponse.next();
+                response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
+                return response;
             }
         }
         return NextResponse.next();
@@ -45,6 +50,9 @@ export async function proxy(request: NextRequest) {
         pathname.startsWith('/api/sse') ||
         pathname.startsWith('/api/demo-token');
 
+        if (pathname.startsWith('/_next/') || pathname.startsWith('/static/')) {
+        return NextResponse.next();
+    }
     if (isPublicRoute || isPublicApiRoute) {
         return NextResponse.next();
     }
