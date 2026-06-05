@@ -84,3 +84,24 @@ Kịch bản này sẽ giả lập chính xác:
 3.  Nhân viên lấy token xác thực và thực hiện gọi số tiếp theo (`POST /api/queue/call-next`).
 4.  Nhân viên thực hiện thao tác bỏ qua vé (`PUT /api/queue/skip`) và kiểm tra thuật toán đẩy lùi vị trí.
 5.  Gọi lại vé và nhấn nút hoàn thành giao dịch (`PUT /api/queue/complete`).
+
+## 🤖 AI Workflow & Tooling
+
+Dự án này hiện đã áp dụng một luồng làm việc AI nhẹ nhàng và dần tiến tới công cụ:
+
+- `AGENTS.md` — quy tắc hành vi agent, tiêu chuẩn sửa code, và cầu nối tới `CLAUDE.md`.
+- `CLAUDE.md` — các quy ước dự án cụ thể: auth, queue, Prisma, API response, tên nhánh.
+- `docs/workflow-v4.md` — workflow Active cho sửa đổi và feature mới.
+- `docs/tooling-roadmap.md` — kế hoạch từng phase cho CodeGraph, Spec Kit, Codebuff và dọn tài liệu.
+
+### Nhánh làm việc
+
+- `main` — production-ready, merge có kiểm soát.
+- `dev` — thử tooling, feature, refactor.
+
+### Ghi chú kiểm chứng
+
+- Sau mỗi thay đổi logic/queue/auth: chạy `node scratch/e2e-test.mjs`.
+- Trước merge `dev` → `main`: chạy `npm run build`.
+
+Nếu bạn muốn tiếp tục với feature cụ thể, bắt đầu bằng mô tả và tôi sẽ giúp chuẩn bị Phase 2 Spec Kit trên `dev`.
