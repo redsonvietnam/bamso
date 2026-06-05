@@ -50,3 +50,9 @@ next-env.d.ts
 # scratch / test files
 /scratch/
 
+# local tooling artifacts
+/.codegraph/
+/.cursor/
+/.agents/
+/.specify/
+
