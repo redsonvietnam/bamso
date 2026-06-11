@@ -11,6 +11,11 @@ import { toast } from 'sonner';
 import { Ticket, User } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
+type TicketResult = {
+    id: string;
+    ticketNumber: string;
+};
+
 export default function HomePage() {
     const router = useRouter();
     const [services, setServices] = useState<Service[]>([]);
@@ -70,8 +75,7 @@ export default function HomePage() {
                 throw new Error(errorData.error || 'Lỗi tạo vé.');
             }
 
-            const ticket = await res.json();
-            toast.success('Lấy số thành công!');
+            const ticket = (await res.json()) as TicketResult;
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -113,8 +117,7 @@ export default function HomePage() {
                 throw new Error(errorData.error || 'Lỗi tạo vé.');
             }
 
-            const ticket = await res.json();
-            toast.success('Lấy số thành công!');
+            const ticket = (await res.json()) as TicketResult;
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -149,7 +152,6 @@ export default function HomePage() {
         );
     }
 
-    // BƯỚC 2: Chọn hình thức lấy số
     if (selectedService) {
         return (
             <div className="flex min-h-screen items-center justify-center px-4 py-12">
@@ -226,14 +228,12 @@ export default function HomePage() {
                                 </Button>
                             </div>
                         )}
-
                     </CardContent>
                 </Card>
             </div>
         );
     }
 
-    // BƯỚC 1: Chọn dịch vụ
     return (
         <div className="min-h-screen px-4 py-12">
             <div className="max-w-4xl mx-auto">

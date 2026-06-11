@@ -71,7 +71,6 @@ export default function GetTicketPage() {
             }
 
             const ticket = await res.json();
-            toast.success('Lấy số thành công!');
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -114,7 +113,6 @@ export default function GetTicketPage() {
             }
 
             const ticket = await res.json();
-            toast.success('Lấy số thành công!');
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
