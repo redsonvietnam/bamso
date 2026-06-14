@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Service } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Ticket, User, ArrowLeft } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { logger } from '@/lib/logger';
 
 export default function GetTicketPage() {
     const router = useRouter();
@@ -39,7 +40,7 @@ export default function GetTicketPage() {
                     if (data.value) setAgencyName(data.value);
                 }
             } catch (error) {
-                console.error('Error fetching data:', error);
+                logger.error('Error fetching data:', error);
                 toast.error('Không thể tải dữ liệu.');
             } finally {
                 setIsLoading(false);

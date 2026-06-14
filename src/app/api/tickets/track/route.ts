@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(ticket);
     } catch (error) {
-        console.error('Error tracking ticket:', error);
+        logger.error('Error tracking ticket:', error);
         return NextResponse.json(
             { error: 'Lỗi hệ thống khi tra cứu vé', code: 'INTERNAL_SERVER_ERROR' },
             { status: 500 }

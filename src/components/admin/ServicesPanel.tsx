@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Service } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, X, Check } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 export default function ServicesPanel() {
     const [services, setServices] = useState<Service[]>([]);
@@ -18,20 +19,25 @@ export default function ServicesPanel() {
 
     const fetchServices = async () => {
         try {
-            const res = await fetch('/api/services?active=false');
-            if (res.ok) {
-                setServices(await res.json());
-            }
-        } catch (error) {
-            console.error('Error fetching services:', error);
+            const data = await apiClient.get<Service[]>('/api/services?active=false');
+            setServices(data);
+        } catch {
+            toast.error('Không thể tải danh sách dịch vụ.');
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        fetchServices();
+        let cancelled = false;
+        apiClient.get<Service[]>('/api/services?active=false').then((data) => {
+            if (!cancelled) setServices(data);
+        }).catch(() => {
+            if (!cancelled) toast.error('Không thể tải danh sách dịch vụ.');
+        }).finally(() => {
+            if (!cancelled) setIsLoading(false);
+        });
+        return () => { cancelled = true; };
     }, []);
 
     const handleCreate = async () => {
@@ -41,17 +47,7 @@ export default function ServicesPanel() {
         }
 
         try {
-            const res = await fetch('/api/services', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Lỗi tạo dịch vụ.');
-            }
-
+            await apiClient.post('/api/services', formData);
             toast.success('Tạo dịch vụ thành công!');
             setIsCreating(false);
             setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 });
@@ -65,17 +61,7 @@ export default function ServicesPanel() {
         if (!editingService) return;
 
         try {
-            const res = await fetch('/api/services', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: editingService.id, ...formData }),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Lỗi cập nhật.');
-            }
-
+            await apiClient.put('/api/services', { id: editingService.id, ...formData });
             toast.success('Cập nhật thành công!');
             setEditingService(null);
             fetchServices();
@@ -88,9 +74,7 @@ export default function ServicesPanel() {
         if (!confirm('Bạn có chắc muốn xóa dịch vụ này?')) return;
 
         try {
-            const res = await fetch(`/api/services?id=${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Lỗi xóa dịch vụ.');
-
+            await apiClient.delete(`/api/services?id=${id}`);
             toast.success('Đã xóa dịch vụ.');
             fetchServices();
         } catch (error) {

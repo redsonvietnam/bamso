@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { TicketStatus } from '@/lib/constants';
 import type { Ticket, Service } from '@prisma/client';
+import { logger } from '@/lib/logger';
 
 type ExtendedTicket = Ticket & { service: Service };
 
@@ -62,7 +63,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
                 }
             }
         } catch (error) {
-            console.error('Error fetching initial tickets:', error);
+            logger.error('Error fetching initial tickets:', error);
         }
 
         currentEventSource = new EventSource(`/api/sse/queue?serviceId=${serviceId}`);
@@ -76,7 +77,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
                     get().setTickets(data.tickets);
                 }
             } catch (error) {
-                console.error('Error parsing SSE message:', error);
+                logger.error('Error parsing SSE message:', error);
             }
         };
 

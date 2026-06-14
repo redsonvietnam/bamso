@@ -1,11 +1,12 @@
 ﻿import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyJWT } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 const COOKIE_NAME = 'auth_token';
 
 export async function proxy(request: NextRequest) {
-    console.log('[DEBUG] Proxy request:', request.nextUrl.pathname);
+    logger.debug('[DEBUG] Proxy request:', request.nextUrl.pathname);
     const { pathname } = request.nextUrl;
 
     // =====================

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // Vietnamese Edge TTS voices list
 const EDGE_VOICES = [
@@ -56,7 +57,7 @@ async function handleGoogleTts(text: string) {
             },
         });
     } catch (error) {
-        console.error('Google TTS Proxy Error:', error);
+        logger.error('Google TTS Proxy Error:', error);
         return new Response('Internal Server Error', { status: 500 });
     }
 }
@@ -146,7 +147,7 @@ async function handleEdgeTts(text: string, voiceName?: string) {
             },
         });
     } catch (error) {
-        console.error('Edge TTS Error:', error);
+        logger.error('Edge TTS Error:', error);
         return new Response('Internal Server Error', { status: 500 });
     }
 }

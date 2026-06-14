@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 
 const DIGIT_MAP: Record<string, string> = {
     '0': 'không',
@@ -183,7 +184,7 @@ export function useSpeech() {
      * Dùng onended để đảm bảo mỗi câu nói kết thúc hoàn toàn 
      * trước khi chuyển sang câu tiếp theo, tránh chồng lấn âm thanh.
      */
-    const processQueue = useCallback(() => {
+    const processQueue = useCallback(function processQueueFn() {
         if (processingRef.current || queueRef.current.length === 0) return;
         processingRef.current = true;
 
@@ -192,19 +193,17 @@ export function useSpeech() {
 
         const onComplete = () => {
             processingRef.current = false;
-            processQueue();
+            processQueueFn();
         };
 
         const provider = settingsRef.current.tts_provider || 'google';
         const volume = parseFloat(settingsRef.current.tts_volume || '1');
 
-        // Web Speech API
         if (provider === 'webspeech') {
             speakWithWebSpeech(formattedText, onComplete);
             return;
         }
 
-        // Microsoft Edge TTS (via server-side proxy)
         if (provider === 'edge') {
             const edgeVoice = settingsRef.current.tts_edge_voice || 'vi-VN-HoaiMyNeural';
             const url = `/api/tts?provider=edge&voice=${encodeURIComponent(edgeVoice)}&text=${encodeURIComponent(formattedText)}`;
@@ -212,29 +211,28 @@ export function useSpeech() {
             audio.volume = volume;
             audio.onended = onComplete;
             audio.onerror = () => {
-                console.warn('Edge TTS failed, falling back to Web Speech API');
+                logger.warn('Edge TTS failed, falling back to Web Speech API');
                 speakWithWebSpeech(formattedText, onComplete);
             };
             audio.play().catch((err) => {
-                console.warn('Edge TTS play failed, falling back to Web Speech API:', err);
+                logger.warn('Edge TTS play failed, falling back to Web Speech API:', err);
                 speakWithWebSpeech(formattedText, onComplete);
             });
             return;
         }
 
-        // Default: Google TTS via proxy
         const audioUrl = `/api/tts?text=${encodeURIComponent(formattedText)}`;
 
         const audio = new Audio(audioUrl);
         audio.volume = volume;
         audio.onended = onComplete;
         audio.onerror = () => {
-            console.warn('Google TTS Proxy failed, falling back to Web Speech API');
+            logger.warn('Google TTS Proxy failed, falling back to Web Speech API');
             speakWithWebSpeech(formattedText, onComplete);
         };
 
         audio.play().catch((err) => {
-            console.warn('Google TTS play failed, falling back to Web Speech API:', err);
+            logger.warn('Google TTS play failed, falling back to Web Speech API:', err);
             speakWithWebSpeech(formattedText, onComplete);
         });
     }, []);

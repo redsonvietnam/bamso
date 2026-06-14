@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,9 +21,11 @@ function WaitingContent() {
 
     useEffect(() => {
         if (!ticketId) {
-            setError('Không tìm thấy thông tin vé.');
-            setIsLoading(false);
-            return;
+            const id = setTimeout(() => {
+                setError('Không tìm thấy thông tin vé.');
+                setIsLoading(false);
+            });
+            return () => clearTimeout(id);
         }
 
         const fetchTicket = async () => {

@@ -4,6 +4,7 @@ import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
     try {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(ticket);
     } catch (error) {
-        console.error('Call next error:', error);
+        logger.error('Call next error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
         const isNoTickets = errorMessage.includes('Không còn số thứ tự');
         return NextResponse.json(

@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { logger } from '@/lib/logger';
 
 // --- JWT Utility ---
 const getJwtSecret = () => {
@@ -21,7 +22,7 @@ export async function verifyJWT(token: string): Promise<{ userId: string, role: 
         const { payload } = await jwtVerify(token, JWT_SECRET_BYTES, { algorithms: ['HS256'] });
         return payload as { userId: string, role: string };
     } catch (error) {
-        console.error('JWT verification failed:', error);
+        logger.error('JWT verification failed:', error);
         return null;
     }
 }

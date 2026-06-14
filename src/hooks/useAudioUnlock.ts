@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { logger } from '@/lib/logger';
 
 /**
  * Hook useAudioUnlock
@@ -23,13 +24,14 @@ export function useAudioUnlock() {
         // Tạo và resume AudioContext để "đánh thức" audio system
         try {
             if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+                audioContextRef.current = new AC();
             }
             if (audioContextRef.current.state === 'suspended') {
                 audioContextRef.current.resume();
             }
         } catch (e) {
-            console.warn('Could not create AudioContext:', e);
+            logger.warn('Could not create AudioContext:', e);
         }
 
         setIsAudioUnlocked(true);

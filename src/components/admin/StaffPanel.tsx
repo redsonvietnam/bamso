@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, X, Check } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
+import { logger } from '@/lib/logger';
 
 type StaffMember = {
     id: string;
@@ -26,12 +28,10 @@ export default function StaffPanel() {
 
     const fetchStaff = async () => {
         try {
-            const res = await fetch('/api/staff');
-            if (res.ok) {
-                setStaff(await res.json());
-            }
+            const data = await apiClient.get<StaffMember[]>('/api/staff');
+            setStaff(data);
         } catch (error) {
-            console.error('Error fetching staff:', error);
+            logger.error('Error fetching staff:', error);
         } finally {
             setIsLoading(false);
         }
@@ -49,16 +49,8 @@ export default function StaffPanel() {
         }
 
         try {
-            const res = await fetch('/api/staff', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Lỗi tạo nhân viên.');
-            }
+            const data = await apiClient.post<{ error?: string }>('/api/staff', formData);
+            if (data.error) throw new Error(data.error);
 
             toast.success('Tạo nhân viên thành công!');
             setIsCreating(false);
@@ -78,16 +70,8 @@ export default function StaffPanel() {
                 body.password = formData.password;
             }
 
-            const res = await fetch('/api/staff', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Lỗi cập nhật.');
-            }
+            const data = await apiClient.put<{ error?: string }>('/api/staff', body);
+            if (data.error) throw new Error(data.error);
 
             toast.success('Cập nhật thành công!');
             setEditingStaff(null);
@@ -102,9 +86,7 @@ export default function StaffPanel() {
         if (!confirm('Bạn có chắc muốn xóa nhân viên này?')) return;
 
         try {
-            const res = await fetch(`/api/staff?id=${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Lỗi xóa nhân viên.');
-
+            await apiClient.delete(`/api/staff?id=${id}`);
             toast.success('Đã xóa nhân viên.');
             fetchStaff();
         } catch (error) {

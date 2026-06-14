@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Service } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import QueuePanel from '@/components/staff/QueuePanel';
 import { LogOut, ArrowLeft, Monitor } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import {
     Select,
     SelectContent,
@@ -57,7 +58,7 @@ export default function CanboPage() {
                     }
                 }
             } catch (error) {
-                console.error('Error fetching data:', error);
+                logger.error('Error fetching data:', error);
                 toast.error('Lỗi kết nối khi tải dữ liệu.');
             } finally {
                 setIsLoading(false);

@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { hashPassword } from '@/lib/password';
 import { UserRole } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
     try {
@@ -23,7 +24,7 @@ export async function GET() {
 
         return NextResponse.json(staff);
     } catch (error) {
-        console.error('Fetch staff error:', error);
+        logger.error('Fetch staff error:', error);
         return NextResponse.json(
             { error: 'Lỗi lấy danh sách nhân viên', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(user, { status: 201 });
     } catch (error) {
-        console.error('Create staff error:', error);
+        logger.error('Create staff error:', error);
         return NextResponse.json(
             { error: 'Lỗi tạo nhân viên', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -129,7 +130,7 @@ export async function PUT(request: Request) {
                 { status: 404 }
             );
         }
-        console.error('Update staff error:', error);
+        logger.error('Update staff error:', error);
         return NextResponse.json(
             { error: 'Lỗi cập nhật nhân viên', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -161,7 +162,7 @@ export async function DELETE(request: Request) {
                 { status: 404 }
             );
         }
-        console.error('Delete staff error:', error);
+        logger.error('Delete staff error:', error);
         return NextResponse.json(
             { error: 'Lỗi xóa nhân viên', code: 'INTERNAL_ERROR' },
             { status: 500 }

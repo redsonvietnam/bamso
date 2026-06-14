@@ -1,7 +1,6 @@
-import { NextRequest } from 'next/server';
 import { subscribeDisplay, unsubscribeDisplay } from '@/lib/sse-broker';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     const clientId = crypto.randomUUID();
 
     const stream = new ReadableStream({

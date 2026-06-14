@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logger } from '@/lib/logger';
 
 interface User {
     id: string;
@@ -47,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({ isLoading: false });
             return { ok: false, error: 'Không thể tải thông tin người dùng.' };
         } catch (error) {
-            console.error('Login store error:', error);
+            logger.error('Login store error:', error);
             set({ isLoading: false });
             return { ok: false, error: 'Lỗi hệ thống hoặc kết nối.' };
         }
@@ -56,7 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
         } catch (error) {
-            console.error('Logout error:', error);
+            logger.error('Logout error:', error);
         } finally {
             set({ user: null });
         }
@@ -71,7 +72,7 @@ export const useAuthStore = create<AuthState>((set) => ({
                 set({ user: null });
             }
         } catch (error) {
-            console.error('Fetch me error:', error);
+            logger.error('Fetch me error:', error);
             set({ user: null });
         }
     },

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyJWT } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const COOKIE_NAME = 'auth_token';
 
@@ -40,7 +41,7 @@ export async function GET() {
 
         return NextResponse.json(user);
     } catch (error) {
-        console.error('Fetch me error:', error);
+        logger.error('Fetch me error:', error);
         return NextResponse.json(
             { error: 'Internal Server Error', code: 'INTERNAL_ERROR' },
             { status: 500 }

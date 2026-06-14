@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     try {
@@ -138,7 +139,7 @@ export async function GET(request: Request) {
             services: serviceBreakdown,
         });
     } catch (error) {
-        console.error('Fetch stats error:', error);
+        logger.error('Fetch stats error:', error);
         return NextResponse.json(
             { error: 'Lỗi lấy thống kê', code: 'INTERNAL_ERROR' },
             { status: 500 }

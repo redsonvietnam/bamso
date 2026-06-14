@@ -4,7 +4,6 @@
  * for Vietnamese text-to-speech - no API key required.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { default: WebSocket } = await import('ws');
 
 const BASE_URL = 'speech.platform.bing.com/consumer/speech/synthesize/readaloud';

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Ticket, Service } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, UserCheck, AlertCircle, CheckCircle2, MonitorPlay } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 interface LiveTrackerProps {
     initialTicket: Ticket & { service: Service };
@@ -26,7 +27,7 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
 
         eventSource.onopen = () => {
             setIsConnected(true);
-            console.log('SSE Connected to queue');
+            logger.log('SSE Connected to queue');
         };
 
         eventSource.onmessage = (event) => {
@@ -45,12 +46,12 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
                     }
                 }
             } catch (error) {
-                console.error('Error parsing SSE message:', error);
+                logger.error('Error parsing SSE message:', error);
             }
         };
 
         eventSource.onerror = (error) => {
-            console.error('SSE connection error:', error);
+            logger.error('SSE connection error:', error);
             setIsConnected(false);
             // EventSource sẽ tự động cố gắng reconnect theo mặc định
         };

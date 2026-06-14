@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     try {
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
         const settings = await prisma.settings.findMany();
         return NextResponse.json(settings);
     } catch (error) {
-        console.error('Fetch settings error:', error);
+        logger.error('Fetch settings error:', error);
         return NextResponse.json(
             { error: 'Lỗi lấy cài đặt', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -48,7 +49,7 @@ export async function PUT(request: Request) {
 
         return NextResponse.json(setting);
     } catch (error) {
-        console.error('Update settings error:', error);
+        logger.error('Update settings error:', error);
         return NextResponse.json(
             { error: 'Lỗi cập nhật cài đặt', code: 'INTERNAL_ERROR' },
             { status: 500 }

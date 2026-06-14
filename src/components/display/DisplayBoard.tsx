@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { Volume2, SmartphoneNfc, Hand } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
+import { logger } from '@/lib/logger';
 
 // Define types for the data received from SSE
 interface DisplayCallEvent {
@@ -70,7 +71,7 @@ export default function DisplayBoard() {
                     setCurrentCalls(calls);
                 }
             } catch (error) {
-                console.error('Error fetching initial data for display:', error);
+                logger.error('Error fetching initial data for display:', error);
             }
         };
         fetchInitialData();
@@ -92,7 +93,7 @@ export default function DisplayBoard() {
                     setLastCalledTicket(newCall);
 
                     // Play chime sound (will be silent until user unlocks audio)
-                    audioRef.current?.play().catch(e => console.warn("Chime play skipped (may need user interaction):", e));
+                    audioRef.current?.play().catch(e => logger.warn("Chime play skipped (may need user interaction):", e));
 
                     speakAnnouncement(data.ticketNumber, data.pos);
 
@@ -104,7 +105,7 @@ export default function DisplayBoard() {
                     setTimeout(() => setLastCalledTicket(null), 5000);
                 }
             } catch (error) {
-                console.error('Error parsing display SSE message:', error);
+                logger.error('Error parsing display SSE message:', error);
             }
         };
         displayEventSource.onerror = () => setIsConnected(false);
@@ -137,7 +138,7 @@ export default function DisplayBoard() {
                     });
                 }
             } catch (error) {
-                console.error('Error parsing queue SSE message:', error);
+                logger.error('Error parsing queue SSE message:', error);
             }
         };
         queueEventSource.onerror = () => setIsConnected(false);

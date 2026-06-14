@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { restoreTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 
 export async function PUT(request: Request) {
     try {
@@ -24,7 +25,7 @@ export async function PUT(request: Request) {
 
         return NextResponse.json(ticket);
     } catch (error) {
-        console.error('Restore ticket error:', error);
+        logger.error('Restore ticket error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
         const isClientError = errorMessage.includes('Không tìm thấy') || errorMessage.includes('Chỉ có thể khôi phục');
         return NextResponse.json(

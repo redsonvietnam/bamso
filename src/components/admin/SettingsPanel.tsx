@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Check, Plus, X } from 'lucide-react';
+import { Check } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
+import { logger } from '@/lib/logger';
 
 export default function SettingsPanel() {
     const [settings, setSettings] = useState<Record<string, string>>({});
@@ -15,15 +17,12 @@ export default function SettingsPanel() {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const res = await fetch('/api/settings');
-                if (res.ok) {
-                    const data = await res.json();
-                    const map: Record<string, string> = {};
-                    data.forEach((s: { key: string; value: string }) => { map[s.key] = s.value; });
-                    setSettings(map);
-                }
+                const data = await apiClient.get<{ key: string; value: string }[]>('/api/settings');
+                const map: Record<string, string> = {};
+                data.forEach((s: { key: string; value: string }) => { map[s.key] = s.value; });
+                setSettings(map);
             } catch (error) {
-                console.error('Error fetching settings:', error);
+                logger.error('Error fetching settings:', error);
             } finally {
                 setIsLoading(false);
             }
@@ -35,14 +34,7 @@ export default function SettingsPanel() {
     const handleSave = async (key: string, value: string) => {
         setIsSaving(true);
         try {
-            const res = await fetch('/api/settings', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key, value }),
-            });
-
-            if (!res.ok) throw new Error('Lỗi lưu cài đặt.');
-
+            await apiClient.put('/api/settings', { key, value });
             toast.success('Đã lưu cài đặt.');
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi lưu cài đặt.');

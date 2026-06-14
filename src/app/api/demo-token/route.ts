@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { signJWT } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     try {
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
 
         return response;
     } catch (error) {
-        console.error('Demo token error:', error);
+        logger.error('Demo token error:', error);
         return NextResponse.json(
             { error: 'Lỗi tạo demo token', code: 'INTERNAL_ERROR' },
             { status: 500 }

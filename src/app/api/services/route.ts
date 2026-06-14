@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     try {
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(services);
     } catch (error) {
-        console.error('Fetch services error:', error);
+        logger.error('Fetch services error:', error);
         return NextResponse.json(
             { error: 'Lỗi lấy danh sách dịch vụ', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(service, { status: 201 });
     } catch (error) {
-        console.error('Create service error:', error);
+        logger.error('Create service error:', error);
         return NextResponse.json(
             { error: 'Lỗi tạo dịch vụ', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -94,7 +95,7 @@ export async function PUT(request: Request) {
                 { status: 404 }
             );
         }
-        console.error('Update service error:', error);
+        logger.error('Update service error:', error);
         return NextResponse.json(
             { error: 'Lỗi cập nhật dịch vụ', code: 'INTERNAL_ERROR' },
             { status: 500 }
@@ -140,7 +141,7 @@ export async function DELETE(request: Request) {
                 { status: 404 }
             );
         }
-        console.error('Delete service error:', error);
+        logger.error('Delete service error:', error);
         return NextResponse.json(
             { error: 'Lỗi xóa dịch vụ', code: 'INTERNAL_ERROR' },
             { status: 500 }

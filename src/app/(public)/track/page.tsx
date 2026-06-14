@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import LiveTracker from '@/components/customer/LiveTracker';
 import { Search, RotateCcw } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function TrackPage() {
     const [query, setQuery] = useState('');
@@ -36,7 +37,7 @@ export default function TrackPage() {
             setFoundTicket(data);
             toast.success('Tìm thấy vé của bạn!');
         } catch (error) {
-            console.error('Search error:', error);
+            logger.error('Search error:', error);
             toast.error('Lỗi kết nối hoặc hệ thống. Vui lòng thử lại.');
         } finally {
             setIsLoading(false);

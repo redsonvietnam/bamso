@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Ticket, CheckCircle, XCircle, Clock, Users } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
+import { logger } from '@/lib/logger';
 
 type StatsData = {
     summary: {
@@ -27,12 +29,10 @@ export default function StatsPanel() {
         const fetchStats = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch(`/api/stats?date=${selectedDate}`);
-                if (res.ok) {
-                    setStats(await res.json());
-                }
+                const data = await apiClient.get<StatsData>(`/api/stats?date=${selectedDate}`);
+                setStats(data);
             } catch (error) {
-                console.error('Error fetching stats:', error);
+                logger.error('Error fetching stats:', error);
             } finally {
                 setIsLoading(false);
             }

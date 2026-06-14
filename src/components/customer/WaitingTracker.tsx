@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
@@ -22,6 +22,7 @@ import {
     Search,
     List,
 } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 interface WaitingTrackerProps {
     initialTicket: Ticket & { service: Service };
@@ -72,7 +73,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
                     }
                 }
             } catch (error) {
-                console.error('Error parsing SSE message:', error);
+                logger.error('Error parsing SSE message:', error);
             }
         };
         eventSource.onerror = () => setIsConnected(false);
@@ -102,11 +103,13 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
                         ? `Số ${ticket.ticketNumber} sắp đến lượt, chỉ còn 2 lượt nữa.`
                         : `Số ${ticket.ticketNumber} sắp đến lượt, chỉ còn 3 lượt nữa.`;
             speak(message);
-            setLastSpokenLevel(proximityLevel);
+            const id = setTimeout(() => setLastSpokenLevel(proximityLevel));
+            return () => clearTimeout(id);
         }
 
         if (proximityLevel === 0 && lastSpokenLevel > 0) {
-            setLastSpokenLevel(0);
+            const id = setTimeout(() => setLastSpokenLevel(0));
+            return () => clearTimeout(id);
         }
     }, [proximityLevel, lastSpokenLevel, soundEnabled, ticket.ticketNumber, ticket.status, speak]);
 

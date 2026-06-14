@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { createTicket } from '@/lib/ticket-service';
 import { TicketStatus } from '@/lib/constants';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
     try {
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(ticket, { status: 201 });
     } catch (error) {
-        console.error('Ticket creation error:', error);
+        logger.error('Ticket creation error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống khi tạo vé';
         return NextResponse.json(
             { error: errorMessage, code: 'INTERNAL_ERROR' },
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(tickets);
     } catch (error) {
-        console.error('Fetch tickets error:', error);
+        logger.error('Fetch tickets error:', error);
         return NextResponse.json({ error: 'Lỗi lấy danh sách vé', code: 'INTERNAL_ERROR' }, { status: 500 });
     }
 }

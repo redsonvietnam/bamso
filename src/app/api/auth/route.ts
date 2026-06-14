@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { signJWT } from '@/lib/auth';
 import { verifyPassword } from '@/lib/password';
+import { logger } from '@/lib/logger';
 
 const COOKIE_NAME = 'auth_token';
 const MAX_AGE = 60 * 60 * 24; // 24 hours
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
         return response;
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('Login error:', error);
         return NextResponse.json(
             { error: 'Đã xảy ra lỗi trong quá trình đăng nhập', code: 'SERVER_ERROR' },
             { status: 500 }

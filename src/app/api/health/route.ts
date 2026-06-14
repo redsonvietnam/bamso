@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
     try {
@@ -8,7 +9,7 @@ export async function GET() {
         await prisma.$queryRaw`SELECT 1`;
         return NextResponse.json({ ok: true, db: 'connected' });
     } catch (error) {
-        console.error('Database connection failed:', error);
+        logger.error('Database connection failed:', error);
         // Return a 500 status code if the database connection fails
         return NextResponse.json({ ok: false, db: 'disconnected', error: (error as Error).message }, { status: 500 });
     }
