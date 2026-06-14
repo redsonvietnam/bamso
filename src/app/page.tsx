@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Ticket, User } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 
 type TicketResult = {
@@ -32,18 +33,13 @@ export default function HomePage() {
         const fetchData = async () => {
             try {
                 const [servicesRes, settingsRes] = await Promise.all([
-                    fetch('/api/services'),
-                    fetch('/api/settings?key=agency_name'),
+                    apiClient.get<Service[]>('/api/services'),
+                    apiClient.get<{ value: string }>('/api/settings?key=agency_name'),
                 ]);
 
-                if (servicesRes.ok) {
-                    setServices(await servicesRes.json());
-                }
+                setServices(servicesRes);
 
-                if (settingsRes.ok) {
-                    const data = await settingsRes.json();
-                    if (data.value) setAgencyName(data.value);
-                }
+                if (settingsRes.value) setAgencyName(settingsRes.value);
             } catch (error) {
                 logger.error('Error fetching data:', error);
                 toast.error('Không thể tải dữ liệu.');
@@ -65,18 +61,7 @@ export default function HomePage() {
 
         setIsCreating(true);
         try {
-            const res = await fetch('/api/tickets', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ serviceId: selectedService.id }),
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Lỗi tạo vé.');
-            }
-
-            const ticket = (await res.json()) as TicketResult;
+            const ticket = await apiClient.post<TicketResult>('/api/tickets', { serviceId: selectedService.id });
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -107,18 +92,7 @@ export default function HomePage() {
                 body.phone = phone.trim();
             }
 
-            const res = await fetch('/api/tickets', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Lỗi tạo vé.');
-            }
-
-            const ticket = (await res.json()) as TicketResult;
+            const ticket = await apiClient.post<TicketResult>('/api/tickets', body);
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');

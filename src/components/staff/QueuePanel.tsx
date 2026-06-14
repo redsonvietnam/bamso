@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { useQueueStore } from '@/stores/queue.store';
 import { useSpeech } from '@/hooks/useSpeech';
+import { apiClient } from '@/lib/api-client';
 
 interface QueuePanelProps {
     serviceId: string;
@@ -81,15 +82,12 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
     const handleAction = async (url: string, method: string, body: object, successMsg: string) => {
         setIsLoading(true);
         try {
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Thao tác thất bại');
+            if (method === 'POST') {
+                await apiClient.post(url, body);
+            } else if (method === 'PUT') {
+                await apiClient.put(url, body);
+            } else {
+                await apiClient.delete(url);
             }
 
             toast.success(successMsg);

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Monitor, UserPlus, LayoutGrid, Smartphone, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 
 export default function DemoPage() {
@@ -17,11 +18,8 @@ export default function DemoPage() {
             const tokens: Record<string, string> = {};
             for (const role of ['STAFF', 'DISPLAY']) {
                 try {
-                    const res = await fetch(`/api/demo-token?role=${role}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        tokens[role] = data.token;
-                    }
+                    const data = await apiClient.get<{token:string}>(`/api/demo-token?role=${role}`);
+                    tokens[role] = data.token;
                 } catch (error) {
                     logger.error(`Error getting demo token for ${role}:`, error);
                 }
@@ -86,7 +84,7 @@ export default function DemoPage() {
     const openInNewTab = async (href: string, role?: string) => {
         if (role && demoTokens[role]) {
             // Set cookie before opening
-            await fetch(`/api/demo-token?role=${role}`);
+            await apiClient.get(`/api/demo-token?role=${role}`);
         }
         window.open(href, '_blank');
     };

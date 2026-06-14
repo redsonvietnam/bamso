@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { TicketStatus } from '@/lib/constants';
 import type { Ticket, Service } from '@prisma/client';
 import { logger } from '@/lib/logger';
+import { apiClient } from '@/lib/api-client';
 
 type ExtendedTicket = Ticket & { service: Service };
 
@@ -55,12 +56,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
         // Load initial tickets via REST API before connecting SSE
         try {
-            const res = await fetch(`/api/tickets?serviceId=${serviceId}`);
-            if (res.ok) {
-                const tickets = await res.json();
-                if (Array.isArray(tickets)) {
-                    get().setTickets(tickets);
-                }
+            const tickets = await apiClient.get<ExtendedTicket[]>(`/api/tickets?serviceId=${serviceId}`);
+            if (Array.isArray(tickets)) {
+                get().setTickets(tickets);
             }
         } catch (error) {
             logger.error('Error fetching initial tickets:', error);

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import WaitingTracker from '@/components/customer/WaitingTracker';
 import { ArrowLeft, Ticket as TicketIcon, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api-client';
 
 function WaitingContent() {
     const searchParams = useSearchParams();
@@ -30,13 +31,7 @@ function WaitingContent() {
 
         const fetchTicket = async () => {
             try {
-                const res = await fetch(`/api/tickets/track?query=${encodeURIComponent(ticketId)}`);
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.error || 'Không thể tải thông tin vé.');
-                }
-
+                const data = await apiClient.get<(Ticket & { service: Service })>(`/api/tickets/track?query=${encodeURIComponent(ticketId)}`);
                 setTicket(data);
             } catch (error) {
                 const msg = error instanceof Error ? error.message : 'Lỗi khi tải vé.';

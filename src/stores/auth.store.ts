@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
+import { apiClient } from '@/lib/api-client';
 
 interface User {
     id: string;
@@ -22,40 +23,31 @@ export const useAuthStore = create<AuthState>((set) => ({
     login: async (username, password) => {
         set({ isLoading: true });
         try {
-            const res = await fetch('/api/auth', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
-            });
+            const data = await apiClient.post<{ token?: string; error?: string }>('/api/auth', { username, password });
 
-            const data = await res.json();
-
-            if (!res.ok) {
+            if (data.error) {
                 set({ isLoading: false });
-                return { ok: false, error: data.error || 'Đăng nhập thất bại.' };
+                return { ok: false, error: data.error };
             }
 
             // After successful login, fetch user info to set in store
-            const meRes = await fetch('/api/auth/me');
-            if (meRes.ok) {
-                const meData = await meRes.json();
+            try {
+                const meData = await apiClient.get<{ id: string; username: string; name: string; role: string }>('/api/auth/me');
                 set({ user: meData, isLoading: false });
                 return { ok: true };
+            } catch {
+                set({ isLoading: false });
+                return { ok: false, error: 'Không thể tải thông tin người dùng.' };
             }
-
-            set({ isLoading: false });
-            return { ok: false, error: 'Không thể tải thông tin người dùng.' };
         } catch (error) {
             logger.error('Login store error:', error);
             set({ isLoading: false });
-            return { ok: false, error: 'Lỗi hệ thống hoặc kết nối.' };
+            return { ok: false, error: error instanceof Error ? error.message : 'Lỗi hệ thống hoặc kết nối.' };
         }
     },
     logout: async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST' });
+            await apiClient.post('/api/auth/logout');
         } catch (error) {
             logger.error('Logout error:', error);
         } finally {
@@ -64,13 +56,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     },
     fetchMe: async () => {
         try {
-            const res = await fetch('/api/auth/me');
-            if (res.ok) {
-                const user = await res.json();
-                set({ user });
-            } else {
-                set({ user: null });
-            }
+            const user = await apiClient.get<{ id: string; username: string; name: string; role: string }>('/api/auth/me');
+            set({ user });
         } catch (error) {
             logger.error('Fetch me error:', error);
             set({ user: null });

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { logger } from '@/lib/logger';
+import { apiClient } from '@/lib/api-client';
 
 const DIGIT_MAP: Record<string, string> = {
     '0': 'không',
@@ -58,22 +59,19 @@ async function fetchTtsSettings(): Promise<TtsSettings> {
 
     settingsFetchPromise = (async () => {
         try {
-            const res = await fetch('/api/settings');
-            if (res.ok) {
-                const data = await res.json();
-                const map: Record<string, string> = {};
-                data.forEach((s: { key: string; value: string }) => {
-                    map[s.key] = s.value;
-                });
-                const settings: TtsSettings = { ...DEFAULT_TTS_SETTINGS };
-                (Object.keys(DEFAULT_TTS_SETTINGS) as (keyof TtsSettings)[]).forEach((key) => {
-                    if (map[key] !== undefined) {
-                        (settings as unknown as Record<string, string>)[key] = map[key];
-                    }
-                });
-                cachedSettings = settings;
-                return settings;
-            }
+            const data = await apiClient.get<{ key: string; value: string }[]>('/api/settings');
+            const map: Record<string, string> = {};
+            data.forEach((s: { key: string; value: string }) => {
+                map[s.key] = s.value;
+            });
+            const settings: TtsSettings = { ...DEFAULT_TTS_SETTINGS };
+            (Object.keys(DEFAULT_TTS_SETTINGS) as (keyof TtsSettings)[]).forEach((key) => {
+                if (map[key] !== undefined) {
+                    (settings as unknown as Record<string, string>)[key] = map[key];
+                }
+            });
+            cachedSettings = settings;
+            return settings;
         } catch {
             // Fallback to defaults
         }

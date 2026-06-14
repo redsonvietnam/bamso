@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import LiveTracker from '@/components/customer/LiveTracker';
 import { Search, RotateCcw } from 'lucide-react';
-import { logger } from '@/lib/logger';
+import { apiClient } from '@/lib/api-client';
 
 export default function TrackPage() {
     const [query, setQuery] = useState('');
@@ -26,19 +26,11 @@ export default function TrackPage() {
         setIsLoading(true);
         setFoundTicket(null); // Clear previous result
         try {
-            const res = await fetch(`/api/tickets/track?query=${encodeURIComponent(query.trim())}`);
-            const data = await res.json();
-
-            if (!res.ok) {
-                toast.error(data.error || 'Đã xảy ra lỗi khi tra cứu.');
-                return;
-            }
-
+            const data = await apiClient.get<(Ticket & { service: Service })>(`/api/tickets/track?query=${encodeURIComponent(query.trim())}`);
             setFoundTicket(data);
             toast.success('Tìm thấy vé của bạn!');
         } catch (error) {
-            logger.error('Search error:', error);
-            toast.error('Lỗi kết nối hoặc hệ thống. Vui lòng thử lại.');
+            toast.error(error instanceof Error ? error.message : 'Lỗi kết nối hoặc hệ thống. Vui lòng thử lại.');
         } finally {
             setIsLoading(false);
         }

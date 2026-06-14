@@ -10,6 +10,7 @@ import QueuePanel from '@/components/staff/QueuePanel';
 import { LogOut, ArrowLeft, Monitor } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import {
     Select,
@@ -35,19 +36,18 @@ export default function CanboPage() {
         const fetchData = async () => {
             try {
                 // Fetch services
-                const servicesRes = await fetch('/api/services');
-                let servicesData: Service[] = [];
-                if (servicesRes.ok) {
-                    servicesData = await servicesRes.json();
+                let servicesData: Service[];
+                try {
+                    servicesData = await apiClient.get<Service[]>('/api/services');
                     setServices(servicesData);
-                } else {
+                } catch {
                     toast.error('Không thể tải danh sách dịch vụ.');
+                    servicesData = [];
                 }
 
                 // Fetch counters from settings
-                const settingsRes = await fetch('/api/settings?key=counters');
-                if (settingsRes.ok) {
-                    const settingsData = await settingsRes.json();
+                try {
+                    const settingsData = await apiClient.get<{ value: string }>('/api/settings?key=counters');
                     if (settingsData.value) {
                         const counterList = settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean);
                         setCounters(counterList);
@@ -56,6 +56,8 @@ export default function CanboPage() {
                             setSelectedPos(counterList[0]);
                         }
                     }
+                } catch {
+                    // counters fetch failed silently
                 }
             } catch (error) {
                 logger.error('Error fetching data:', error);

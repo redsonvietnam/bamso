@@ -6,6 +6,7 @@ import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { Volume2, SmartphoneNfc, Hand } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 
 // Define types for the data received from SSE
@@ -49,19 +50,20 @@ export default function DisplayBoard() {
         const fetchInitialData = async () => {
             try {
                 // Fetch counters from settings
-                const settingsRes = await fetch('/api/settings?key=counters');
-                if (settingsRes.ok) {
-                    const settingsData = await settingsRes.json();
+                try {
+                    const settingsData = await apiClient.get<{ value: string }>('/api/settings?key=counters');
                     if (settingsData.value) {
                         const counterList = settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean);
                         setCounters(counterList);
                     }
+                } catch {
+                    // counters fetch failed silently
                 }
 
                 // Fetch all tickets today to get current calls
-                const ticketsRes = await fetch('/api/tickets');
-                if (ticketsRes.ok) {
-                    const tickets: Ticket[] = await ticketsRes.json();
+                let tickets: Ticket[] = [];
+                try {
+                    tickets = await apiClient.get<Ticket[]>('/api/tickets');
                     const calls: Record<string, CurrentCall> = {};
                     for (const t of tickets) {
                         if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
@@ -69,6 +71,8 @@ export default function DisplayBoard() {
                         }
                     }
                     setCurrentCalls(calls);
+                } catch {
+                    // tickets fetch failed silently
                 }
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
