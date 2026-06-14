@@ -4,12 +4,11 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
-import { Volume2, SmartphoneNfc, Hand } from 'lucide-react';
+import { Volume2, SmartphoneNfc, Hand, User } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 
-// Define types for the data received from SSE
 interface DisplayCallEvent {
     type: 'DISPLAY_CALL';
     ticketNumber: string;
@@ -30,11 +29,6 @@ interface CurrentCall {
     timestamp: number;
 }
 
-/**
- * DisplayBoard Component
- * Hiển thị tất cả các quầy trên màn hình lớn. Mỗi quầy hiện số đang được phục vụ
- * hoặc trạng thái rảnh. Người dùng chỉ cần nhìn vào quầy mình cần đến là biết số hiện tại.
- */
 export default function DisplayBoard() {
     const [currentCalls, setCurrentCalls] = useState<Record<string, CurrentCall>>({});
     const [counters, setCounters] = useState<string[]>([]);
@@ -42,38 +36,42 @@ export default function DisplayBoard() {
     const [isConnected, setIsConnected] = useState(false);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const { speak, speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
+    const { speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
     const isProcessedRef = useRef(false);
 
-    // Fetch initial data: counters list + active tickets
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // Fetch counters from settings
-                try {
-                    const settingsData = await apiClient.get<{ value: string }>('/api/settings?key=counters');
-                    if (settingsData.value) {
-                        const counterList = settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean);
-                        setCounters(counterList);
+                const [settingsData, tickets] = await Promise.all([
+                    apiClient.get<{ value: string }>('/api/settings?key=counters').catch(() => ({ value: '' })),
+                    apiClient.get<Ticket[]>('/api/tickets').catch(() => [] as Ticket[]),
+                ]);
+
+                const counterList = settingsData.value
+                    ? settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+
+                const activeCounterSet = new Set<string>();
+                const calls: Record<string, CurrentCall> = {};
+
+                for (const t of tickets) {
+                    if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
+                        activeCounterSet.add(t.pos);
+                        calls[t.pos] = {
+                            ticketNumber: t.ticketNumber,
+                            pos: t.pos,
+                            customerName: (t as Ticket & { customerName?: string | null }).customerName,
+                            timestamp: Date.now(),
+                        };
                     }
-                } catch {
-                    // counters fetch failed silently
                 }
 
-                // Fetch all tickets today to get current calls
-                let tickets: Ticket[] = [];
-                try {
-                    tickets = await apiClient.get<Ticket[]>('/api/tickets');
-                    const calls: Record<string, CurrentCall> = {};
-                    for (const t of tickets) {
-                        if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
-                            calls[t.pos] = { ticketNumber: t.ticketNumber, pos: t.pos, customerName: (t as Ticket & { customerName?: string | null }).customerName, timestamp: Date.now() };
-                        }
-                    }
-                    setCurrentCalls(calls);
-                } catch {
-                    // tickets fetch failed silently
-                }
+                const allCounters = counterList.length > 0
+                    ? [...new Set([...counterList, ...activeCounterSet])]
+                    : [...activeCounterSet];
+
+                setCounters(allCounters.length > 0 ? allCounters : ['Quầy số 1', 'Quầy số 2', 'Quầy số 3', 'Quầy số 4']);
+                setCurrentCalls(calls);
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
             }
@@ -85,7 +83,6 @@ export default function DisplayBoard() {
         audioRef.current = new Audio('/sounds/chime.mp3');
         audioRef.current.load();
 
-        // SSE for Display Calls (hiệu ứng gọi số + âm thanh)
         const displayEventSource = new EventSource('/api/sse/display');
         displayEventSource.onopen = () => setIsConnected(true);
         displayEventSource.onmessage = (event) => {
@@ -96,13 +93,13 @@ export default function DisplayBoard() {
                     setCurrentCalls(prev => ({ ...prev, [data.pos]: newCall }));
                     setLastCalledTicket(newCall);
 
-                    // Play chime sound (will be silent until user unlocks audio)
-                    audioRef.current?.play().catch(e => logger.warn("Chime play skipped (may need user interaction):", e));
+                    setCounters(prev => prev.includes(data.pos) ? prev : [...prev, data.pos].sort());
+
+                    audioRef.current?.play().catch(() => {});
 
                     speakAnnouncement(data.ticketNumber, data.pos);
 
                     if (data.nextTicketNumber) {
-                        // Queue sẽ phát tuần tự: câu "chuẩn bị" chỉ phát sau khi câu trên kết thúc
                         speakPrepare(data.nextTicketNumber);
                     }
 
@@ -114,7 +111,6 @@ export default function DisplayBoard() {
         };
         displayEventSource.onerror = () => setIsConnected(false);
 
-        // SSE for Queue Updates (đồng bộ trạng thái các quầy khi hoàn thành/bỏ qua)
         const queueEventSource = new EventSource('/api/sse/queue');
         queueEventSource.onopen = () => setIsConnected(true);
         queueEventSource.onmessage = (event) => {
@@ -127,19 +123,12 @@ export default function DisplayBoard() {
                             activeCalls[t.pos] = { ticketNumber: t.ticketNumber, pos: t.pos, customerName: (t as Ticket & { customerName?: string | null }).customerName, timestamp: Date.now() };
                         }
                     }
-                    setCurrentCalls(prev => {
-                        if (Object.keys(activeCalls).length === 0) return {};
-                        const merged = { ...prev };
-                        // Add/update active calls
-                        for (const [pos, call] of Object.entries(activeCalls)) {
-                            merged[pos] = call;
-                        }
-                        // Remove counters no longer active
-                        for (const pos of Object.keys(prev)) {
-                            if (!activeCalls[pos]) delete merged[pos];
-                        }
-                        return merged;
-                    });
+                    setCurrentCalls(activeCalls);
+
+                    const activePositions = Object.keys(activeCalls);
+                    if (activePositions.length > 0) {
+                        setCounters(prev => [...new Set([...prev, ...activePositions])].sort());
+                    }
                 }
             } catch (error) {
                 logger.error('Error parsing queue SSE message:', error);
@@ -151,18 +140,15 @@ export default function DisplayBoard() {
             displayEventSource.close();
             queueEventSource.close();
         };
-    }, [speak, speakAnnouncement, speakPrepare]);
+    }, [speakAnnouncement, speakPrepare]);
 
-    // Handle user interaction to unlock audio
     const handleUserInteraction = () => {
         if (!isProcessedRef.current) {
             isProcessedRef.current = true;
             unlockAudio();
-
-            // Replay chime if audio just got unlocked
             if (audioRef.current) {
                 audioRef.current.currentTime = 0;
-                audioRef.current.play().catch(() => { });
+                audioRef.current.play().catch(() => {});
             }
         }
     };
@@ -186,7 +172,6 @@ export default function DisplayBoard() {
             onClick={!isAudioUnlocked ? handleUserInteraction : undefined}
             onTouchStart={!isAudioUnlocked ? handleUserInteraction : undefined}
         >
-            {/* Audio Unlock Overlay */}
             {!isAudioUnlocked && (
                 <div
                     className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-pointer"
@@ -209,70 +194,76 @@ export default function DisplayBoard() {
                 </div>
             )}
 
-            {/* Header */}
             <header className="py-6 text-center relative">
-                <h1 className="text-6xl font-extrabold text-primary">
+                <h1 className="text-5xl font-extrabold" style={{ color: '#00BD7D' }}>
                     BẢNG GỌI SỐ
                 </h1>
             </header>
 
-            {/* Counters Grid — chiếm toàn bộ không gian còn lại */}
-            <main className="flex-1 px-8 pb-8">
-                <div className="h-full grid grid-cols-2 lg:grid-cols-3 gap-6">
-                    {counterDisplayList.map(({ pos, call, isActive, isHighlighted }) => (
-                        <Card
-                            key={pos}
-                            className={`border-2 transition-all duration-500 flex flex-col justify-center items-center p-8
-                                ${isHighlighted
-                                    ? 'border-yellow-400 bg-yellow-50 shadow-lg shadow-yellow-500/30 animate-pulse-once'
-                                    : isActive
-                                        ? 'border-primary/40 bg-card'
-                                        : 'border-dashed border-muted-foreground/30 bg-muted/30'
-                                }
-                            `}
-                        >
-                            <CardTitle className="text-4xl font-bold text-muted-foreground mb-4">
-                                {pos}
-                            </CardTitle>
-                            <CardContent className="p-0 flex flex-col items-center gap-2">
-                                {isActive && call ? (
-                                    <>
-                                        <p className="text-8xl font-black text-primary tracking-tighter">
-                                            {call.ticketNumber}
-                                        </p>
-                                        {call.customerName && (
-                                            <p className="text-2xl text-muted-foreground font-medium">
-                                                {call.customerName}
+            <main className="flex-1 px-6 pb-6">
+                {counterDisplayList.length === 0 ? (
+                    <div className="h-full flex items-center justify-center">
+                        <p className="text-2xl text-muted-foreground/50 italic">
+                            Đang chờ dữ liệu...
+                        </p>
+                    </div>
+                ) : (
+                    <div className="h-full grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {counterDisplayList.map(({ pos, call, isActive, isHighlighted }) => (
+                            <Card
+                                key={pos}
+                                className={`border-2 transition-all duration-500 flex flex-col justify-center items-center p-6
+                                    ${isHighlighted
+                                        ? 'border-yellow-400 bg-yellow-50 shadow-lg shadow-yellow-500/30 animate-pulse-once'
+                                        : isActive
+                                            ? 'border-emerald-400 bg-white shadow-md'
+                                            : 'border-dashed border-slate-300 bg-slate-50/50'
+                                    }
+                                `}
+                            >
+                                <CardTitle className="text-3xl font-bold text-slate-500 mb-3">
+                                    {pos}
+                                </CardTitle>
+                                <CardContent className="p-0 flex flex-col items-center gap-2">
+                                    {isActive && call ? (
+                                        <>
+                                            <p className="text-7xl font-black tracking-tighter" style={{ color: '#00BD7D' }}>
+                                                {call.ticketNumber}
                                             </p>
-                                        )}
-                                    </>
-                                ) : (
-                                    <p className="text-2xl text-muted-foreground/50 italic flex items-center gap-2">
-                                        <SmartphoneNfc className="w-6 h-6" />
-                                        Chưa có số
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+                                            {call.customerName && (
+                                                <p className="text-xl text-slate-500 font-medium flex items-center gap-2">
+                                                    <User className="w-5 h-5" />
+                                                    {call.customerName}
+                                                </p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p className="text-xl text-slate-400 italic flex items-center gap-2">
+                                            <SmartphoneNfc className="w-5 h-5" />
+                                            Chưa có số
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
             </main>
 
-            {/* Footer: connection status + sound */}
-            <footer className="px-8 py-3 border-t border-border text-muted-foreground text-sm flex justify-between items-center">
+            <footer className="px-6 py-3 border-t border-slate-200 text-slate-500 text-sm flex justify-between items-center">
                 <span>
                     Trạng thái kết nối:
-                    <span className={`ml-2 font-semibold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`ml-2 font-semibold ${isConnected ? 'text-emerald-600' : 'text-red-500'}`}>
                         {isConnected ? 'Đã kết nối' : 'Mất kết nối'}
                     </span>
                 </span>
                 <div className="flex items-center gap-2">
                     {!isAudioUnlocked && (
-                        <span className="text-yellow-600 text-xs">
+                        <span className="text-amber-500 text-xs">
                             Âm thanh chưa kích hoạt
                         </span>
                     )}
-                    <Volume2 className={`w-5 h-5 ${!isAudioUnlocked ? 'text-yellow-600' : ''}`} />
+                    <Volume2 className={`w-5 h-5 ${!isAudioUnlocked ? 'text-amber-500' : 'text-slate-400'}`} />
                 </div>
             </footer>
         </div>

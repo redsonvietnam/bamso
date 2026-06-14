@@ -4,11 +4,10 @@ import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Search, List } from 'lucide-react';
+import { ExternalLink, List } from 'lucide-react';
 import { TicketStatus } from '@/lib/constants';
 import { useQueueStatus } from '@/hooks/useQueueStatus';
 import { QueueStatusCard } from '@/components/customer/QueueStatusCard';
-import { NextCallerDisplay } from '@/components/customer/NextCallerDisplay';
 import { EstimatedWaitTime } from '@/components/customer/EstimatedWaitTime';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
 import { AudioUnlockBanner, SoundToggle, ConnectionBadge } from '@/components/customer/WaitingTrackerControls';
@@ -67,9 +66,17 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
 
       <QueueStatusCard ticket={ticket} queueAhead={queueAhead} proximityLevel={proximityLevel} />
 
-      <div className="mt-4">
-        <NextCallerDisplay currentServed={currentServed} />
-      </div>
+      {ticket.status === 'PENDING' && (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-semibold text-emerald-800">Số đang được phục vụ:</p>
+          <p className="mt-1 text-3xl font-black text-emerald-700">
+            {currentServed?.ticketNumber || '—'}
+          </p>
+          <p className="mt-1 text-sm text-emerald-600">
+            tại {currentServed?.pos || 'quầy'} · Còn {queueAhead} lượt trước bạn
+          </p>
+        </div>
+      )}
 
       <div className="mt-4">
         <EstimatedWaitTime ticket={ticket} queueAhead={queueAhead} />
@@ -79,10 +86,10 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
         <Button
           variant="outline"
           className="rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm"
-          onClick={() => router.push('/track')}
+          onClick={() => router.push('/get-ticket')}
         >
-          <Search className="mr-2 h-4 w-4" />
-          Tra cứu vé khác
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Lấy số mới
         </Button>
         <Button
           variant="outline"
@@ -92,22 +99,13 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           }
         >
           <List className="mr-2 h-4 w-4" />
-          Xem danh sách quầy
+          Xem danh sách hàng chờ
         </Button>
       </div>
 
       <div id="service-queue" className="mt-4">
         <ServiceQueueList tickets={serviceQueueTickets} />
       </div>
-
-      <Button
-        variant="ghost"
-        className="mt-4 w-full rounded-2xl py-6 text-sm font-medium text-slate-600"
-        onClick={() => router.push('/track')}
-      >
-        <ExternalLink className="mr-2 h-4 w-4" />
-        Mở trang tra cứu riêng
-      </Button>
     </div>
   );
 }
