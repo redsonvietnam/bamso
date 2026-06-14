@@ -1,4 +1,5 @@
 import prisma from '@/lib/db';
+import { pubSub, CHANNELS } from '@/lib/pub-sub';
 
 const encoder = new TextEncoder();
 
@@ -16,8 +17,33 @@ type DisplayClient = {
 class SSEBroker {
     private queueClients = new Set<QueueClient>();
     private displayClients = new Set<DisplayClient>();
+    private initialized = false;
+
+    private init() {
+        if (this.initialized) return;
+        this.initialized = true;
+
+        pubSub.subscribe(CHANNELS.QUEUE_UPDATE, async (_channel, message) => {
+            try {
+                const { serviceId } = JSON.parse(message);
+                await this.broadcastQueueUpdateLocal(serviceId);
+            } catch {
+                // ignore parse errors
+            }
+        });
+
+        pubSub.subscribe(CHANNELS.DISPLAY_CALL, (_channel, message) => {
+            try {
+                const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
+                this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+            } catch {
+                // ignore parse errors
+            }
+        });
+    }
 
     subscribeQueue(id: string, controller: ReadableStreamDefaultController, serviceId?: string | null) {
+        this.init();
         this.queueClients.add({ id, controller, serviceId });
     }
 
@@ -31,6 +57,7 @@ class SSEBroker {
     }
 
     subscribeDisplay(id: string, controller: ReadableStreamDefaultController) {
+        this.init();
         this.displayClients.add({ id, controller });
     }
 
@@ -44,35 +71,28 @@ class SSEBroker {
     }
 
     async broadcastQueueUpdate(serviceId?: string) {
+        await pubSub.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId }));
+        await this.broadcastQueueUpdateLocal(serviceId);
+    }
+
+    private async broadcastQueueUpdateLocal(serviceId?: string) {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        // Always query ALL tickets today so that display clients (no serviceId filter)
-        // receive the full picture. Per-client filtering is done in-memory below.
         const allTickets = await prisma.ticket.findMany({
             where: {
-                createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
+                createdAt: { gte: startOfDay, lte: endOfDay },
             },
-            orderBy: {
-                position: 'asc',
-            },
-            include: {
-                service: true,
-            },
+            orderBy: { position: 'asc' },
+            include: { service: true },
         });
 
-        // Build per-client payload based on their serviceId filter
         for (const client of this.queueClients) {
             const filtered = client.serviceId
                 ? allTickets.filter(t => t.serviceId === client.serviceId)
                 : allTickets;
 
-            // Only send if the triggered serviceId matches this client's filter,
-            // or if we're broadcasting to clients without a filter (display board)
             if (!serviceId || !client.serviceId || client.serviceId === serviceId) {
                 const payload = JSON.stringify({ type: 'QUEUE_UPDATE', tickets: filtered });
                 const message = `data: ${payload}\n\n`;
@@ -86,6 +106,11 @@ class SSEBroker {
     }
 
     broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+        pubSub.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber }));
+        this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+    }
+
+    private broadcastDisplayCallLocal(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
         const payload = JSON.stringify({
             type: 'DISPLAY_CALL',
             ticketNumber,
@@ -103,7 +128,6 @@ class SSEBroker {
             }
         }
 
-        // Also broadcast to queue clients so waiting dashboards can update
         const queuePayload = JSON.stringify({ type: 'DISPLAY_CALL', ticketNumber, pos, nextTicketNumber });
         const queueMessage = `data: ${queuePayload}\n\n`;
         for (const client of this.queueClients) {
@@ -116,7 +140,6 @@ class SSEBroker {
     }
 }
 
-// Singleton pattern for HMR support in development
 declare global {
     var sseBroker: SSEBroker | undefined;
 }
