@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
-import { Volume2, SmartphoneNfc, Hand, User } from 'lucide-react';
+import { Volume2, Hand, User, ArrowRight } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
@@ -32,12 +32,19 @@ interface CurrentCall {
 export default function DisplayBoard() {
     const [currentCalls, setCurrentCalls] = useState<Record<string, CurrentCall>>({});
     const [counters, setCounters] = useState<string[]>([]);
+    const [pendingTickets, setPendingTickets] = useState<Ticket[]>([]);
     const [lastCalledTicket, setLastCalledTicket] = useState<CurrentCall | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const [time, setTime] = useState(new Date());
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const { speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
     const isProcessedRef = useRef(false);
+
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 30000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -53,6 +60,7 @@ export default function DisplayBoard() {
 
                 const activeCounterSet = new Set<string>();
                 const calls: Record<string, CurrentCall> = {};
+                const pending: Ticket[] = [];
 
                 for (const t of tickets) {
                     if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
@@ -63,6 +71,8 @@ export default function DisplayBoard() {
                             customerName: (t as Ticket & { customerName?: string | null }).customerName,
                             timestamp: Date.now(),
                         };
+                    } else if (t.status === TicketStatus.PENDING) {
+                        pending.push(t);
                     }
                 }
 
@@ -72,6 +82,7 @@ export default function DisplayBoard() {
 
                 setCounters(allCounters.length > 0 ? allCounters : ['Quầy số 1', 'Quầy số 2', 'Quầy số 3', 'Quầy số 4']);
                 setCurrentCalls(calls);
+                setPendingTickets(pending.sort((a, b) => a.position - b.position));
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
             }
@@ -118,12 +129,18 @@ export default function DisplayBoard() {
                 const data: QueueUpdateEvent = JSON.parse(event.data);
                 if (data.type === 'QUEUE_UPDATE' && Array.isArray(data.tickets)) {
                     const activeCalls: Record<string, CurrentCall> = {};
+                    const pending: Ticket[] = [];
+
                     for (const t of data.tickets) {
                         if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
                             activeCalls[t.pos] = { ticketNumber: t.ticketNumber, pos: t.pos, customerName: (t as Ticket & { customerName?: string | null }).customerName, timestamp: Date.now() };
+                        } else if (t.status === TicketStatus.PENDING) {
+                            pending.push(t);
                         }
                     }
+
                     setCurrentCalls(activeCalls);
+                    setPendingTickets(pending.sort((a, b) => a.position - b.position));
 
                     const activePositions = Object.keys(activeCalls);
                     if (activePositions.length > 0) {
@@ -166,9 +183,11 @@ export default function DisplayBoard() {
         }).sort((a, b) => a.pos.localeCompare(b.pos));
     }, [counters, currentCalls, lastCalledTicket]);
 
+    const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
     return (
         <div
-            className="relative flex flex-col h-screen w-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 text-foreground font-sans"
+            className="relative flex flex-col h-screen w-screen bg-white text-foreground font-sans overflow-hidden"
             onClick={!isAudioUnlocked ? handleUserInteraction : undefined}
             onTouchStart={!isAudioUnlocked ? handleUserInteraction : undefined}
         >
@@ -194,78 +213,111 @@ export default function DisplayBoard() {
                 </div>
             )}
 
-            <header className="py-6 text-center relative">
-                <h1 className="text-5xl font-extrabold" style={{ color: '#00BD7D' }}>
-                    BẢNG GỌI SỐ
-                </h1>
-            </header>
-
-            <main className="flex-1 px-6 pb-6">
-                {counterDisplayList.length === 0 ? (
-                    <div className="h-full flex items-center justify-center">
-                        <p className="text-2xl text-muted-foreground/50 italic">
-                            Đang chờ dữ liệu...
-                        </p>
+            <header className="flex items-center justify-between px-8 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#00BD7D' }}>
+                        BẢNG GỌI SỐ
+                    </h1>
+                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                        <span>{isConnected ? 'Đã kết nối' : 'Mất kết nối'}</span>
                     </div>
-                ) : (
-                    <div className="h-full grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {counterDisplayList.map(({ pos, call, isActive, isHighlighted }) => (
-                            <Card
-                                key={pos}
-                                className={`border-2 transition-all duration-500 flex flex-col justify-center items-center p-6
-                                    ${isHighlighted
-                                        ? 'border-yellow-400 bg-yellow-50 shadow-lg shadow-yellow-500/30 animate-pulse-once'
-                                        : isActive
-                                            ? 'border-emerald-400 bg-white shadow-md'
-                                            : 'border-dashed border-slate-300 bg-slate-50/50'
-                                    }
-                                `}
-                            >
-                                <CardTitle className="text-3xl font-bold text-slate-500 mb-3">
-                                    {pos}
-                                </CardTitle>
-                                <CardContent className="p-0 flex flex-col items-center gap-2">
-                                    {isActive && call ? (
-                                        <>
-                                            <p className="text-7xl font-black tracking-tighter" style={{ color: '#00BD7D' }}>
-                                                {call.ticketNumber}
-                                            </p>
-                                            {call.customerName && (
-                                                <p className="text-xl text-slate-500 font-medium flex items-center gap-2">
-                                                    <User className="w-5 h-5" />
-                                                    {call.customerName}
-                                                </p>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <p className="text-xl text-slate-400 italic flex items-center gap-2">
-                                            <SmartphoneNfc className="w-5 h-5" />
-                                            Chưa có số
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                )}
-            </main>
-
-            <footer className="px-6 py-3 border-t border-slate-200 text-slate-500 text-sm flex justify-between items-center">
-                <span>
-                    Trạng thái kết nối:
-                    <span className={`ml-2 font-semibold ${isConnected ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {isConnected ? 'Đã kết nối' : 'Mất kết nối'}
-                    </span>
-                </span>
-                <div className="flex items-center gap-2">
+                </div>
+                <div className="flex items-center gap-4 text-slate-500">
                     {!isAudioUnlocked && (
-                        <span className="text-amber-500 text-xs">
-                            Âm thanh chưa kích hoạt
+                        <span className="text-xs text-amber-500 flex items-center gap-1">
+                            <Volume2 className="w-3.5 h-3.5" />
+                            Chạm để bật âm thanh
                         </span>
                     )}
-                    <Volume2 className={`w-5 h-5 ${!isAudioUnlocked ? 'text-amber-500' : 'text-slate-400'}`} />
+                    <span className="text-lg font-semibold text-slate-700">{timeStr}</span>
                 </div>
-            </footer>
+            </header>
+
+            <main className="flex-1 flex gap-6 p-6 min-h-0">
+                <div className="flex-1 grid grid-cols-2 xl:grid-cols-3 gap-4 content-start">
+                    {counterDisplayList.map(({ pos, call, isActive, isHighlighted }) => (
+                        <Card
+                            key={pos}
+                            className={`border-2 transition-all duration-500 flex flex-col justify-center items-center p-5
+                                ${isHighlighted
+                                    ? 'border-amber-400 bg-amber-50 shadow-lg shadow-amber-500/20'
+                                    : isActive
+                                        ? 'border-emerald-300 bg-white shadow-sm'
+                                        : 'border-dashed border-slate-200 bg-slate-50'
+                                }
+                            `}
+                        >
+                            <CardTitle className="text-xl font-bold text-slate-500 mb-2">
+                                {pos}
+                            </CardTitle>
+                            <CardContent className="p-0 flex flex-col items-center gap-1">
+                                {isActive && call ? (
+                                    <>
+                                        <p className="text-6xl font-black tracking-tighter" style={{ color: '#00BD7D' }}>
+                                            {call.ticketNumber}
+                                        </p>
+                                        {call.customerName && (
+                                            <p className="text-base text-slate-500 font-medium flex items-center gap-1.5">
+                                                <User className="w-4 h-4" />
+                                                {call.customerName}
+                                            </p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-lg text-slate-300 font-medium">
+                                        ——
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+
+                <aside className="w-80 shrink-0 flex flex-col">
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 flex-1 flex flex-col min-h-0">
+                        <div className="px-4 py-3 border-b border-slate-200">
+                            <h2 className="text-base font-bold text-slate-700">Hàng chờ</h2>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                {pendingTickets.length} người đang chờ
+                            </p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+                            {pendingTickets.length > 0 ? (
+                                pendingTickets.slice(0, 20).map((t, i) => (
+                                    <div key={t.id} className="flex items-center justify-between px-4 py-2.5">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                                                i === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                            }`}>
+                                                {t.position}
+                                            </span>
+                                            <span className="text-sm font-semibold text-slate-800 truncate">
+                                                {t.ticketNumber}
+                                            </span>
+                                            {(t as Ticket & { customerName?: string | null }).customerName && (
+                                                <span className="text-xs text-slate-400 truncate">
+                                                    {(t as Ticket & { customerName?: string | null }).customerName}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {i === 0 && (
+                                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1 shrink-0">
+                                                <ArrowRight className="w-3 h-3" />
+                                                Tiếp theo
+                                            </span>
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-sm text-slate-300 italic">
+                                    Chưa có ai trong hàng chờ
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </aside>
+            </main>
         </div>
     );
 }
