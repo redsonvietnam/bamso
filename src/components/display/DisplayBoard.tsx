@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
-import { Card, CardContent, CardTitle } from '@/components/ui/card';
-import { Volume2, Hand, User, ArrowRight } from 'lucide-react';
+import { Card, CardTitle } from '@/components/ui/card';
+import { Volume2, Hand, User, Users } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
@@ -32,10 +32,13 @@ interface CurrentCall {
 export default function DisplayBoard() {
     const [currentCalls, setCurrentCalls] = useState<Record<string, CurrentCall>>({});
     const [counters, setCounters] = useState<string[]>([]);
-    const [pendingTickets, setPendingTickets] = useState<Ticket[]>([]);
+    const [allTickets, setAllTickets] = useState<Ticket[]>([]);
     const [lastCalledTicket, setLastCalledTicket] = useState<CurrentCall | null>(null);
+    const [previousCalls, setPreviousCalls] = useState<Record<string, { serviceId: string; lostAt: number }>>({});
     const [isConnected, setIsConnected] = useState(false);
     const [time, setTime] = useState(new Date());
+
+    const PREVIOUS_CALL_TTL = 60000;
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const { speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
@@ -60,7 +63,6 @@ export default function DisplayBoard() {
 
                 const activeCounterSet = new Set<string>();
                 const calls: Record<string, CurrentCall> = {};
-                const pending: Ticket[] = [];
 
                 for (const t of tickets) {
                     if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
@@ -71,8 +73,6 @@ export default function DisplayBoard() {
                             customerName: (t as Ticket & { customerName?: string | null }).customerName,
                             timestamp: Date.now(),
                         };
-                    } else if (t.status === TicketStatus.PENDING) {
-                        pending.push(t);
                     }
                 }
 
@@ -82,7 +82,7 @@ export default function DisplayBoard() {
 
                 setCounters(allCounters.length > 0 ? allCounters : ['Quầy số 1', 'Quầy số 2', 'Quầy số 3', 'Quầy số 4']);
                 setCurrentCalls(calls);
-                setPendingTickets(pending.sort((a, b) => a.position - b.position));
+                setAllTickets(tickets);
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
             }
@@ -129,18 +129,42 @@ export default function DisplayBoard() {
                 const data: QueueUpdateEvent = JSON.parse(event.data);
                 if (data.type === 'QUEUE_UPDATE' && Array.isArray(data.tickets)) {
                     const activeCalls: Record<string, CurrentCall> = {};
-                    const pending: Ticket[] = [];
+                    const ticketServiceMap: Record<string, string> = {};
 
                     for (const t of data.tickets) {
+                        ticketServiceMap[t.ticketNumber] = t.serviceId;
                         if ((t.status === TicketStatus.CALLED || t.status === TicketStatus.IN_PROGRESS) && t.pos) {
                             activeCalls[t.pos] = { ticketNumber: t.ticketNumber, pos: t.pos, customerName: (t as Ticket & { customerName?: string | null }).customerName, timestamp: Date.now() };
-                        } else if (t.status === TicketStatus.PENDING) {
-                            pending.push(t);
                         }
                     }
 
-                    setCurrentCalls(activeCalls);
-                    setPendingTickets(pending.sort((a, b) => a.position - b.position));
+                    setCurrentCalls(prev => {
+                        const lostCounters: Record<string, { serviceId: string; lostAt: number }> = {};
+                        for (const pos of Object.keys(prev)) {
+                            if (!activeCalls[pos]) {
+                                const lostTicket = prev[pos].ticketNumber;
+                                const serviceId = ticketServiceMap[lostTicket];
+                                if (serviceId) {
+                                    lostCounters[pos] = { serviceId, lostAt: Date.now() };
+                                }
+                            }
+                        }
+                        if (Object.keys(lostCounters).length > 0) {
+                            setPreviousCalls(p => {
+                                const now = Date.now();
+                                const merged = { ...p, ...lostCounters };
+                                const fresh: Record<string, { serviceId: string; lostAt: number }> = {};
+                                for (const [pos, info] of Object.entries(merged)) {
+                                    if (now - info.lostAt < PREVIOUS_CALL_TTL) {
+                                        fresh[pos] = info;
+                                    }
+                                }
+                                return fresh;
+                            });
+                        }
+                        return activeCalls;
+                    });
+                    setAllTickets(data.tickets);
 
                     const activePositions = Object.keys(activeCalls);
                     if (activePositions.length > 0) {
@@ -170,18 +194,43 @@ export default function DisplayBoard() {
         }
     };
 
+    const pendingByServiceId = useMemo(() => {
+        const map: Record<string, number> = {};
+        for (const t of allTickets) {
+            if (t.status === TicketStatus.PENDING) {
+                map[t.serviceId] = (map[t.serviceId] || 0) + 1;
+            }
+        }
+        return map;
+    }, [allTickets]);
+
+    const ticketServiceMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const t of allTickets) {
+            map[t.ticketNumber] = t.serviceId;
+        }
+        return map;
+    }, [allTickets]);
+
     const counterDisplayList = useMemo(() => {
         return counters.map(counter => {
             const call = currentCalls[counter];
+            const prevInfo = previousCalls[counter];
+            const serviceId = call
+                ? ticketServiceMap[call.ticketNumber]
+                : prevInfo?.serviceId;
+            const waitingCount = serviceId ? pendingByServiceId[serviceId] ?? 0 : 0;
             return {
                 pos: counter,
                 call,
                 isActive: !!call,
+                isBetweenCalls: !call && !!prevInfo,
+                waitingCount,
                 isHighlighted: lastCalledTicket?.pos === counter &&
                     lastCalledTicket?.ticketNumber === call?.ticketNumber,
             };
         }).sort((a, b) => a.pos.localeCompare(b.pos));
-    }, [counters, currentCalls, lastCalledTicket]);
+    }, [counters, currentCalls, lastCalledTicket, pendingByServiceId, ticketServiceMap, previousCalls]);
 
     const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
@@ -234,89 +283,58 @@ export default function DisplayBoard() {
                 </div>
             </header>
 
-            <main className="flex-1 flex gap-6 p-6 min-h-0">
-                <div className="flex-1 grid grid-cols-2 xl:grid-cols-3 gap-4 content-start">
-                    {counterDisplayList.map(({ pos, call, isActive, isHighlighted }) => (
-                        <Card
-                            key={pos}
-                            className={`border-2 transition-all duration-500 flex flex-col justify-center items-center p-5
-                                ${isHighlighted
-                                    ? 'border-amber-400 bg-amber-50 shadow-lg shadow-amber-500/20'
-                                    : isActive
-                                        ? 'border-emerald-300 bg-white shadow-sm'
+            <main className="flex-1 grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-5 p-6 content-start auto-rows-max">
+                {counterDisplayList.map(({ pos, call, isActive, isHighlighted, isBetweenCalls, waitingCount }) => (
+                    <Card
+                        key={pos}
+                        className={`border-2 transition-all duration-500 flex flex-col justify-center items-center py-7 px-4
+                            ${isHighlighted
+                                ? 'border-amber-400 bg-amber-50 shadow-lg shadow-amber-500/20'
+                                : isActive
+                                    ? 'border-emerald-300 bg-white shadow-sm'
+                                    : isBetweenCalls
+                                        ? 'border-emerald-200 bg-emerald-50/50 border-dashed'
                                         : 'border-dashed border-slate-200 bg-slate-50'
-                                }
-                            `}
-                        >
-                            <CardTitle className="text-xl font-bold text-slate-500 mb-2">
-                                {pos}
-                            </CardTitle>
-                            <CardContent className="p-0 flex flex-col items-center gap-1">
-                                {isActive && call ? (
-                                    <>
-                                        <p className="text-6xl font-black tracking-tighter" style={{ color: '#00BD7D' }}>
-                                            {call.ticketNumber}
-                                        </p>
-                                        {call.customerName && (
-                                            <p className="text-base text-slate-500 font-medium flex items-center gap-1.5">
-                                                <User className="w-4 h-4" />
-                                                {call.customerName}
-                                            </p>
-                                        )}
-                                    </>
-                                ) : (
-                                    <p className="text-lg text-slate-300 font-medium">
-                                        ——
+                            }
+                        `}
+                    >
+                        <CardTitle className="text-lg font-bold text-slate-400 mb-1 tracking-wide">
+                            {pos}
+                        </CardTitle>
+                        {isActive && call ? (
+                            <>
+                                <p className="text-6xl font-black tracking-tighter leading-none my-3" style={{ color: '#00BD7D' }}>
+                                    {call.ticketNumber}
+                                </p>
+                                {call.customerName && (
+                                    <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5 mb-2">
+                                        <User className="w-3.5 h-3.5" />
+                                        {call.customerName}
                                     </p>
                                 )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-
-                <aside className="w-80 shrink-0 flex flex-col">
-                    <div className="bg-slate-50 rounded-xl border border-slate-200 flex-1 flex flex-col min-h-0">
-                        <div className="px-4 py-3 border-b border-slate-200">
-                            <h2 className="text-base font-bold text-slate-700">Hàng chờ</h2>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                                {pendingTickets.length} người đang chờ
-                            </p>
-                        </div>
-                        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-                            {pendingTickets.length > 0 ? (
-                                pendingTickets.slice(0, 20).map((t, i) => (
-                                    <div key={t.id} className="flex items-center justify-between px-4 py-2.5">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                                                i === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                                            }`}>
-                                                {t.position}
-                                            </span>
-                                            <span className="text-sm font-semibold text-slate-800 truncate">
-                                                {t.ticketNumber}
-                                            </span>
-                                            {(t as Ticket & { customerName?: string | null }).customerName && (
-                                                <span className="text-xs text-slate-400 truncate">
-                                                    {(t as Ticket & { customerName?: string | null }).customerName}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {i === 0 && (
-                                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1 shrink-0">
-                                                <ArrowRight className="w-3 h-3" />
-                                                Tiếp theo
-                                            </span>
-                                        )}
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-sm text-slate-300 italic">
-                                    Chưa có ai trong hàng chờ
+                                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-400 mt-2">
+                                    <Users className="w-4 h-4" />
+                                    <span>{waitingCount} lượt chờ</span>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                </aside>
+                            </>
+                        ) : isBetweenCalls ? (
+                            <>
+                                <p className="text-3xl font-bold tracking-tighter leading-none my-3 text-slate-300">
+                                    ...
+                                </p>
+                                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-400">
+                                    <Users className="w-4 h-4" />
+                                    <span>{waitingCount} lượt chờ</span>
+                                </div>
+                                <p className="text-xs text-slate-300 mt-1">Đang gọi tiếp...</p>
+                            </>
+                        ) : (
+                            <p className="text-base text-slate-300 font-medium my-8">
+                                Đang rảnh
+                            </p>
+                        )}
+                    </Card>
+                ))}
             </main>
         </div>
     );
