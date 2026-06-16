@@ -23,22 +23,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     login: async (username, password) => {
         set({ isLoading: true });
         try {
-            const data = await apiClient.post<{ token?: string; error?: string }>('/api/auth', { username, password });
+            const data = await apiClient.post<{ success: boolean; user?: { id: string; username: string; name: string; role: string }; error?: string }>('/api/auth', { username, password });
 
-            if (data.error) {
+            if (data.error || !data.user) {
                 set({ isLoading: false });
-                return { ok: false, error: data.error };
+                return { ok: false, error: data.error || 'Không thể tải thông tin người dùng.' };
             }
 
-            // After successful login, fetch user info to set in store
-            try {
-                const meData = await apiClient.get<{ id: string; username: string; name: string; role: string }>('/api/auth/me');
-                set({ user: meData, isLoading: false });
-                return { ok: true };
-            } catch {
-                set({ isLoading: false });
-                return { ok: false, error: 'Không thể tải thông tin người dùng.' };
-            }
+            set({ user: data.user, isLoading: false });
+            return { ok: true };
         } catch (error) {
             logger.error('Login store error:', error);
             set({ isLoading: false });

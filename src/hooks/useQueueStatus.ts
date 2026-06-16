@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Ticket, Service } from '@prisma/client';
 import { useSpeech } from '@/hooks/useSpeech';
 import { logger } from '@/lib/logger';
@@ -13,7 +13,23 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   const [isConnected, setIsConnected] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [lastSpokenLevel, setLastSpokenLevel] = useState<ProximityLevel>(0);
+  const [showThankYou, setShowThankYou] = useState(false);
   const { speak, isAudioUnlocked, unlockAudio } = useSpeech();
+
+  const prevStatusRef = useRef(ticket.status);
+  const thankYouTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearThankYouTimer = useCallback(() => {
+    if (thankYouTimerRef.current) {
+      clearTimeout(thankYouTimerRef.current);
+      thankYouTimerRef.current = null;
+    }
+  }, []);
+
+  const dismissThankYou = useCallback(() => {
+    clearThankYouTimer();
+    setShowThankYou(false);
+  }, [clearThankYouTimer]);
 
   useEffect(() => {
     const eventSource = new EventSource(`/api/sse/queue?serviceId=${ticket.serviceId}`);
@@ -25,6 +41,17 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
           setAllTickets(data.tickets);
           const updatedTicket = data.tickets.find((t: Ticket) => t.id === ticket.id);
           if (updatedTicket) {
+            const prevStatus = prevStatusRef.current;
+            const newStatus = updatedTicket.status;
+            if (
+              (prevStatus === 'CALLED' || prevStatus === 'IN_PROGRESS') &&
+              newStatus === 'COMPLETED'
+            ) {
+              clearThankYouTimer();
+              setShowThankYou(true);
+              thankYouTimerRef.current = setTimeout(() => setShowThankYou(false), 15000);
+            }
+            prevStatusRef.current = newStatus;
             setTicket((prev) => ({ ...updatedTicket, service: prev.service }));
           }
         }
@@ -33,8 +60,17 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
       }
     };
     eventSource.onerror = () => setIsConnected(false);
-    return () => eventSource.close();
-  }, [ticket.id, ticket.serviceId]);
+    return () => {
+      eventSource.close();
+      clearThankYouTimer();
+    };
+  }, [ticket.id, ticket.serviceId, clearThankYouTimer]);
+
+  useEffect(() => {
+    if (showThankYou) {
+      speak(`Cảm ơn bạn. Số ${ticket.ticketNumber} đã được phục vụ xong.`);
+    }
+  }, [showThankYou, speak, ticket.ticketNumber]);
 
   const queueAhead = useMemo(() => {
     if (ticket.status !== 'PENDING') return 0;
@@ -86,6 +122,8 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
     queueAhead,
     proximityLevel,
     currentServed,
+    showThankYou,
+    dismissThankYou,
     handleToggleSound,
     unlockAudio,
   };

@@ -11,6 +11,7 @@ import { QueueStatusCard } from '@/components/customer/QueueStatusCard';
 import { NextCallerDisplay } from '@/components/customer/NextCallerDisplay';
 import { EstimatedWaitTime } from '@/components/customer/EstimatedWaitTime';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
+import ThankYouOverlay from '@/components/customer/ThankYouOverlay';
 
 interface LiveTrackerProps {
     initialTicket: Ticket & { service: Service };
@@ -24,6 +25,8 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
         queueAhead,
         proximityLevel,
         currentServed,
+        showThankYou,
+        dismissThankYou,
     } = useQueueStatus(initialTicket);
 
     const serviceQueueTickets = useMemo(() => {
@@ -33,7 +36,17 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
     }, [allTickets]);
 
     return (
-        <div className="mx-auto w-full max-w-xl">
+        <>
+            {showThankYou && (
+                <ThankYouOverlay
+                    ticketNumber={ticket.ticketNumber}
+                    serviceName={ticket.service.name}
+                    servicePrefix={ticket.service.prefix}
+                    serviceColor={ticket.service.color}
+                    onDismiss={dismissThankYou}
+                />
+            )}
+            <div className="mx-auto w-full max-w-xl">
             <div className="flex items-center gap-3 mb-4">
                 <div
                     className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-sm"
@@ -81,6 +94,7 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
             <div id="service-queue" className="mt-4">
                 <ServiceQueueList tickets={serviceQueueTickets} />
             </div>
-        </div>
+            </div>
+        </>
     );
 }

@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // Set environment variable NEXT_BUILD_STANDALONE=1 for production/Docker builds.
   output: process.env.NEXT_BUILD_STANDALONE ? 'standalone' : undefined,
   // Allow HMR/dev resources from LAN IP for development
-  allowedDevOrigins: ['192.168.1.148'],
+  allowedDevOrigins: ['*'],
 };
 
 export default nextConfig;

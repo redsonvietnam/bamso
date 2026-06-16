@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,9 @@ import { ExternalLink, List } from 'lucide-react';
 import { TicketStatus } from '@/lib/constants';
 import { useQueueStatus } from '@/hooks/useQueueStatus';
 import { QueueStatusCard } from '@/components/customer/QueueStatusCard';
-import { EstimatedWaitTime } from '@/components/customer/EstimatedWaitTime';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
 import { AudioUnlockBanner, SoundToggle, ConnectionBadge } from '@/components/customer/WaitingTrackerControls';
+import ThankYouOverlay from '@/components/customer/ThankYouOverlay';
 
 interface WaitingTrackerProps {
   initialTicket: Ticket & { service: Service };
@@ -27,9 +27,21 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
     queueAhead,
     proximityLevel,
     currentServed,
+    showThankYou,
+    dismissThankYou,
     handleToggleSound,
     unlockAudio,
   } = useQueueStatus(initialTicket);
+
+  useEffect(() => {
+    const handler = () => {
+      if (!isAudioUnlocked && soundEnabled) {
+        unlockAudio();
+      }
+    };
+    document.addEventListener('click', handler, { once: true });
+    return () => document.removeEventListener('click', handler);
+  }, [isAudioUnlocked, soundEnabled, unlockAudio]);
 
   const serviceQueueTickets = useMemo(() => {
     return allTickets
@@ -38,8 +50,18 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
   }, [allTickets]);
 
   return (
-    <div className="mx-auto w-full max-w-xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <>
+      {showThankYou && (
+        <ThankYouOverlay
+          ticketNumber={ticket.ticketNumber}
+          serviceName={ticket.service.name}
+          servicePrefix={ticket.service.prefix}
+          serviceColor={ticket.service.color}
+          onDismiss={dismissThankYou}
+        />
+      )}
+      <div className="mx-auto w-full max-w-xl px-4 py-6 space-y-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div
             className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-sm"
@@ -49,7 +71,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-900">{ticket.service.name}</p>
-            <p className="text-xs text-slate-500">Theo dõi realtime</p>
+            <p className="text-xs text-slate-500">Cập nhật realtime</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -66,26 +88,28 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
 
       <QueueStatusCard ticket={ticket} queueAhead={queueAhead} proximityLevel={proximityLevel} />
 
-      {ticket.status === 'PENDING' && (
-        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-sm font-semibold text-emerald-800">Số đang được phục vụ:</p>
-          <p className="mt-1 text-3xl font-black text-emerald-700">
-            {currentServed?.ticketNumber || '—'}
+      {ticket.status === 'PENDING' && currentServed && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.1em] text-emerald-600">
+            Hiện đang phục vụ
           </p>
-          <p className="mt-1 text-sm text-emerald-600">
-            tại {currentServed?.pos || 'quầy'} · Còn {queueAhead} lượt trước bạn
-          </p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-emerald-800">
+              {currentServed.ticketNumber}
+            </span>
+            {currentServed.pos && (
+              <span className="text-sm text-emerald-600">
+                &middot; Quầy {currentServed.pos}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="mt-4">
-        <EstimatedWaitTime ticket={ticket} queueAhead={queueAhead} />
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="flex gap-3">
         <Button
           variant="outline"
-          className="rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm"
+          className="flex-1 rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
           onClick={() => router.push('/get-ticket')}
         >
           <ExternalLink className="mr-2 h-4 w-4" />
@@ -93,19 +117,20 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
         </Button>
         <Button
           variant="outline"
-          className="rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm"
+          className="flex-1 rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
           onClick={() =>
             document.getElementById('service-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
         >
           <List className="mr-2 h-4 w-4" />
-          Xem danh sách hàng chờ
+          Xem hàng chờ
         </Button>
       </div>
 
-      <div id="service-queue" className="mt-4">
+      <div id="service-queue">
         <ServiceQueueList tickets={serviceQueueTickets} />
       </div>
-    </div>
+      </div>
+    </>
   );
 }

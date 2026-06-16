@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
         const user = await prisma.user.findUnique({
             where: { username },
-            select: { id: true, name: true, role: true, passwordHash: true },
+            select: { id: true, username: true, name: true, role: true, passwordHash: true },
         });
 
         if (!user || !verifyPassword(password, user.passwordHash)) {
@@ -35,13 +35,14 @@ export async function POST(request: Request) {
 
         const response = NextResponse.json({
             success: true,
-            user: { name: user.name, role: user.role }
+            user: { id: user.id, username: user.username, name: user.name, role: user.role }
         });
 
         // Set httpOnly cookie natively
+        const isSecure = process.env.NODE_ENV === 'production' && request.headers.get('x-forwarded-proto') === 'https';
         response.cookies.set(COOKIE_NAME, token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isSecure,
             sameSite: 'lax',
             path: '/',
             maxAge: MAX_AGE,
