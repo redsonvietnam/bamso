@@ -69,6 +69,8 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   useEffect(() => {
     if (showThankYou) {
       speak(`Cảm ơn bạn. Số ${ticket.ticketNumber} đã được phục vụ xong.`);
+      const audio = new Audio('/sounds/chime.mp3');
+      audio.play().catch(() => {});
     }
   }, [showThankYou, speak, ticket.ticketNumber]);
 

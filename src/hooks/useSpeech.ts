@@ -260,20 +260,13 @@ export function useSpeech() {
      * Nếu TTS bị tắt (tts_enabled = false) thì không phát gì cả.
      */
     const speak = useCallback((text: string) => {
-        // Check if TTS is enabled globally
         if (settingsRef.current.tts_enabled !== 'true') {
             return;
         }
 
-        if (!isAudioUnlocked) {
-            // Chưa unlock → xếp hàng để phát sau
-            queueRef.current.push(text);
-            return;
-        }
-        // Đã unlock → xử lý ngay (hoặc thêm vào queue)
         queueRef.current.push(text);
         processQueue();
-    }, [isAudioUnlocked, processQueue]);
+    }, [processQueue]);
 
     /**
      * Phát thông báo sử dụng template từ settings.

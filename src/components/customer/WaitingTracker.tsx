@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { TicketStatus } from '@/lib/constants';
 import { useQueueStatus } from '@/hooks/useQueueStatus';
 import { QueueStatusCard } from '@/components/customer/QueueStatusCard';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
-import { AudioUnlockBanner, SoundToggle, ConnectionBadge } from '@/components/customer/WaitingTrackerControls';
+import { SoundToggle, ConnectionBadge } from '@/components/customer/WaitingTrackerControls';
 import ThankYouOverlay from '@/components/customer/ThankYouOverlay';
 
 interface WaitingTrackerProps {
@@ -23,25 +23,13 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
     allTickets,
     isConnected,
     soundEnabled,
-    isAudioUnlocked,
     queueAhead,
     proximityLevel,
     currentServed,
     showThankYou,
     dismissThankYou,
     handleToggleSound,
-    unlockAudio,
   } = useQueueStatus(initialTicket);
-
-  useEffect(() => {
-    const handler = () => {
-      if (!isAudioUnlocked && soundEnabled) {
-        unlockAudio();
-      }
-    };
-    document.addEventListener('click', handler, { once: true });
-    return () => document.removeEventListener('click', handler);
-  }, [isAudioUnlocked, soundEnabled, unlockAudio]);
 
   const serviceQueueTickets = useMemo(() => {
     return allTickets
@@ -79,12 +67,6 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           <ConnectionBadge isConnected={isConnected} />
         </div>
       </div>
-
-      <AudioUnlockBanner
-        isAudioUnlocked={isAudioUnlocked}
-        soundEnabled={soundEnabled}
-        onUnlockAudio={unlockAudio}
-      />
 
       <QueueStatusCard ticket={ticket} queueAhead={queueAhead} proximityLevel={proximityLevel} />
 
