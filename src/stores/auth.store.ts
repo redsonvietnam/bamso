@@ -52,7 +52,9 @@ export const useAuthStore = create<AuthState>((set) => ({
             const user = await apiClient.get<{ id: string; username: string; name: string; role: string }>('/api/auth/me');
             set({ user });
         } catch (error) {
-            logger.error('Fetch me error:', error);
+            if (error instanceof Error && error.message !== 'Unauthorized') {
+                logger.error('Fetch me error:', error);
+            }
             set({ user: null });
         }
     },
