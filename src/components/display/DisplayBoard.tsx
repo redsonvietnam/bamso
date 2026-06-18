@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
 import { Card, CardTitle } from '@/components/ui/card';
-import { Volume2, Hand, User, Users } from 'lucide-react';
+import { User, Users } from 'lucide-react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
@@ -41,8 +41,7 @@ export default function DisplayBoard() {
     const PREVIOUS_CALL_TTL = 60000;
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const { speakAnnouncement, speakPrepare, isAudioUnlocked, unlockAudio } = useSpeech();
-    const isProcessedRef = useRef(false);
+    const { speakAnnouncement, speakPrepare, unlockAudio } = useSpeech();
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 30000);
@@ -183,16 +182,9 @@ export default function DisplayBoard() {
         };
     }, [speakAnnouncement, speakPrepare]);
 
-    const handleUserInteraction = () => {
-        if (!isProcessedRef.current) {
-            isProcessedRef.current = true;
-            unlockAudio();
-            if (audioRef.current) {
-                audioRef.current.currentTime = 0;
-                audioRef.current.play().catch(() => {});
-            }
-        }
-    };
+    useEffect(() => {
+        unlockAudio();
+    }, [unlockAudio]);
 
     const pendingByServiceId = useMemo(() => {
         const map: Record<string, number> = {};
@@ -237,31 +229,7 @@ export default function DisplayBoard() {
     return (
         <div
             className="relative flex flex-col h-screen w-screen bg-white text-foreground font-sans overflow-hidden"
-            onClick={!isAudioUnlocked ? handleUserInteraction : undefined}
-            onTouchStart={!isAudioUnlocked ? handleUserInteraction : undefined}
         >
-            {!isAudioUnlocked && (
-                <div
-                    className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-pointer"
-                    onClick={handleUserInteraction}
-                    onTouchStart={handleUserInteraction}
-                >
-                    <div className="animate-bounce mb-6">
-                        <Hand className="w-20 h-20 text-white" />
-                    </div>
-                    <p className="text-4xl font-bold text-white mb-4">
-                        Chạm vào màn hình
-                    </p>
-                    <p className="text-2xl text-white/70">
-                        để kích hoạt âm thanh thông báo
-                    </p>
-                    <div className="mt-10 flex items-center gap-3 text-white/50 text-lg">
-                        <Volume2 className="w-6 h-6" />
-                        <span>Âm thanh sẽ phát sau khi bạn chạm</span>
-                    </div>
-                </div>
-            )}
-
             <header className="flex items-center justify-between px-8 py-4 border-b border-slate-100">
                 <div className="flex items-center gap-4">
                     <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#00BD7D' }}>
@@ -273,12 +241,6 @@ export default function DisplayBoard() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4 text-slate-500">
-                    {!isAudioUnlocked && (
-                        <span className="text-xs text-amber-500 flex items-center gap-1">
-                            <Volume2 className="w-3.5 h-3.5" />
-                            Chạm để bật âm thanh
-                        </span>
-                    )}
                     <span className="text-lg font-semibold text-slate-700">{timeStr}</span>
                 </div>
             </header>
