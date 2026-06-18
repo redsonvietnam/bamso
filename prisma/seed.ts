@@ -10,7 +10,7 @@ async function main() {
     // --- Users ---
     // We use the real hashPassword utility to seed credentials
     const adminPasswordHash = hashPassword('admin@2026');
-    const staff1PasswordHash = hashPassword('staff1@2026');
+    const canbo1PasswordHash = hashPassword('canbo1@123');
     const staff2PasswordHash = hashPassword('staff2@2026');
     const kiosk1PasswordHash = hashPassword('kiosk@2026');
     const display1PasswordHash = hashPassword('display@2026');
@@ -29,19 +29,22 @@ async function main() {
     });
     console.log(`Created admin user with id: ${admin.id}`);
 
-    const staff1 = await prisma.user.upsert({
-        where: { username: 'staff1' },
+    // Remove old staff1 if still exists, then create/update canbo1
+    await prisma.user.deleteMany({ where: { username: 'staff1' } });
+
+    const canbo1 = await prisma.user.upsert({
+        where: { username: 'canbo1' },
         update: {
-            passwordHash: staff1PasswordHash,
+            passwordHash: canbo1PasswordHash,
         },
         create: {
-            username: 'staff1',
-            passwordHash: staff1PasswordHash,
-            name: 'Staff One',
+            username: 'canbo1',
+            passwordHash: canbo1PasswordHash,
+            name: 'Cán bộ 1',
             role: UserRole.STAFF,
         },
     });
-    console.log(`Created staff1 user with id: ${staff1.id}`);
+    console.log(`Created canbo1 user with id: ${canbo1.id}`);
 
     const staff2 = await prisma.user.upsert({
         where: { username: 'staff2' },

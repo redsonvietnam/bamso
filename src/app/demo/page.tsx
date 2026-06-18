@@ -191,9 +191,9 @@ export default function DemoPage() {
                                 <p>Password: <code className="bg-background px-1 rounded">admin@2026</code></p>
                             </div>
                             <div className="bg-muted p-3 rounded">
-                                <p className="font-semibold">Nhân viên</p>
-                                <p>Username: <code className="bg-background px-1 rounded">staff1</code></p>
-                                <p>Password: <code className="bg-background px-1 rounded">staff1@2026</code></p>
+                                <p className="font-semibold">Cán bộ</p>
+                                <p>Username: <code className="bg-background px-1 rounded">canbo1</code></p>
+                                <p>Password: <code className="bg-background px-1 rounded">canbo1@123</code></p>
                             </div>
                         </div>
                     </CardContent>

@@ -1,7 +1,7 @@
 # 🧪 Kế Hoạch Kiểm Thử Toàn Diện — Bamso Queue Management System
 
 > **Môi trường:** http://localhost:3000  
-> **Tài khoản test:** admin / admin@2026 | staff1 / staff1@2026 | staff2 / staff2@2026  
+> **Tài khoản test:** admin / admin@2026 | canbo1 / canbo1@2026 | staff2 / staff2@2026  
 > **Dữ liệu mẫu:** Dịch vụ A (Ưu tiên), Dịch vụ B (Thông thường)
 
 ---
@@ -21,10 +21,10 @@
 | # | Test Case | Bước thực hiện | Kết quả mong đợi | Trạng thái |
 |---|-----------|---------------|-----------------|-----------|
 | 2.1 | Login thành công (Admin) | Mở `/login`, nhập `admin` / `admin@2026`, bấm Đăng nhập | Redirect sang `/admin` | ✅ |
-| 2.2 | Login thành công (Staff) | Nhập `staff1` / `staff1@2026` | Redirect sang `/canbo` | ✅ |
+| 2.2 | Login thành công (Staff) | Nhập `canbo1` / `canbo1@2026` | Redirect sang `/canbo` | ✅ |
 | 2.3 | Login sai mật khẩu | Nhập `admin` / `saimatkhau` | Toast lỗi hiện ra, không redirect | ✅ |
 | 2.4 | Truy cập protected route khi chưa login | Mở `/admin` khi chưa login | Redirect về `/login` (proxy.ts) | ✅ |
-| 2.5 | Staff không được vào `/admin` | Login staff1, thử mở `/admin` | Redirect về `/canbo` hoặc 403 | ✅ |
+| 2.5 | Staff không được vào `/admin` | Login canbo1, thử mở `/admin` | Redirect về `/canbo` hoặc 403 | ✅ |
 | 2.6 | Logout | Đang ở `/admin`, bấm nút Đăng xuất | Redirect về `/login`, cookie bị xóa | ✅ |
 | 2.7 | Demo token API (STAFF role) | `GET /api/demo-token?role=STAFF` | Trả về `{token: "..."}` hợp lệ | ✅ |
 | 2.8 | **[VERIFIED] Login thiếu username** | `POST /api/auth` với body `{password: "abc"}` | HTTP 400 `code: MISSING_CREDENTIALS` | ✅ |
@@ -142,17 +142,17 @@
 
 | # | Test Case | Bước thực hiện | Kết quả mong đợi | Trạng thái |
 |---|-----------|---------------|-----------------|-----------|
-| 8.6 | Xem danh sách nhân viên | Vào tab Nhân viên | Hiển thị admin, staff1, staff2 | ✅ |
+| 8.6 | Xem danh sách nhân viên | Vào tab Nhân viên | Hiển thị admin, canbo1, staff2 | ✅ |
 | 8.7 | Thêm nhân viên mới | Bấm Thêm, điền username/password/role | Nhân viên mới được tạo | ✅ |
-| 8.8 | Sửa thông tin nhân viên | Sửa tên staff1 | Tên cập nhật | ✅ |
+| 8.8 | Sửa thông tin nhân viên | Sửa tên canbo1 | Tên cập nhật | ✅ |
 | 8.9 | Xóa nhân viên | Xóa nhân viên test | Nhân viên biến khỏi danh sách | ✅ |
 | 8.10 | Nhân viên mới đăng nhập được | Tạo staff3, logout, login với staff3 | Login thành công vào `/canbo` | ✅ |
 | 8.21 | **[VERIFIED] POST /api/staff — thiếu field** | `POST /api/staff` thiếu `role` | HTTP 400 `code: MISSING_FIELDS` | ✅ |
 | 8.22 | **[VERIFIED] POST /api/staff — role không hợp lệ** | `POST /api/staff` với `role: "MANAGER"` | HTTP 400 `code: INVALID_ROLE` | ✅ |
-| 8.23 | **[VERIFIED] POST /api/staff — username trùng** | `POST /api/staff` với username `staff1` | HTTP 409 `code: DUPLICATE_USERNAME` | ✅ |
+| 8.23 | **[VERIFIED] POST /api/staff — username trùng** | `POST /api/staff` với username `canbo1` | HTTP 409 `code: DUPLICATE_USERNAME` | ✅ |
 | 8.24 | **[VERIFIED] PUT /api/staff — id không tồn tại** | `PUT /api/staff` với id ngẫu nhiên | HTTP 404 `code: NOT_FOUND` | ✅ |
 | 8.25 | **[VERIFIED] DELETE /api/staff — id không tồn tại** | `DELETE /api/staff?id=xxx` với id ngẫu nhiên | HTTP 404 `code: NOT_FOUND` | ✅ |
-| 8.26 | **[VERIFIED] PUT /api/staff — đổi mật khẩu** | `PUT /api/staff` với id staff1, `{password: "newpass"}` | Mật khẩu được cập nhật, hash đúng | ✅ |
+| 8.26 | **[VERIFIED] PUT /api/staff — đổi mật khẩu** | `PUT /api/staff` với id canbo1, `{password: "newpass"}` | Mật khẩu được cập nhật, hash đúng | ✅ |
 
 ### 8C — Thống Kê (Stats)
 
