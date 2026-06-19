@@ -53,6 +53,14 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
               setShowThankYou(true);
               thankYouTimerRef.current = setTimeout(() => setShowThankYou(false), 15000);
             }
+            if (
+              soundEnabled &&
+              prevStatus === 'PENDING' &&
+              (newStatus === 'CALLED' || newStatus === 'IN_PROGRESS')
+            ) {
+              const pos = updatedTicket.pos ? ` đến quầy ${updatedTicket.pos}` : '';
+              speak(`Số ${updatedTicket.ticketNumber} đã đến lượt. Xin mời quý khách${pos}.`);
+            }
             prevStatusRef.current = newStatus;
             setTicket((prev) => ({ ...updatedTicket, service: prev.service }));
           }
@@ -66,7 +74,7 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
       eventSource.close();
       clearThankYouTimer();
     };
-  }, [ticket.id, ticket.serviceId, clearThankYouTimer]);
+  }, [ticket.id, ticket.serviceId, clearThankYouTimer, soundEnabled, speak]);
 
   useEffect(() => {
     apiClient.get<{ value: string }>('/api/settings?key=thank_you_voice_template')
