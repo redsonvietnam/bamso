@@ -20,6 +20,7 @@ export const DEFAULT_TTS_SETTINGS: Record<string, string> = {
   tts_edge_voice: 'vi-VN-HoaiMyNeural',
   tts_announcement_template: 'Mời số {ticketNumber} đến {pos} để phục vụ',
   tts_prepare_template: 'Số {ticketNumber} chuẩn bị',
+  thank_you_voice_template: 'Cảm ơn bạn. Số {ticketNumber} đã được phục vụ xong.',
 };
 
 export type TTSVoice = { id: string; name: string };

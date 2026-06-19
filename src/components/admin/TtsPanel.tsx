@@ -58,11 +58,14 @@ export default function TtsPanel() {
       <TemplateEditor
         announcementTemplate={settings['tts_announcement_template'] || ''}
         prepareTemplate={settings['tts_prepare_template'] || ''}
+        thankYouVoiceTemplate={settings['thank_you_voice_template'] || ''}
         savingKey={savingKey}
         onAnnouncementChange={(val) => updateSetting('tts_announcement_template', val)}
         onPrepareChange={(val) => updateSetting('tts_prepare_template', val)}
+        onThankYouVoiceChange={(val) => updateSetting('thank_you_voice_template', val)}
         onSaveAnnouncement={() => saveSetting('tts_announcement_template', settings['tts_announcement_template'] || '')}
         onSavePrepare={() => saveSetting('tts_prepare_template', settings['tts_prepare_template'] || '')}
+        onSaveThankYouVoice={() => saveSetting('thank_you_voice_template', settings['thank_you_voice_template'] || '')}
       />
 
       <Card>
@@ -74,7 +77,7 @@ export default function TtsPanel() {
           <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
             <li>Bảng hiển thị (Display Board) — đọc số gọi</li>
             <li>Nhân viên (Staff Panel) — đọc số khi gọi</li>
-            <li>Theo dõi khách hàng (Waiting Tracker) — nhắc sắp đến lượt</li>
+            <li>Theo dõi khách hàng (Waiting Tracker) — nhắc sắp đến lượt + cảm ơn sau khi phục vụ</li>
           </ul>
         </CardContent>
       </Card>

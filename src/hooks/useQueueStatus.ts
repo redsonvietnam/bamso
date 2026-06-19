@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Ticket, Service } from '@prisma/client';
 import { useSpeech } from '@/hooks/useSpeech';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 
 type ProximityLevel = 0 | 1 | 2 | 3;
@@ -14,6 +15,7 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [lastSpokenLevel, setLastSpokenLevel] = useState<ProximityLevel>(0);
   const [showThankYou, setShowThankYou] = useState(false);
+  const thankYouVoiceRef = useRef('Cảm ơn bạn. Số {ticketNumber} đã được phục vụ xong.');
   const { speak, isAudioUnlocked, unlockAudio } = useSpeech();
 
   const prevStatusRef = useRef(ticket.status);
@@ -67,8 +69,15 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   }, [ticket.id, ticket.serviceId, clearThankYouTimer]);
 
   useEffect(() => {
+    apiClient.get<{ value: string }>('/api/settings?key=thank_you_voice_template')
+      .then((res) => { if (res.value) thankYouVoiceRef.current = res.value; })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (showThankYou) {
-      speak(`Cảm ơn bạn. Số ${ticket.ticketNumber} đã được phục vụ xong.`);
+      const text = thankYouVoiceRef.current.replace('{ticketNumber}', ticket.ticketNumber);
+      speak(text);
       const audio = new Audio('/sounds/chime.mp3');
       audio.play().catch(() => {});
     }

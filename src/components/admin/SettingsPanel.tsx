@@ -103,6 +103,34 @@ export default function SettingsPanel() {
 
             <Card>
                 <CardHeader>
+                    <CardTitle>Lời cảm ơn khi hoàn thành</CardTitle>
+                    <CardDescription>
+                        Hiển thị trên màn hình khách hàng khi vé được phục vụ xong.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex gap-3">
+                        <Input
+                            value={settings['thank_you_text'] || 'Cảm ơn bạn đã sử dụng dịch vụ'}
+                            onChange={(e) => setSettings({ ...settings, thank_you_text: e.target.value })}
+                            placeholder="Cảm ơn bạn đã sử dụng dịch vụ"
+                            className="max-w-md"
+                        />
+                        <Button
+                            onClick={() => handleSave('thank_you_text', settings['thank_you_text'] || 'Cảm ơn bạn đã sử dụng dịch vụ')}
+                            disabled={isSaving}
+                        >
+                            <Check className="w-4 h-4 mr-1" /> Lưu
+                        </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                        Mặc định: <code className="bg-muted px-1 py-0.5 rounded">Cảm ơn bạn đã sử dụng dịch vụ</code>
+                    </p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
                     <CardTitle>Danh sách quầy</CardTitle>
                     <CardDescription>
                         Các quầy mà cán bộ có thể chọn khi trực. Mỗi quầy cách nhau bằng dấu phẩy (ví dụ: Quầy 1, Quầy 2, Quầy 3).

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { NextCallerDisplay } from '@/components/customer/NextCallerDisplay';
 import { EstimatedWaitTime } from '@/components/customer/EstimatedWaitTime';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
 import ThankYouOverlay from '@/components/customer/ThankYouOverlay';
+import { apiClient } from '@/lib/api-client';
 
 interface LiveTrackerProps {
     initialTicket: Ticket & { service: Service };
@@ -19,6 +20,14 @@ interface LiveTrackerProps {
 
 export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
     const router = useRouter();
+    const [thankYouMessage, setThankYouMessage] = useState('Cảm ơn bạn đã sử dụng dịch vụ');
+
+    useEffect(() => {
+        apiClient.get<{ value: string }>('/api/settings?key=thank_you_text')
+            .then((res) => { if (res.value) setThankYouMessage(res.value); })
+            .catch(() => {});
+    }, []);
+
     const {
         ticket,
         allTickets,
@@ -43,6 +52,7 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
                     serviceName={ticket.service.name}
                     servicePrefix={ticket.service.prefix}
                     serviceColor={ticket.service.color}
+                    message={thankYouMessage}
                     onDismiss={dismissThankYou}
                 />
             )}

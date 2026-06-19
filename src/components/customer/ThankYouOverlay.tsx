@@ -9,6 +9,7 @@ interface ThankYouOverlayProps {
   serviceName: string;
   servicePrefix: string;
   serviceColor: string;
+  message: string;
   onDismiss: () => void;
 }
 
@@ -17,6 +18,7 @@ export default function ThankYouOverlay({
   serviceName,
   servicePrefix,
   serviceColor,
+  message,
   onDismiss,
 }: ThankYouOverlayProps) {
   const router = useRouter();
@@ -29,7 +31,7 @@ export default function ThankYouOverlay({
         </div>
 
         <h1 className="text-2xl font-bold text-slate-900 mb-6">
-          Cảm ơn bạn đã sử dụng dịch vụ
+          {message}
         </h1>
 
         <p className="text-5xl font-black tracking-tighter mb-1" style={{ color: serviceColor }}>

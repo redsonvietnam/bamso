@@ -147,6 +147,8 @@ async function main() {
         { key: 'tts_edge_voice', value: 'vi-VN-HoaiMyNeural' },
         { key: 'tts_announcement_template', value: 'Mời số {ticketNumber} đến {pos} để phục vụ' },
         { key: 'tts_prepare_template', value: 'Số {ticketNumber} chuẩn bị' },
+        { key: 'thank_you_text', value: 'Cảm ơn bạn đã sử dụng dịch vụ' },
+        { key: 'thank_you_voice_template', value: 'Cảm ơn bạn. Số {ticketNumber} đã được phục vụ xong.' },
     ];
 
     for (const s of ttsSettings) {

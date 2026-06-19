@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Ticket, Service } from '@prisma/client';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { QueueStatusCard } from '@/components/customer/QueueStatusCard';
 import { ServiceQueueList } from '@/components/customer/ServiceQueueList';
 import { SoundToggle, ConnectionBadge } from '@/components/customer/WaitingTrackerControls';
 import ThankYouOverlay from '@/components/customer/ThankYouOverlay';
+import { apiClient } from '@/lib/api-client';
 
 interface WaitingTrackerProps {
   initialTicket: Ticket & { service: Service };
@@ -18,6 +19,14 @@ interface WaitingTrackerProps {
 
 export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
   const router = useRouter();
+  const [thankYouMessage, setThankYouMessage] = useState('Cảm ơn bạn đã sử dụng dịch vụ');
+
+  useEffect(() => {
+    apiClient.get<{ value: string }>('/api/settings?key=thank_you_text')
+      .then((res) => { if (res.value) setThankYouMessage(res.value); })
+      .catch(() => {});
+  }, []);
+
   const {
     ticket,
     allTickets,
@@ -45,6 +54,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           serviceName={ticket.service.name}
           servicePrefix={ticket.service.prefix}
           serviceColor={ticket.service.color}
+          message={thankYouMessage}
           onDismiss={dismissThankYou}
         />
       )}
