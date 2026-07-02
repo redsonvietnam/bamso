@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   output: process.env.NEXT_BUILD_STANDALONE ? 'standalone' : undefined,
   // Allow HMR/dev resources from LAN IP for development
   allowedDevOrigins: ['*'],
+  serverExternalPackages: ['ioredis'],
 };
 
 export default nextConfig;
