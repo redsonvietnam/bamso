@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
-import { Card, CardTitle } from '@/components/ui/card';
-import { User, Users } from 'lucide-react';
+import { Volume2, User, Users, Bell } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
@@ -39,12 +39,11 @@ export default function DisplayBoard() {
     const [time, setTime] = useState(new Date());
 
     const PREVIOUS_CALL_TTL = 60000;
-
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const { speakAnnouncement, speakPrepare, unlockAudio } = useSpeech();
+    const { speakAnnouncement, speakPrepare } = useSpeech();
 
     useEffect(() => {
-        const timer = setInterval(() => setTime(new Date()), 30000);
+        const timer = setInterval(() => setTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
@@ -105,15 +104,16 @@ export default function DisplayBoard() {
 
                     setCounters(prev => prev.includes(data.pos) ? prev : [...prev, data.pos].sort());
 
-                    audioRef.current?.play().catch(() => {});
-
+                    audioRef.current?.play().catch(() => {
+                        logger.warn('Audio autoplay blocked. Ensure browser is configured for autoplay in kiosk mode.');
+                    });
                     speakAnnouncement(data.ticketNumber, data.pos);
 
                     if (data.nextTicketNumber) {
                         speakPrepare(data.nextTicketNumber);
                     }
 
-                    setTimeout(() => setLastCalledTicket(null), 5000);
+                    setTimeout(() => setLastCalledTicket(null), 7000);
                 }
             } catch (error) {
                 logger.error('Error parsing display SSE message:', error);
@@ -182,10 +182,6 @@ export default function DisplayBoard() {
         };
     }, [speakAnnouncement, speakPrepare]);
 
-    useEffect(() => {
-        unlockAudio();
-    }, [unlockAudio]);
-
     const pendingByServiceId = useMemo(() => {
         const map: Record<string, number> = {};
         for (const t of allTickets) {
@@ -227,77 +223,148 @@ export default function DisplayBoard() {
     const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <div
-            className="relative flex flex-col h-screen w-screen bg-white text-foreground font-sans overflow-hidden"
-        >
-            <header className="flex items-center justify-between px-8 py-4 border-b border-slate-100">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#00BD7D' }}>
-                        BẢNG GỌI SỐ
-                    </h1>
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-400'}`} />
-                        <span>{isConnected ? 'Đã kết nối' : 'Mất kết nối'}</span>
+        <div className="relative flex flex-col h-screen w-screen bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden selection:bg-emerald-100">
+            {/* Subtle Brand Accents */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-[#00BD7D]" />
+            <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[30%] bg-emerald-100/50 blur-[100px] rounded-full pointer-events-none" />
+            
+            <header className="relative z-10 flex items-center justify-between px-12 py-6 bg-white border-b border-slate-200 shadow-sm">
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-8 bg-[#00BD7D] rounded-full" />
+                        <h1 className="text-4xl font-black tracking-tighter uppercase" style={{ color: '#00BD7D' }}>
+                            BẢNG GỌI SỐ
+                        </h1>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200">
+                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                            {isConnected ? 'Hệ thống trực tuyến' : 'Mất kết nối'}
+                        </span>
                     </div>
                 </div>
-                <div className="flex items-center gap-4 text-slate-500">
-                    <span className="text-lg font-semibold text-slate-700">{timeStr}</span>
+                <div className="flex items-center gap-6 text-slate-500">
+                    <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400">Thời gian</p>
+                        <p className="text-2xl font-mono font-bold text-slate-700">{timeStr}</p>
+                    </div>
                 </div>
             </header>
 
-            <main className="flex-1 grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-5 p-6 content-start auto-rows-max">
-                {counterDisplayList.map(({ pos, call, isActive, isHighlighted, isBetweenCalls, waitingCount }) => (
-                    <Card
-                        key={pos}
-                        className={`border-2 transition-all duration-500 flex flex-col justify-center items-center py-7 px-4
-                            ${isHighlighted
-                                ? 'border-amber-400 bg-amber-50 shadow-lg shadow-amber-500/20'
-                                : isActive
-                                    ? 'border-emerald-300 bg-white shadow-sm'
-                                    : isBetweenCalls
-                                        ? 'border-emerald-200 bg-emerald-50/50 border-dashed'
-                                        : 'border-dashed border-slate-200 bg-slate-50'
-                            }
-                        `}
-                    >
-                        <CardTitle className="text-lg font-bold text-slate-400 mb-1 tracking-wide">
-                            {pos}
-                        </CardTitle>
-                        {isActive && call ? (
-                            <>
-                                <p className="text-6xl font-black tracking-tighter leading-none my-3" style={{ color: '#00BD7D' }}>
-                                    {call.ticketNumber}
-                                </p>
-                                {call.customerName && (
-                                    <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5 mb-2">
-                                        <User className="w-3.5 h-3.5" />
-                                        {call.customerName}
-                                    </p>
-                                )}
-                                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-400 mt-2">
-                                    <Users className="w-4 h-4" />
-                                    <span>{waitingCount} lượt chờ</span>
+            <main className="relative z-10 flex-1 p-8 overflow-y-auto">
+                <AnimatePresence mode="wait">
+                    {lastCalledTicket && (
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 1.1 }}
+                            className="mb-12 relative"
+                        >
+                            <div className="relative flex flex-col items-center justify-center p-12 rounded-[40px] bg-white border-4 border-[#00BD7D] shadow-[0_20px_50px_rgba(0,189,125,0.15)]">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <Bell className="w-6 h-6 text-[#00BD7D] animate-ring" />
+                                    <span className="text-[#00BD7D] uppercase tracking-[0.3em] font-black text-sm">Đang gọi số</span>
                                 </div>
-                            </>
-                        ) : isBetweenCalls ? (
-                            <>
-                                <p className="text-3xl font-bold tracking-tighter leading-none my-3 text-slate-300">
-                                    ...
+                                <p className="text-[12rem] font-black tracking-tighter leading-none text-slate-900">
+                                    {lastCalledTicket.ticketNumber}
                                 </p>
-                                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-400">
-                                    <Users className="w-4 h-4" />
-                                    <span>{waitingCount} lượt chờ</span>
+                                <div className="flex items-center gap-12 mt-6">
+                                    <div className="text-center">
+                                        <p className="text-slate-400 uppercase text-xs font-bold tracking-widest mb-1">Vị trí</p>
+                                        <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.pos}</p>
+                                    </div>
+                                    <div className="w-px h-12 bg-slate-200" />
+                                    <div className="text-center">
+                                        <p className="text-slate-400 uppercase text-xs font-bold tracking-widest mb-1">Khách hàng</p>
+                                        <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.customerName || 'Quý khách'}</p>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-slate-300 mt-1">Đang gọi tiếp...</p>
-                            </>
-                        ) : (
-                            <p className="text-base text-slate-300 font-medium my-8">
-                                Đang rảnh
-                            </p>
-                        )}
-                    </Card>
-                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8">
+                    {counterDisplayList.map(({ pos, call, isActive, isHighlighted, isBetweenCalls, waitingCount }, index) => (
+                        <motion.div
+                            key={pos}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                        >
+                            <div className={`relative h-full rounded-3xl border transition-all duration-500 p-8 flex flex-col justify-between
+                                ${isHighlighted
+                                    ? 'border-[#00BD7D] bg-emerald-50 shadow-lg shadow-emerald-500/10'
+                                    : isActive
+                                        ? 'border-slate-200 bg-white shadow-sm'
+                                        : isBetweenCalls
+                                            ? 'border-slate-200 bg-slate-50/50 border-dashed'
+                                            : 'border-slate-100 bg-slate-50/30'
+                                }
+                            `}>
+                                <div className="flex items-center justify-between mb-6">
+                                    <span className="text-sm font-bold uppercase tracking-widest text-slate-400">
+                                        {pos}
+                                    </span>
+                                    {isActive && (
+                                        <span className="flex h-2 w-2 rounded-full bg-[#00BD7D] animate-pulse" />
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col items-center justify-center py-6">
+                                    {isActive && call ? (
+                                        <>
+                                            <p className="text-7xl font-black tracking-tighter text-slate-900 mb-2">
+                                                {call.ticketNumber}
+                                            </p>
+                                            {call.customerName && (
+                                                <p className="text-base text-slate-500 font-medium flex items-center gap-1.5">
+                                                    <User className="w-4 h-4" />
+                                                    {call.customerName}
+                                                </p>
+                                            )}
+                                        </>
+                                    ) : isBetweenCalls ? (
+                                        <p className="text-2xl font-bold text-slate-300 italic">
+                                            Đang chuẩn bị...
+                                        </p>
+                                    ) : (
+                                        <p className="text-lg text-slate-400 font-medium">
+                                            Hiện đang rảnh
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-slate-400">
+                                        <Users className="w-4 h-4" />
+                                        <span className="text-xs font-bold uppercase tracking-tighter">Đang chờ</span>
+                                    </div>
+                                    <span className="text-xl font-mono font-bold text-slate-600">
+                                        {waitingCount}
+                                    </span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
             </main>
+
+            <style jsx global>{`
+                @keyframes ring {
+                    0% { transform: scale(1); opacity: 1; }
+                    100% { transform: scale(2); opacity: 0; }
+                }
+                .animate-ring::after {
+                    content: '';
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    border: 4px solid #00BD7D;
+                    border-radius: 50%;
+                    animation: ring 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+                }
+            `}</style>
         </div>
     );
 }

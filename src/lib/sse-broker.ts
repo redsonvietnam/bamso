@@ -1,7 +1,12 @@
 import prisma from '@/lib/db';
-import { pubSub, CHANNELS } from '@/lib/pub-sub';
+import { redis, redisPubSub } from '@/lib/redis';
 
 const encoder = new TextEncoder();
+
+const CHANNELS = {
+    QUEUE_UPDATE: 'queue:updates',
+    DISPLAY_CALL: 'display:calls',
+} as const;
 
 type QueueClient = {
     id: string;
@@ -19,25 +24,24 @@ class SSEBroker {
     private displayClients = new Set<DisplayClient>();
     private initialized = false;
 
-    private init() {
+    private async init() {
         if (this.initialized) return;
         this.initialized = true;
 
-        pubSub.subscribe(CHANNELS.QUEUE_UPDATE, async (_channel, message) => {
+        // Subscribe to Redis channels for cross-instance synchronization
+        await redisPubSub.subscribe(CHANNELS.QUEUE_UPDATE, CHANNELS.DISPLAY_CALL);
+        
+        redisPubSub.on('message', async (channel, message) => {
             try {
-                const { serviceId } = JSON.parse(message);
-                await this.broadcastQueueUpdateLocal(serviceId);
-            } catch {
-                // ignore parse errors
-            }
-        });
-
-        pubSub.subscribe(CHANNELS.DISPLAY_CALL, (_channel, message) => {
-            try {
-                const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
-                this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
-            } catch {
-                // ignore parse errors
+                if (channel === CHANNELS.QUEUE_UPDATE) {
+                    const { serviceId } = JSON.parse(message);
+                    await this.broadcastQueueUpdateLocal(serviceId);
+                } else if (channel === CHANNELS.DISPLAY_CALL) {
+                    const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
+                    this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+                }
+            } catch (err) {
+                console.error('[SSEBroker] Redis message parse error:', err);
             }
         });
     }
@@ -71,7 +75,9 @@ class SSEBroker {
     }
 
     async broadcastQueueUpdate(serviceId?: string) {
-        await pubSub.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId }));
+        // Publish to Redis for all instances to pick up
+        await redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId }));
+        // Also trigger local update immediately
         await this.broadcastQueueUpdateLocal(serviceId);
     }
 
@@ -80,20 +86,25 @@ class SSEBroker {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        const allTickets = await prisma.ticket.findMany({
+        // OPTIMIZATION: Filter by serviceId directly in the DB query to avoid O(N) memory issues
+        // We fetch all if serviceId is not provided, otherwise only for that service
+        const tickets = await prisma.ticket.findMany({
             where: {
                 createdAt: { gte: startOfDay, lte: endOfDay },
+                ...(serviceId && { serviceId }),
             },
             orderBy: { position: 'asc' },
             include: { service: true },
         });
 
         for (const client of this.queueClients) {
-            const filtered = client.serviceId
-                ? allTickets.filter(t => t.serviceId === client.serviceId)
-                : allTickets;
-
+            // If the broadcast is for a specific service, only send to clients interested in that service
             if (!serviceId || !client.serviceId || client.serviceId === serviceId) {
+                // Further filter for clients who only want a specific service if they provided one
+                const filtered = client.serviceId
+                    ? tickets.filter(t => t.serviceId === client.serviceId)
+                    : tickets;
+
                 const payload = JSON.stringify({ type: 'QUEUE_UPDATE', tickets: filtered });
                 const message = `data: ${payload}\n\n`;
                 try {
@@ -106,7 +117,9 @@ class SSEBroker {
     }
 
     broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
-        pubSub.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber }));
+        // Publish to Redis for all instances to pick up
+        redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber }));
+        // Also trigger local update immediately
         this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
     }
 

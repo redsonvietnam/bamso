@@ -41,19 +41,24 @@ export async function proxy(request: NextRequest) {
     // =====================
     const publicRoutes = ['/', '/get-ticket', '/track', '/waiting', '/demo', '/display', '/kiosk'];
     const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
-    const isPublicApiRoute = pathname.startsWith('/api/auth') ||
-        pathname.startsWith('/api/services') ||
-        pathname.startsWith('/api/tickets') ||
-        pathname.startsWith('/api/tickets/track') ||
-        pathname.startsWith('/api/settings') ||
-        pathname.startsWith('/api/health') ||
-        pathname.startsWith('/api/tts') ||
-        pathname.startsWith('/api/sse') ||
-        pathname.startsWith('/api/demo-token');
+    
+    const PUBLIC_API_ROUTES = [
+        '/api/auth',
+        '/api/services',
+        '/api/tickets',
+        '/api/tickets/track',
+        '/api/settings',
+        '/api/health',
+        '/api/tts',
+        '/api/sse',
+        '/api/demo-token',
+    ];
+    const isPublicApiRoute = PUBLIC_API_ROUTES.some(route => pathname.startsWith(route));
 
-        if (pathname.startsWith('/_next/') || pathname.startsWith('/static/')) {
+    if (pathname.startsWith('/_next/') || pathname.startsWith('/static/')) {
         return NextResponse.next();
     }
+
     if (isPublicRoute || isPublicApiRoute) {
         return NextResponse.next();
     }
@@ -96,7 +101,6 @@ export async function proxy(request: NextRequest) {
             if (pathname.startsWith('/api')) {
                 return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
             }
-            // Redirect user to their appropriate dashboard
             const roleRedirect: Record<string, string> = {
                 ADMIN: '/admin',
                 STAFF: '/canbo',
@@ -110,8 +114,15 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // Default: allow through
+    // =====================
+    // 4. DENY BY DEFAULT: Bất kỳ route /api nào không khớp whitelist hoặc protected đều bị chặn
+    // =====================
+    if (pathname.startsWith('/api')) {
+        return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+    }
+
     return NextResponse.next();
+
 }
 
 export const config = {
@@ -119,9 +130,6 @@ export const config = {
         '/login',
         '/admin/:path*',
         '/canbo/:path*',
-        '/api/admin/:path*',
-        '/api/queue/:path*',
-        '/api/staff/:path*',
-        '/api/stats/:path*',
+        '/api/:path*',
     ],
 };

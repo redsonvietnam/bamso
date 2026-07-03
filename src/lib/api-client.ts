@@ -52,6 +52,13 @@ export class APIClient {
         return (await res.json()) as T;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // IMPORTANT: Do NOT retry non-idempotent requests (POST, PATCH) 
+        // to prevent duplicate data creation on the server.
+        if (method === 'POST' || method === 'PATCH') {
+          throw lastError;
+        }
+
         if (error instanceof DOMException && error.name === 'AbortError') {
           throw error;
         }
