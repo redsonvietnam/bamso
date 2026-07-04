@@ -46,6 +46,14 @@ export default function QRScanner({ onScanSuccess, onScanError }: QRScannerProps
     const startScanning = useCallback(async () => {
         if (!containerRef.current) return;
 
+        // Check for secure context (HTTPS or localhost)
+        if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+            const msg = 'Camera yêu cầu kết nối HTTPS hoặc localhost để hoạt động. Bạn đang truy cập qua IP không bảo mật.';
+            toast.error(msg);
+            onScanError?.(msg);
+            return;
+        }
+
         try {
             const html5QrCode = new Html5Qrcode("reader");
             scannerRef.current = html5QrCode;
