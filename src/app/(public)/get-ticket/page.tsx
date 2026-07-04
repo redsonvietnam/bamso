@@ -8,16 +8,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Ticket, User, ArrowLeft } from 'lucide-react';
+import { Ticket, User, ArrowLeft, QrCode } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient } from '@/lib/api-client';
+import { parseCCCDName } from '@/lib/cccd-parser';
+import QRScanner from '@/components/qr-scanner/QRScanner';
 
 export default function GetTicketPage() {
     const router = useRouter();
     const [services, setServices] = useState<Service[]>([]);
     const [agencyName, setAgencyName] = useState('Hệ thống quản lý hàng đợi');
     const [selectedService, setSelectedService] = useState<Service | null>(null);
-    const [mode, setMode] = useState<'quick' | 'form' | null>(null);
+    const [mode, setMode] = useState<'quick' | 'form' | 'scan' | null>(null);
     const [customerName, setCustomerName] = useState('');
     const [phone, setPhone] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -78,9 +80,11 @@ export default function GetTicketPage() {
         setIsCreating(true);
         try {
             const body: Record<string, string> = { serviceId: selectedService.id };
-            if (mode === 'form') {
+            if (mode === 'form' || mode === 'scan') {
                 body.customerName = customerName.trim();
-                body.phone = phone.trim();
+                if (mode === 'form') {
+                    body.phone = phone.trim();
+                }
             }
 
             const ticket = await apiClient.post<{ id: string }>('/api/tickets', body);
@@ -89,6 +93,17 @@ export default function GetTicketPage() {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleScanSuccess = (decodedText: string) => {
+        const name = parseCCCDName(decodedText);
+        if (name) {
+            setCustomerName(name);
+            setMode('form'); // Switch to form mode with name pre-filled
+            toast.success(`Đã tìm thấy tên: ${name}`);
+        } else {
+            toast.error('Không thể nhận diện thông tin từ mã QR. Vui lòng thử lại hoặc nhập thủ công.');
         }
     };
 
@@ -130,6 +145,8 @@ export default function GetTicketPage() {
                             onClick={() => {
                                 setSelectedService(null);
                                 setMode(null);
+                                setCustomerName('');
+                                setPhone('');
                             }}
                         >
                             <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại
@@ -152,14 +169,25 @@ export default function GetTicketPage() {
                             <Ticket className="w-5 h-5 mr-2" /> {isCreating ? 'Đang lấy số...' : 'Lấy số nhanh'}
                         </Button>
 
-                        <Button
-                            variant="outline"
-                            className="w-full h-12 text-lg font-medium"
-                            onClick={() => setMode('form')}
-                            disabled={isCreating}
-                        >
-                            <User className="w-5 h-5 mr-2" /> Lấy số có thông tin
-                        </Button>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button
+                                variant="outline"
+                                className="w-full h-12 text-sm font-medium"
+                                onClick={() => setMode('form')}
+                                disabled={isCreating}
+                            >
+                                <User className="w-4 h-4 mr-2" /> Nhập tay
+                            </Button>
+
+                            <Button
+                                variant="outline"
+                                className="w-full h-12 text-sm font-medium"
+                                onClick={() => setMode('scan')}
+                                disabled={isCreating}
+                            >
+                                <QrCode className="w-4 h-4 mr-2" /> Quét CCCD
+                            </Button>
+                        </div>
 
                         {mode === 'form' && (
                             <div className="space-y-4 pt-4 border-t mt-4">
@@ -196,6 +224,13 @@ export default function GetTicketPage() {
                         )}
                     </CardContent>
                 </Card>
+
+                {mode === 'scan' && (
+                    <QRScanner 
+                        onScanSuccess={handleScanSuccess} 
+                        onScanError={(err) => toast.error(err)}
+                    />
+                )}
             </div>
         );
     }

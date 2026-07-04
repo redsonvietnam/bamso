@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
-import { Volume2, User, Users, Bell } from 'lucide-react';
+import { User, Users, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';

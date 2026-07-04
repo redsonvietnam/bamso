@@ -41,6 +41,7 @@ class SSEBroker {
                     this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
                 }
             } catch (err) {
+                // eslint-disable-next-line no-console
                 console.error('[SSEBroker] Redis message parse error:', err);
             }
         });
