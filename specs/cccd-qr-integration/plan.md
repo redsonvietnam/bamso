@@ -1,26 +1,31 @@
-# Plan: CCCD QR Code Integration
+# Plan: CCCD QR Code Integration - Next Steps
 
-## Phase 1: Documentation & Setup
-- [x] Tạo file đặc tả kỹ thuật: `specs/cccd-qr-integration/spec.md`
-- [ ] Tạo file theo dõi tiến độ: `specs/cccd-qr-integration/plan.md`
-- [ ] Nghiên cứu và chọn thư viện quét QR nhẹ, tương thích tốt với trình duyệt di động (ví dụ: `html5-qrcode`).
-- [ ] Chuẩn bị bộ dữ liệu mẫu (mock data) gồm các chuỗi QR CCCD với các trường dữ liệu khác nhau để phục vụ việc test.
+## Mục tiêu chính
+Đảm bảo tính năng quét QR CCCD hoạt động đầy đủ trên thiết bị di động.
 
-## Phase 2: Core Logic Development
-- [ ] Tạo file tiện ích: `src/lib/cccd-parser.ts`.
-- [ ] Viết Unit Tests cho `cccd-parser.ts`.
+## Trạng thái hiện tại
+Tính năng đã được code xong và tích hợp vào ứng dụng. Các vấn đề về network (Hot Reload trên mobile) và camera (yêu cầu HTTPS) đã được xác định và có hướng dẫn giải quyết bằng `ngrok`.
 
-## Phase 3: Frontend Integration
-- [ ] Cài đặt thư viện quét QR đã chọn.
-- [ ] Cập nhật trang lấy số: `src/app/(public)/get-ticket/page.tsx`.
-- [ ] Xây dựng Component `QRScanner`.
-- [ ] Tích hợp logic: `Quét thành công` $\rightarrow$ `Parser` $\rightarrow$ `Hiển thị tên để xác nhận`.
+## Các bước tiếp theo
 
-## Phase 4: Privacy Audit
-- [ ] Kiểm tra Network: Đảm bảo payload gửi lên server chỉ chứa `serviceId` và `customerName`.
-- [ ] Kiểm tra Client-side: Xác nhận không có dữ liệu nhạy cảm nào được lưu trong `state` hoặc `localStorage`.
+### Bước 1: Chuẩn bị dữ liệu mẫu để kiểm thử (Mock Data)
+- [ ] Tạo các mã QR giả lập CCCD với các trường hợp khác nhau (tên có dấu, không dấu, độ dài khác nhau) dưới dạng chuỗi text.
+  - *Mục đích:* Giúp người dùng dễ dàng kiểm tra tính năng mà không cần CCCD thật.
+  - *Định dạng sẽ là:* `[Số CCCD]|[Họ tên]|[Ngày sinh]|[Giới tính]|[Quốc tịch]|[Ngày cấp]`
+  - *Ví dụ mẫu sẽ được cung cấp ngay sau khi cập nhật file plan.*
 
-## Phase 5: Verification & Finalization
-- [ ] Kiểm thử E2E.
-- [ ] Kiểm tra Mobile UX.
-- [ ] Chạy `npm run lint` và `npm run typecheck`.
+### Bước 2: Hướng dẫn người dùng chạy ngrok và kiểm thử E2E trên mobile
+- [ ] **Khởi động server:** Chạy `npm run dev` trên máy tính của bạn.
+- [ ] **Khởi động ngrok:** Thực hiện theo hướng dẫn trong `docs/ngrok-setup.md` để khởi động `ngrok` và lấy URL HTTPS.
+- [ ] **Kiểm thử trên điện thoại:**
+    1. Truy cập URL ngrok trên điện thoại.
+    2. Chọn một dịch vụ.
+    3. Nhấn nút "Quét CCCD".
+    4. Cấp quyền truy cập camera (nếu được hỏi).
+    5. Quét các mã QR mẫu (sẽ cung cấp bên dưới) hoặc CCCD thật của bạn.
+    6. Xác nhận tên được trích xuất hiển thị chính xác.
+    7. Hoàn tất lấy số.
+- [ ] **Báo cáo kết quả:** Yêu cầu người dùng báo cáo lại kết quả kiểm thử (camera có bật không, quét có nhận diện được không, tên có đúng không, có lấy được số không).
+
+### Bước 3: Tối ưu hóa trải nghiệm người dùng (Mobile UX - nếu cần)
+- [ ] Dựa trên phản hồi kiểm thử của người dùng, thực hiện các điều chỉnh về giao diện, độ nhạy của camera, hoặc thông báo lỗi để tối ưu hóa trải nghiệm trên thiết bị di động.

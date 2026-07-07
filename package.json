@@ -25,6 +25,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "axios": "^1.18.0",
     "edge-tts": "^1.0.1",
+    "html5-qrcode": "^2.3.8",
     "ioredis": "^5.11.1",
     "jose": "^5.2.4",
     "lucide-react": "^1.16.0",

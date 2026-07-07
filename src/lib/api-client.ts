@@ -14,7 +14,11 @@ export class APIClient {
   private config: APIClientConfig;
 
   constructor(config: APIClientConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = {
+      ...DEFAULT_CONFIG,
+      baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
+      ...config
+    };
   }
 
   async request<T>(endpoint: string, options: RequestOptions): Promise<T> {
@@ -52,7 +56,7 @@ export class APIClient {
         return (await res.json()) as T;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         // IMPORTANT: Do NOT retry non-idempotent requests (POST, PATCH) 
         // to prevent duplicate data creation on the server.
         if (method === 'POST' || method === 'PATCH') {

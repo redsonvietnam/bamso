@@ -30,7 +30,7 @@ export default function GetTicketPage() {
             try {
                 const [svc, settings] = await Promise.all([
                     apiClient.get<Service[]>('/api/services'),
-                    apiClient.get<{key:string,value:string}>('/api/settings?key=agency_name'),
+                    apiClient.get<{ key: string, value: string }>('/api/settings?key=agency_name'),
                 ]);
                 setServices(svc);
                 if (settings.value) setAgencyName(settings.value);
@@ -80,11 +80,23 @@ export default function GetTicketPage() {
         setIsCreating(true);
         try {
             const body: Record<string, string> = { serviceId: selectedService.id };
-            if (mode === 'form' || mode === 'scan') {
+
+            // Include customerName if it's available (from scan or form input)
+            if (customerName.trim()) {
                 body.customerName = customerName.trim();
-                if (mode === 'form') {
-                    body.phone = phone.trim();
+            }
+
+            // Include phone only if in 'form' mode and provided
+            if (mode === 'form') {
+                if (!customerName.trim()) {
+                    toast.error('Vui lòng nhập tên.');
+                    return;
                 }
+                if (!validatePhone(phone)) {
+                    toast.error('Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0).');
+                    return;
+                }
+                body.phone = phone.trim();
             }
 
             const ticket = await apiClient.post<{ id: string }>('/api/tickets', body);
@@ -226,10 +238,19 @@ export default function GetTicketPage() {
                 </Card>
 
                 {mode === 'scan' && (
-                    <QRScanner 
-                        onScanSuccess={handleScanSuccess} 
-                        onScanError={(err) => toast.error(err)}
-                    />
+                    <div className="fixed inset-0 z-20 bg-white flex items-center justify-center">
+                        <QRScanner
+                            onScanSuccess={handleScanSuccess}
+                            onScanError={(err) => toast.error(err)}
+                        />
+                        <Button
+                            variant="ghost"
+                            className="absolute top-4 right-4"
+                            onClick={() => setMode(null)}
+                        >
+                            Đóng
+                        </Button>
+                    </div>
                 )}
             </div>
         );
