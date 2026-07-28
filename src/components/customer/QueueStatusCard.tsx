@@ -73,6 +73,12 @@ export function QueueStatusCard({ ticket, queueAhead, proximityLevel }: QueueSta
           {ticket.ticketNumber}
         </p>
 
+        {ticket.customerName && (
+          <p className="mt-2 text-base font-semibold text-slate-700">
+            {ticket.customerName}
+          </p>
+        )}
+
         {ticket.status === 'PENDING' ? (
           <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4">
             <div className="flex items-center gap-3">

@@ -15,12 +15,12 @@ export default function ServicesPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [editingService, setEditingService] = useState<Service | null>(null);
     const [isCreating, setIsCreating] = useState(false);
-    const [formData, setFormData] = useState({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 });
+    const [formData, setFormData] = useState({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] as string[] });
 
     const fetchServices = async () => {
         try {
             const data = await apiClient.get<Service[]>('/api/services?active=false');
-            setServices(data);
+            setServices(data.map(s => ({ ...s, allowedModes: typeof s.allowedModes === 'string' ? JSON.parse(s.allowedModes) : s.allowedModes })));
         } catch {
             toast.error('Không thể tải danh sách dịch vụ.');
         } finally {
@@ -31,7 +31,7 @@ export default function ServicesPanel() {
     useEffect(() => {
         let cancelled = false;
         apiClient.get<Service[]>('/api/services?active=false').then((data) => {
-            if (!cancelled) setServices(data);
+            if (!cancelled) setServices(data.map(s => ({ ...s, allowedModes: typeof s.allowedModes === 'string' ? JSON.parse(s.allowedModes) : s.allowedModes })));
         }).catch(() => {
             if (!cancelled) toast.error('Không thể tải danh sách dịch vụ.');
         }).finally(() => {
@@ -47,10 +47,10 @@ export default function ServicesPanel() {
         }
 
         try {
-            await apiClient.post('/api/services', formData);
+            await apiClient.post('/api/services', { ...formData, allowedModes: JSON.stringify(formData.allowedModes) });
             toast.success('Tạo dịch vụ thành công!');
             setIsCreating(false);
-            setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 });
+            setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] });
             fetchServices();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo dịch vụ.');
@@ -61,7 +61,7 @@ export default function ServicesPanel() {
         if (!editingService) return;
 
         try {
-            await apiClient.put('/api/services', { id: editingService.id, ...formData });
+            await apiClient.put('/api/services', { id: editingService.id, ...formData, allowedModes: JSON.stringify(formData.allowedModes) });
             toast.success('Cập nhật thành công!');
             setEditingService(null);
             fetchServices();
@@ -84,6 +84,7 @@ export default function ServicesPanel() {
 
     const startEdit = (service: Service) => {
         setEditingService(service);
+        const modes = typeof service.allowedModes === 'string' ? JSON.parse(service.allowedModes) : service.allowedModes;
         setFormData({
             code: service.code,
             name: service.name,
@@ -91,12 +92,13 @@ export default function ServicesPanel() {
             color: service.color,
             prefix: service.prefix,
             order: service.order,
+            allowedModes: Array.isArray(modes) ? modes : ['quick', 'manual', 'qr'],
         });
     };
 
     const cancelEdit = () => {
         setEditingService(null);
-        setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 });
+        setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] });
     };
 
     if (isLoading) return <p className="text-muted-foreground">Đang tải...</p>;
@@ -120,7 +122,7 @@ export default function ServicesPanel() {
                             formData={formData}
                             setFormData={setFormData}
                             onSave={handleCreate}
-                            onCancel={() => { setIsCreating(false); setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0 }); }}
+                            onCancel={() => { setIsCreating(false); setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] }); }}
                             saveLabel="Tạo"
                         />
                     </CardContent>
@@ -191,13 +193,28 @@ export default function ServicesPanel() {
     );
 }
 
+const MODE_LABELS: Record<string, { label: string; desc: string }> = {
+    quick: { label: 'Lấy số nhanh', desc: 'Chỉ lấy số, không cần thông tin' },
+    manual: { label: 'Nhập tay', desc: 'Nhập họ tên + giọng nói' },
+    qr: { label: 'Quét CCCD / VNeID', desc: 'Quét mã QR trên CCCD hoặc VNeID' },
+};
+
 function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
-    formData: { code: string; name: string; description: string; color: string; prefix: string; order: number };
-    setFormData: React.Dispatch<React.SetStateAction<{ code: string; name: string; description: string; color: string; prefix: string; order: number }>>;
+    formData: { code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[] };
+    setFormData: React.Dispatch<React.SetStateAction<{ code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[] }>>;
     onSave: () => void;
     onCancel: () => void;
     saveLabel: string;
 }) {
+    const toggleMode = (mode: string) => {
+        setFormData(prev => ({
+            ...prev,
+            allowedModes: prev.allowedModes.includes(mode)
+                ? prev.allowedModes.filter(m => m !== mode)
+                : [...prev.allowedModes, mode],
+        }));
+    };
+
     return (
         <div className="grid grid-cols-2 gap-4">
             <div>
@@ -223,6 +240,41 @@ function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
             <div>
                 <Label>Mô tả</Label>
                 <Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Mô tả ngắn" />
+            </div>
+            <div className="col-span-2">
+                <Label className="mb-2 block">Chế độ lấy số</Label>
+                <div className="flex flex-wrap gap-3">
+                    {Object.entries(MODE_LABELS).map(([key, { label, desc }]) => (
+                        <label
+                            key={key}
+                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                                formData.allowedModes.includes(key)
+                                    ? 'border-primary bg-primary/5 text-primary'
+                                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                            }`}
+                        >
+                            <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={formData.allowedModes.includes(key)}
+                                onChange={() => toggleMode(key)}
+                            />
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                                formData.allowedModes.includes(key)
+                                    ? 'bg-primary border-primary text-white'
+                                    : 'border-slate-300'
+                            }`}>
+                                {formData.allowedModes.includes(key) && (
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium">{label}</p>
+                                <p className="text-xs text-muted-foreground">{desc}</p>
+                            </div>
+                        </label>
+                    ))}
+                </div>
             </div>
             <div className="col-span-2 flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={onCancel}><X className="w-4 h-4 mr-1" /> Hủy</Button>

@@ -13,39 +13,29 @@
 export function parseCCCDName(qrString: string): string | null {
     if (!qrString) return null;
 
-    // Split the string by the pipe '|' delimiter
     const parts = qrString.split('|');
 
-    // A valid CCCD QR code should have exactly 6 parts
-    if (parts.length === 6) {
-        const fullName = parts[1].trim();
+    if (parts.length >= 3) {
+        const fullName = parts[2].trim();
         return fullName || null;
     }
 
     return null;
 }
 
-/**
- * Parses the entire CCCD QR code string into a structured object.
- * Useful for internal testing or if more information is needed in the future,
- * though for privacy reasons, we primarily use the name.
- * 
- * @param qrString The raw string content from the QR code.
- * @returns An object containing the extracted fields, or null if invalid.
- */
 export function parseFullCCCDData(qrString: string) {
     if (!qrString) return null;
 
     const parts = qrString.split('|');
 
-    if (parts.length === 6) {
+    if (parts.length >= 3) {
         return {
-            idNumber: parts[0].trim(),
-            fullName: parts[1].trim(),
-            dateOfBirth: parts[2].trim(),
-            gender: parts[3].trim(),
-            nationality: parts[4].trim(),
-            issueDate: parts[5].trim(),
+            idNumber: parts[0]?.trim() || '',
+            oldIdNumber: parts[1]?.trim() || '',
+            fullName: parts[2]?.trim() || '',
+            dateOfBirth: parts[3]?.trim() || '',
+            permanentResidence: parts[4]?.trim() || '',
+            issueDate: parts[5]?.trim() || '',
         };
     }
 

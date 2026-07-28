@@ -31,6 +31,7 @@ export function ServiceQueueList({ tickets }: ServiceQueueListProps) {
               <div>
                 <p className="text-base font-semibold text-slate-900">{item.ticketNumber}</p>
                 <p className="text-xs text-slate-500">
+                  {item.customerName && <span className="font-medium text-slate-700">{item.customerName} · </span>}
                   {getStatusLabel(item.status)} · Vị trí {item.position}
                 </p>
               </div>

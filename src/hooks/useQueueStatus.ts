@@ -34,6 +34,12 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   }, [clearThankYouTimer]);
 
   useEffect(() => {
+    apiClient.get<(Ticket & { service: Service })[]>(`/api/tickets?serviceId=${initialTicket.serviceId}`)
+      .then((tickets) => setAllTickets(tickets))
+      .catch(() => {});
+  }, [initialTicket.serviceId]);
+
+  useEffect(() => {
     const eventSource = new EventSource(`/api/sse/queue?serviceId=${ticket.serviceId}`);
     eventSource.onopen = () => setIsConnected(true);
     eventSource.onmessage = (event) => {

@@ -67,10 +67,15 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           >
             <span className="text-base font-bold">{ticket.service.prefix}</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">{ticket.service.name}</p>
-            <p className="text-xs text-slate-500">Cập nhật realtime</p>
-          </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">{ticket.service.name}</p>
+              {ticket.customerName && (
+                <p className="text-xs text-slate-500">
+                  Khách: <span className="font-medium">{ticket.customerName}</span>
+                </p>
+              )}
+              <p className="text-xs text-slate-500">Cập nhật realtime</p>
+            </div>
         </div>
         <div className="flex items-center gap-2">
           <SoundToggle soundEnabled={soundEnabled} onToggle={handleToggleSound} />

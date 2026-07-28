@@ -21,17 +21,18 @@ model User {
 }
 
 model Service {
-  id          String    @id @default(uuid())
-  code        String    @unique
-  name        String
-  description String?
-  color       String
-  prefix      String
-  order       Int       @default(0)
-  isActive    Boolean   @default(true)
-  tickets     Ticket[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  code         String    @unique
+  name         String
+  description  String?
+  color        String
+  prefix       String
+  order        Int       @default(0)
+  isActive     Boolean   @default(true)
+  allowedModes String    @default("[\"quick\",\"manual\",\"qr\"]")
+  tickets      Ticket[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model Ticket {

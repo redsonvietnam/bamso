@@ -48,7 +48,7 @@ export async function createTicket(data: {
         });
 
         const sequence = dailyCount + 1;
-        const ticketNumber = `${service.prefix}${sequence.toString().padStart(3, '0')}`;
+        const ticketNumber = `${service.prefix}${sequence}`;
         const position = (maxPosResult._max.position || 0) + 1;
 
         // 5. Tạo vé mới
