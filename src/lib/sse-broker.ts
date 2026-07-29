@@ -1,5 +1,6 @@
 import prisma from '@/lib/db';
 import { redis, redisPubSub } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 const encoder = new TextEncoder();
 
@@ -24,27 +25,33 @@ class SSEBroker {
     private displayClients = new Set<DisplayClient>();
     private initialized = false;
 
-    private async init() {
+    private init() {
         if (this.initialized) return;
         this.initialized = true;
 
         // Subscribe to Redis channels for cross-instance synchronization
-        await redisPubSub.subscribe(CHANNELS.QUEUE_UPDATE, CHANNELS.DISPLAY_CALL);
-        
-        redisPubSub.on('message', async (channel, message) => {
-            try {
-                if (channel === CHANNELS.QUEUE_UPDATE) {
-                    const { serviceId } = JSON.parse(message);
-                    await this.broadcastQueueUpdateLocal(serviceId);
-                } else if (channel === CHANNELS.DISPLAY_CALL) {
-                    const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
-                    this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+        // Fail-open: if Redis is unavailable, run in single-instance mode
+        try {
+            redisPubSub.subscribe(CHANNELS.QUEUE_UPDATE, CHANNELS.DISPLAY_CALL).catch((err) => {
+                logger.error('Redis subscribe failed (single-instance mode):', err);
+            });
+
+            redisPubSub.on('message', (channel, message) => {
+                try {
+                    if (channel === CHANNELS.QUEUE_UPDATE) {
+                        const { serviceId } = JSON.parse(message);
+                        this.broadcastQueueUpdateLocal(serviceId);
+                    } else if (channel === CHANNELS.DISPLAY_CALL) {
+                        const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
+                        this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+                    }
+                } catch (err) {
+                    logger.error('Redis message parse error:', err);
                 }
-            } catch (err) {
-                // eslint-disable-next-line no-console
-                console.error('[SSEBroker] Redis message parse error:', err);
-            }
-        });
+            });
+        } catch (err) {
+            logger.error('Redis init failed (single-instance mode):', err);
+        }
     }
 
     subscribeQueue(id: string, controller: ReadableStreamDefaultController, serviceId?: string | null) {
@@ -75,11 +82,13 @@ class SSEBroker {
         }
     }
 
-    async broadcastQueueUpdate(serviceId?: string) {
-        // Publish to Redis for all instances to pick up
-        await redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId }));
+    broadcastQueueUpdate(serviceId?: string) {
+        // Best-effort publish to Redis — don't block on Redis errors
+        redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId })).catch((err) => {
+            logger.error('Redis publish queue update failed:', err);
+        });
         // Also trigger local update immediately
-        await this.broadcastQueueUpdateLocal(serviceId);
+        this.broadcastQueueUpdateLocal(serviceId);
     }
 
     private async broadcastQueueUpdateLocal(serviceId?: string) {
@@ -87,8 +96,6 @@ class SSEBroker {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        // OPTIMIZATION: Filter by serviceId directly in the DB query to avoid O(N) memory issues
-        // We fetch all if serviceId is not provided, otherwise only for that service
         const tickets = await prisma.ticket.findMany({
             where: {
                 createdAt: { gte: startOfDay, lte: endOfDay },
@@ -99,9 +106,7 @@ class SSEBroker {
         });
 
         for (const client of this.queueClients) {
-            // If the broadcast is for a specific service, only send to clients interested in that service
             if (!serviceId || !client.serviceId || client.serviceId === serviceId) {
-                // Further filter for clients who only want a specific service if they provided one
                 const filtered = client.serviceId
                     ? tickets.filter(t => t.serviceId === client.serviceId)
                     : tickets;
@@ -118,8 +123,10 @@ class SSEBroker {
     }
 
     broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
-        // Publish to Redis for all instances to pick up
-        redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber }));
+        // Best-effort publish to Redis — don't block on Redis errors
+        redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
+            logger.error('Redis publish display call failed:', err);
+        });
         // Also trigger local update immediately
         this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
     }

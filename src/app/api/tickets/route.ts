@@ -4,9 +4,16 @@ import { createTicket } from '@/lib/ticket-service';
 import { TicketStatus } from '@/lib/constants';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
     try {
+        const ip = getClientIp(request);
+        const { allowed } = await checkRateLimit(`tickets:${ip}`, RATE_LIMITS.tickets);
+        if (!allowed) {
+            return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
+        }
+
         const body = await request.json();
         const { serviceId, customerName, phone } = body;
 

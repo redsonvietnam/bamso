@@ -1,21 +1,47 @@
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 
-// Vietnamese Edge TTS voices list
-const EDGE_VOICES = [
-    { id: 'vi-VN-HoaiMyNeural', name: 'Hoài My (Nữ)' },
-    { id: 'vi-VN-NamMinhNeural', name: 'Nam Minh (Nam)' },
-    { id: 'vi-VN-LanAnhNeural', name: 'Lan Anh (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-NguyenBaoNeural', name: 'Nguyên Bảo (Nam, Tự nhiên)' },
-    { id: 'vi-VN-MyDuyenNeural', name: 'My Duyên (Nữ)' },
-    { id: 'vi-VN-MyLinhNeural', name: 'My Linh (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-QuynhChiNeural', name: 'Quỳnh Chi (Nữ)' },
-    { id: 'vi-VN-BichNgocNeural', name: 'Bích Ngọc (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-ThiLeNeural', name: 'Thi Lệ (Nữ, Tự nhiên)' },
-];
+const EDGE_VOICE_IDS = [
+    'vi-VN-HoaiMyNeural',
+    'vi-VN-NamMinhNeural',
+    'vi-VN-LanAnhNeural',
+    'vi-VN-NguyenBaoNeural',
+    'vi-VN-MyDuyenNeural',
+    'vi-VN-MyLinhNeural',
+    'vi-VN-QuynhChiNeural',
+    'vi-VN-BichNgocNeural',
+    'vi-VN-ThiLeNeural',
+] as const;
+
+const EDGE_VOICES = EDGE_VOICE_IDS.map(id => ({
+    id,
+    name: id.replace('vi-VN-', '').replace('Neural', ''),
+}));
+
+const MAX_TEXT_LENGTH = 500;
+
+/**
+ * Escape special characters for SSML to prevent injection attacks.
+ */
+function escapeForSsml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
 
 /** POST handler - supports getVoices, edge, google providers */
 export async function POST(request: NextRequest) {
+    // Rate limit
+    const ip = getClientIp(request);
+    const { allowed } = await checkRateLimit(`tts:${ip}`, RATE_LIMITS.tts);
+    if (!allowed) {
+        return new Response('Too many requests', { status: 429 });
+    }
+
     const { provider, text, voice } = await request.json();
 
     if (provider === 'getVoices') {
@@ -24,6 +50,10 @@ export async function POST(request: NextRequest) {
 
     if (!text) {
         return new Response('Missing text parameter', { status: 400 });
+    }
+
+    if (text.length > MAX_TEXT_LENGTH) {
+        return new Response(`Text exceeds maximum length of ${MAX_TEXT_LENGTH} characters`, { status: 400 });
     }
 
     if (provider === 'edge') {
@@ -64,12 +94,15 @@ async function handleGoogleTts(text: string) {
 
 /**
  * Microsoft Edge TTS via WebSocket
- * Dynamically imports 'ws' at runtime (server-side only).
  */
 async function handleEdgeTts(text: string, voiceName?: string) {
+    // Whitelist validation
+    const voice = (voiceName && EDGE_VOICE_IDS.includes(voiceName as typeof EDGE_VOICE_IDS[number]))
+        ? voiceName
+        : 'vi-VN-HoaiMyNeural';
+
     try {
         const { default: WebSocket } = await import('ws');
-        const voice = voiceName || 'vi-VN-HoaiMyNeural';
 
         const TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
         const BASE_URL = 'speech.platform.bing.com/consumer/speech/synthesize/readaloud';
@@ -112,7 +145,6 @@ async function handleEdgeTts(text: string, voiceName?: string) {
             ws.on('error', reject);
 
             ws.on('open', () => {
-                // Send speech config
                 const speechConfig = JSON.stringify({
                     context: {
                         synthesis: {
@@ -127,10 +159,11 @@ async function handleEdgeTts(text: string, voiceName?: string) {
                 ws.send(configMsg, { compress: true }, (err) => {
                     if (err) return reject(err);
 
-                    // Send SSML
+                    // Use escaped text in SSML to prevent injection
+                    const escapedText = escapeForSsml(text);
                     const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='vi-VN'>`
-                        + `<voice name='${voice}'><prosody rate='+0%' volume='+0%' pitch='+0Hz'>`
-                        + `${text}</prosody></voice></speak>`;
+                        + `<voice name='${escapeForSsml(voice)}'><prosody rate='+0%' volume='+0%' pitch='+0Hz'>`
+                        + `${escapedText}</prosody></voice></speak>`;
                     const ssmlMsg = `X-RequestId:${uuid()}\r\nContent-Type:application/ssml+xml\r\n`
                         + `X-Timestamp:${new Date().toISOString()}Z\r\nPath:ssml\r\n\r\n${ssml}`;
                     ws.send(ssmlMsg, { compress: true }, (ssmlErr) => {
@@ -154,6 +187,12 @@ async function handleEdgeTts(text: string, voiceName?: string) {
 
 /** Legacy GET support (backward compatibility) */
 export async function GET(request: NextRequest) {
+    const ip = getClientIp(request);
+    const { allowed } = await checkRateLimit(`tts:${ip}`, RATE_LIMITS.tts);
+    if (!allowed) {
+        return new Response('Too many requests', { status: 429 });
+    }
+
     const { searchParams } = new URL(request.url);
     const text = searchParams.get('text');
     const provider = searchParams.get('provider') || 'google';
@@ -161,6 +200,10 @@ export async function GET(request: NextRequest) {
 
     if (!text) {
         return new Response('Missing text parameter', { status: 400 });
+    }
+
+    if (text.length > MAX_TEXT_LENGTH) {
+        return new Response(`Text exceeds maximum length of ${MAX_TEXT_LENGTH} characters`, { status: 400 });
     }
 
     if (provider === 'edge') {

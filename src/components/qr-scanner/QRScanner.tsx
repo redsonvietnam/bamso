@@ -67,6 +67,22 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError }) => 
         let fallbackHtml5Qrcode: any = null;
 
         const start = async () => {
+            // Camera requires secure context (HTTPS or localhost)
+            if (!window.isSecureContext) {
+                const msg = 'Camera yêu cầu HTTPS hoặc localhost. Đang truy cập qua HTTP IP — camera bị trình duyệt chặn.';
+                toast.error(msg);
+                onScanError?.(msg);
+                return;
+            }
+
+            // Check if mediaDevices API is available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                const msg = 'Trình duyệt không hỗ trợ truy cập camera.';
+                toast.error(msg);
+                onScanError?.(msg);
+                return;
+            }
+
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },

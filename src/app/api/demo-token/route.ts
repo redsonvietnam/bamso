@@ -2,19 +2,33 @@ import { NextResponse } from 'next/server';
 import { signJWT } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
+const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY'] as const;
+
 export async function GET(request: Request) {
+    // Block entirely unless DEMO_MODE_ENABLED=true
+    if (process.env.DEMO_MODE_ENABLED !== 'true') {
+        return NextResponse.json(
+            { error: 'Demo mode is not enabled', code: 'FORBIDDEN' },
+            { status: 403 }
+        );
+    }
+
     try {
         const { searchParams } = new URL(request.url);
-        const role = searchParams.get('role') || 'STAFF';
+        const requestedRole = (searchParams.get('role') || 'STAFF').toUpperCase();
+
+        // NEVER allow ADMIN role through demo-token, even if DEMO_MODE_ENABLED
+        const role = DEMO_ALLOWED_ROLES.includes(requestedRole as typeof DEMO_ALLOWED_ROLES[number])
+            ? requestedRole
+            : 'STAFF';
 
         const demoPayloads: Record<string, { userId: string; role: string }> = {
-            ADMIN: { userId: 'demo-admin', role: 'ADMIN' },
             STAFF: { userId: 'demo-staff', role: 'STAFF' },
             KIOSK: { userId: 'demo-kiosk', role: 'KIOSK' },
             DISPLAY: { userId: 'demo-display', role: 'DISPLAY' },
         };
 
-        const payload = demoPayloads[role] || demoPayloads.STAFF;
+        const payload = demoPayloads[role];
         const token = await signJWT(payload);
 
         const response = NextResponse.json({ token, role });
@@ -23,7 +37,7 @@ export async function GET(request: Request) {
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
-            maxAge: 60 * 60, // 1 hour
+            maxAge: 60 * 60,
         });
 
         return response;

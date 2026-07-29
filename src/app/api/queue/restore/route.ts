@@ -20,6 +20,12 @@ export async function PUT(request: Request) {
         }
 
         const ticket = await restoreTicket(ticketId);
+        if (!ticket) {
+            return NextResponse.json(
+                { error: 'Không tìm thấy vé', code: 'NOT_FOUND' },
+                { status: 404 }
+            );
+        }
 
         broadcastQueueUpdate(ticket.serviceId);
 

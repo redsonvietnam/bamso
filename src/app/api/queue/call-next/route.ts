@@ -22,8 +22,13 @@ export async function POST(request: Request) {
         }
 
         const ticket = await callNextTicket(serviceId, pos);
+        if (!ticket) {
+            return NextResponse.json(
+                { error: 'Không thể gọi vé', code: 'CALL_FAILED' },
+                { status: 500 }
+            );
+        }
 
-        // Find the next pending ticket for the same service (for "chuẩn bị" announcement)
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -38,7 +43,6 @@ export async function POST(request: Request) {
             orderBy: { position: 'asc' },
         });
 
-        // SSE Broadcast with next ticket info + customer name
         broadcastQueueUpdate(ticket.serviceId);
         broadcastDisplayCall(ticket.ticketNumber, pos, ticket.customerName, nextPending?.ticketNumber);
 

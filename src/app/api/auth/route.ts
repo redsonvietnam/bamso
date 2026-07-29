@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { signJWT } from '@/lib/auth';
-import { verifyPassword } from '@/lib/password';
+import { verifyPassword, hashPassword, needsRehash } from '@/lib/password';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 
 const COOKIE_NAME = 'auth_token';
-const MAX_AGE = 60 * 60 * 24; // 24 hours
+const MAX_AGE = 60 * 60 * 24;
 
 export async function POST(request: Request) {
     try {
+        const ip = getClientIp(request);
+        const { allowed } = await checkRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
+        if (!allowed) {
+            return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
+        }
+
         const { username, password } = await request.json();
 
         if (!username || !password) {
@@ -30,7 +37,16 @@ export async function POST(request: Request) {
             );
         }
 
-        // Sign JWT
+        // Auto-rehash password if it was created with weak iterations
+        if (needsRehash(user.passwordHash)) {
+            const newHash = hashPassword(password);
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { passwordHash: newHash },
+            });
+            logger.log(`Auto-rehashed password for user: ${user.username}`);
+        }
+
         const token = await signJWT({ userId: user.id, role: user.role });
 
         const response = NextResponse.json({
@@ -38,7 +54,6 @@ export async function POST(request: Request) {
             user: { id: user.id, username: user.username, name: user.name, role: user.role }
         });
 
-        // Set httpOnly cookie natively
         const isSecure = process.env.NODE_ENV === 'production' && request.headers.get('x-forwarded-proto') === 'https';
         response.cookies.set(COOKIE_NAME, token, {
             httpOnly: true,

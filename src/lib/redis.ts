@@ -1,26 +1,45 @@
 import Redis from 'ioredis';
+import { logger } from '@/lib/logger';
 
-/**
- * Redis connection singleton.
- * We use a global variable to prevent multiple connections during Next.js HMR in development.
- */
 const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD,
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+    retryStrategy(times: number) {
+        if (times > 10) {
+            logger.error('Redis: max retry attempts reached, giving up');
+            return null;
+        }
+        const delay = Math.min(times * 200, 5000);
+        return delay;
+    },
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 3,
 };
 
 declare global {
-  var redis: Redis | undefined;
-  var redisPubSub: Redis | undefined;
+    var redis: Redis | undefined;
+    var redisPubSub: Redis | undefined;
 }
 
-// Main client for publishing and general commands
-export const redis = global.redis || new Redis(redisConfig);
+function createRedisClient(): Redis {
+    const client = new Redis(redisConfig);
+
+    client.on('error', (err) => {
+        logger.error('Redis connection error:', err);
+    });
+
+    client.on('connect', () => {
+        logger.log('Redis connected');
+    });
+
+    return client;
+}
+
+export const redis = global.redis || createRedisClient();
 if (process.env.NODE_ENV !== 'production') global.redis = redis;
 
-// Dedicated client for subscribing (Redis requires a dedicated connection for subscribe)
-export const redisPubSub = global.redisPubSub || new Redis(redisConfig);
+export const redisPubSub = global.redisPubSub || createRedisClient();
 if (process.env.NODE_ENV !== 'production') global.redisPubSub = redisPubSub;
 
 export default redis;

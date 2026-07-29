@@ -1,9 +1,14 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { logger } from '@/lib/logger';
 
-// --- JWT Utility ---
 const getJwtSecret = () => {
-    const secret = process.env.JWT_SECRET || 'your-default-fallback-jwt-secret-key-change-me-in-production';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('JWT_SECRET environment variable is required. Generate one with: openssl rand -base64 48');
+    }
+    if (process.env.NODE_ENV === 'production' && secret.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
     return new TextEncoder().encode(secret);
 };
 
@@ -12,7 +17,7 @@ export async function signJWT(payload: { userId: string, role: string }): Promis
     return new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
-        .setExpirationTime('24h') // 24 hours
+        .setExpirationTime('24h')
         .sign(JWT_SECRET_BYTES);
 }
 

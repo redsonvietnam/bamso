@@ -1,13 +1,40 @@
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 
+const MAX_RETRIES = 5;
+
+function getDayKey(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 export async function createTicket(data: {
     serviceId: string;
     customerName?: string;
     phone?: string;
 }) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            return await createTicketInternal(data);
+        } catch (error) {
+            // P2002 = unique constraint violation (ticketNumber collision)
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002' && attempt < MAX_RETRIES - 1) {
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw new Error('Failed to create ticket after maximum retries');
+}
+
+async function createTicketInternal(data: {
+    serviceId: string;
+    customerName?: string;
+    phone?: string;
+}) {
     return await prisma.$transaction(async (tx) => {
-        // 1. Lấy thông tin dịch vụ
         const service = await tx.service.findUnique({
             where: { id: data.serviceId },
         });
@@ -16,46 +43,37 @@ export async function createTicket(data: {
             throw new Error('Dịch vụ không tồn tại hoặc đã ngừng hoạt động');
         }
 
-        // 2. Xác định khoảng thời gian của ngày hiện tại (Local Time)
         const now = new Date();
+        const dayKey = getDayKey(now);
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        // 3. Tính số thứ tự vé trong ngày (để sinh ticketNumber)
         const dailyCount = await tx.ticket.count({
             where: {
                 serviceId: data.serviceId,
-                createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
+                dayKey,
+                createdAt: { gte: startOfDay, lte: endOfDay },
             },
         });
 
-        // 4. Tính vị trí hàng đợi (position)
-        // Lấy max position hiện tại của ngày hôm nay để đảm bảo thứ tự tăng dần không trùng lặp
         const maxPosResult = await tx.ticket.aggregate({
             where: {
                 serviceId: data.serviceId,
-                createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
+                dayKey,
+                createdAt: { gte: startOfDay, lte: endOfDay },
             },
-            _max: {
-                position: true,
-            },
+            _max: { position: true },
         });
 
         const sequence = dailyCount + 1;
         const ticketNumber = `${service.prefix}${sequence}`;
         const position = (maxPosResult._max.position || 0) + 1;
 
-        // 5. Tạo vé mới
         return await tx.ticket.create({
             data: {
                 ...data,
                 ticketNumber,
+                dayKey,
                 position,
                 status: TicketStatus.PENDING,
             },

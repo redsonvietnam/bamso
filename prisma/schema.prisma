@@ -37,19 +37,22 @@ model Service {
 
 model Ticket {
   id           String       @id @default(uuid())
-  ticketNumber String       // e.g., A-001, B-002
+  ticketNumber String
+  dayKey       String       @default("") // "YYYY-MM-DD" for daily uniqueness
   serviceId    String
-  service      Service  @relation(fields: [serviceId], references: [id])
+  service      Service      @relation(fields: [serviceId], references: [id])
   customerName String?
   phone        String?
-  status       String   @default("PENDING")
-  position     Int      // For queue ordering
-  missCount    Int      @default(0)
-  pos          String?  // Counter name/number (e.g. Quầy 1)
-  createdAt    DateTime @default(now())
+  status       String       @default("PENDING")
+  position     Int
+  missCount    Int          @default(0)
+  pos          String?
+  createdAt    DateTime     @default(now())
   calledAt     DateTime?
   completedAt  DateTime?
-  date         DateTime @default(now()) // Date the ticket is for, defaults to creation date
+
+  @@unique([serviceId, dayKey, ticketNumber])
+  @@index([serviceId, dayKey, status])
 }
 
 model Settings {
