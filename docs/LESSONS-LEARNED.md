@@ -59,11 +59,20 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 
 ### Cách tiếp cận nhanh để test camera trên điện thoại
 ```bash
-# cloudflared (miễn phí, không cần account)
-cloudflared tunnel --url http://localhost:3001
+# Cloudflare (推荐 — miễn phí, không cần account)
+npm run build && npm run start          # Production mode BẮT BUỘC
+cloudflared tunnel --url http://localhost:3000
 # → Nhận URL https://xxxx.trycloudflare.com
 # → Mở trên điện thoại → camera hoạt động
+
+# Hoặc ngrok (cần đăng ký tài khoản)
+ngrok http 3000
 ```
+
+**LƯU Ý QUAN TRỌNG:**
+- `npm run dev` KHÔNG hoạt động qua tunnel (WebSocket HMR bị block)
+- PHẢI dùng `npm run build && npm run start`
+- Xem chi tiết: `docs/ngrok-setup.md`
 
 ### Bài học
 > **Luôn check `window.isSecureContext` trước khi dùng camera/microphone.**
@@ -91,8 +100,17 @@ Khi `services.length === 0`, trang hiển thị thông báo rỗng.
 
 ### Cách fix
 ```bash
-npx prisma db push        # Tạo/update schema
-npx prisma db seed        # Insert dữ liệu mẫu
+# 1. Check database có data chưa
+curl http://localhost:3000/api/services
+
+# 2. Nếu rỗng → seed
+npx prisma db push
+npx prisma db seed
+
+# 3. Nếu qua tunnel mà vẫn trống → có thể là dev mode
+# PHẢI dùng production mode:
+npm run build && npm run start
+cloudflared tunnel --url http://localhost:3000
 ```
 
 ### Kiểm tra nhanh
@@ -300,10 +318,17 @@ grep -r "ADMIN" src/app/api/demo-token/        # Không cho ADMIN qua demo
 grep -r "ITERATIONS = 1000" src/lib/password.ts # Phải >= 210000
 
 # 3. Check database
-curl http://localhost:3001/api/services | jq length  # Phải > 0
+curl http://localhost:3000/api/services | Select-Object -First 1  # Phải trả về JSON có data
 
 # 4. Test camera (nếu có thay đổi QR)
-# Truy cập qua HTTPS hoặc localhost, KHÔNG qua http://IP
+# BẮT BUỘC qua HTTPS hoặc localhost, KHÔNG qua http://IP
+npm run build && npm run start
+cloudflared tunnel --url http://localhost:3000
+# → Mở URL trên điện thoại → test camera
+
+# 5. Kiểm tra AI có thật sự sửa code không
+git diff --stat    # Tổng quan files thay đổi
+git diff           # Chi tiết từng dòng
 ```
 
 ---
@@ -352,4 +377,4 @@ git diff           # Chi tiết từng dòng
 
 ---
 
-*Tài liệu này được cập nhật lần cuối: 2026-07-29*
+*Tài liệu này được cập nhật lần cuối: 2026-07-30*
