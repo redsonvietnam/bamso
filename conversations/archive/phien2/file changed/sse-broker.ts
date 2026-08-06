@@ -18,7 +18,7 @@ function redactForRole<T extends { customerName?: string | null; phone?: string 
     role: string | null
 ) {
     if (role && STAFF_ROLES.includes(role)) return tickets;
-    return tickets.map(({ customerName: _customerName, phone: _phone, ...rest }) => rest);
+    return tickets.map(({ customerName, phone, ...rest }) => rest);
 }
 
 type QueueClient = {

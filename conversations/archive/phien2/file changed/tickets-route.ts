@@ -15,7 +15,7 @@ function redactTicketsForRole<T extends { customerName?: string | null; phone?: 
     role: string | null
 ) {
     if (role && STAFF_ROLES.includes(role)) return tickets;
-    return tickets.map(({ customerName: _customerName, phone: _phone, ...rest }) => rest);
+    return tickets.map(({ customerName, phone, ...rest }) => rest);
 }
 
 export async function POST(request: Request) {

@@ -94,52 +94,37 @@ async function runTests() {
         }
         console.log('   👉 OK — STAFF vẫn thấy đầy đủ customerName/phone như thiết kế.');
 
-        // 4c. [PII TEST] Anonymous SSE /api/sse/queue KHÔNG được lọt customerName/phone thật
-        //     LƯU Ý: đây là kiểm tra best-effort trên vài giây đầu của stream.
-        //     Nếu endpoint yêu cầu query param khác (vd ?serviceId=...), cần chỉnh lại URL bên dưới.
-        console.log('\n🔄 4c. [PII] Kiểm tra SSE /api/sse/queue ẩn danh trong 3 giây đầu...');
-        try {
-            const sseController = new AbortController();
-            const sseTimeout = setTimeout(() => sseController.abort(), 3000);
-            const sseRes = await fetch(`${BASE_URL}/api/sse/queue?serviceId=${serviceA.id}`, {
-                signal: sseController.signal,
-                headers: { Accept: 'text/event-stream' }
-            });
-            let sseBuffer = '';
-            if (sseRes.body) {
+        // 4c-setup. [PII TEST] Mở kết nối SSE ẩn danh TRƯỚC các thao tác call-next/skip/complete,
+        //     để khi các event thật (có kèm customerName/phone) được broadcast trong bước 5-8,
+        //     ta bắt được dữ liệu thật thay vì chỉ đọc lúc kết nối im lặng (sẽ chỉ có vài ký tự heartbeat).
+        //     LƯU Ý: giả định query param là ?serviceId=... — sửa lại nếu route thật khác.
+        console.log('\n🔄 4c-setup. [PII] Mở kết nối SSE ẩn danh, sẽ nghe song song trong lúc cán bộ thao tác (bước 5-8)...');
+        let sseBuffer = '';
+        let sseListenError = null;
+        const sseController = new AbortController();
+        const sseListenPromise = (async () => {
+            try {
+                const sseRes = await fetch(`${BASE_URL}/api/sse/queue?serviceId=${serviceA.id}`, {
+                    signal: sseController.signal,
+                    headers: { Accept: 'text/event-stream' }
+                });
+                if (!sseRes.ok || !sseRes.body) {
+                    sseListenError = new Error(`SSE trả HTTP ${sseRes.status}`);
+                    return;
+                }
                 const reader = sseRes.body.getReader();
                 const decoder = new TextDecoder();
-                try {
-                    // eslint-disable-next-line no-constant-condition
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        sseBuffer += decoder.decode(value, { stream: true });
-                        if (sseBuffer.length > 20000) break; // tránh đọc vô hạn
-                    }
-                } catch (readErr) {
-                    // abort do timeout là mong đợi, các lỗi khác thì log lại
-                    if (readErr.name !== 'AbortError') {
-                        console.log(`   ⚠️  Đọc SSE dừng sớm: ${readErr.message}`);
-                    }
+                // eslint-disable-next-line no-constant-condition
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    sseBuffer += decoder.decode(value, { stream: true });
+                    if (sseBuffer.length > 50000) break; // tránh đọc vô hạn
                 }
+            } catch (err) {
+                if (err.name !== 'AbortError') sseListenError = err;
             }
-            clearTimeout(sseTimeout);
-
-            if (sseBuffer.includes(CUSTOMER_NAME) || sseBuffer.includes(CUSTOMER_PHONE)) {
-                throw new Error(
-                    `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName/phone thật của khách.`
-                );
-            }
-            if (sseBuffer.length === 0) {
-                console.log('   ⚠️  Không đọc được dữ liệu nào từ SSE trong 3s (có thể do chưa có event nào bắn ra) — không kết luận được, cần kiểm tra thủ công.');
-            } else {
-                console.log(`   👉 OK — không thấy PII thật trong ${sseBuffer.length} ký tự đầu của SSE stream.`);
-            }
-        } catch (sseErr) {
-            if (sseErr.message?.startsWith('❌')) throw sseErr;
-            console.log(`   ⚠️  Không thể kiểm tra SSE tự động (${sseErr.message}) — bỏ qua, cần verify thủ công qua trình duyệt.`);
-        }
+        })();
 
         // 5. Cán bộ gọi số tiếp theo (Call Next)
         console.log('\n🔄 5. Cán bộ Quầy 5 bấm "Gọi số tiếp theo" (Call Next)...');
@@ -215,9 +200,26 @@ async function runTests() {
         const completedTicket = await completeRes.json();
         console.log(`   👉 Hoàn thành giao dịch: Vé ${completedTicket.ticketNumber} đổi trạng thái thành -> ${completedTicket.status}`);
 
+        // 4c-verify. [PII TEST] Đóng kết nối SSE và kiểm tra dữ liệu thu được TRONG LÚC các event
+        //     call-next/skip/complete vừa xảy ra ở bước 5-8.
+        console.log('\n🔄 4c-verify. [PII] Đóng SSE, kiểm tra dữ liệu thu được trong lúc thao tác...');
+        sseController.abort();
+        await sseListenPromise.catch(() => {});
+        if (sseListenError) {
+            console.log(`   ⚠️  Không thể kiểm tra SSE tự động (${sseListenError.message}) — cần verify thủ công qua trình duyệt (mở /api/sse/queue không đăng nhập, xem Network tab lúc cán bộ gọi số).`);
+        } else if (sseBuffer.includes(CUSTOMER_NAME) || sseBuffer.includes(CUSTOMER_PHONE)) {
+            throw new Error(
+                `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName/phone thật của khách trong lúc broadcast queue update.`
+            );
+        } else if (sseBuffer.length < 20) {
+            console.log(`   ⚠️  Chỉ thu được ${sseBuffer.length} ký tự qua SSE trong suốt bước 5-8 — gần như chắc chắn KHÔNG có event queue update nào thực sự lọt qua (có thể do sai serviceId/query param, hoặc event dùng channel khác). KHÔNG kết luận được gì từ bước này — cần verify thủ công.`);
+        } else {
+            console.log(`   👉 OK — thu được ${sseBuffer.length} ký tự qua SSE trong lúc call-next/skip/complete xảy ra, không thấy customerName/phone thật.`);
+        }
+
         console.log('\n🎉 THỬ NGHIỆM TỰ ĐỘNG HOÀN TẤT THÀNH CÔNG RỰC RỠ! 🎉');
         console.log('Toàn bộ quy trình Lấy số ➔ Gọi số ➔ Bỏ qua ➔ Gọi lại ➔ Hoàn tất hoạt động hoàn hảo!');
-        console.log('PII redaction (GET /api/tickets ẩn danh + SSE) đã được verify trong bước 3b/4b/4c.');
+        console.log('PII redaction (GET /api/tickets ẩn danh) đã verify ở 3b/4b. SSE verify (nếu đủ dữ liệu) ở 4c-verify.');
 
     } catch (error) {
         console.error('\n❌ THỬ NGHIỆM THẤT BẠI:', error.message);
