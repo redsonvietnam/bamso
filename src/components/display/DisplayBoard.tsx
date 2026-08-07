@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
-import { User, Users, Bell } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Users, Bell, Clock, WifiOff } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
@@ -42,7 +42,9 @@ export default function DisplayBoard() {
     const [lastCalledTicket, setLastCalledTicket] = useState<CurrentCall | null>(null);
     const [previousCalls, setPreviousCalls] = useState<Record<string, { serviceId: string; lostAt: number }>>({});
     const [isConnected, setIsConnected] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [time, setTime] = useState(new Date());
+    const reduceMotion = useReducedMotion();
 
     const PREVIOUS_CALL_TTL = 60000;
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -89,6 +91,8 @@ export default function DisplayBoard() {
                 setAllTickets(tickets);
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
+            } finally {
+                setIsLoading(false);
             }
         };
         fetchInitialData();
@@ -237,131 +241,164 @@ export default function DisplayBoard() {
     const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <div className="relative flex flex-col h-screen w-screen bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden selection:bg-emerald-100">
+        <div className="relative flex flex-col h-screen w-screen bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden selection:bg-[#00BD7D]/10">
             {/* Subtle Brand Accents */}
             <div className="absolute top-0 left-0 w-full h-2 bg-[#00BD7D]" />
-            <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[30%] bg-emerald-100/50 blur-[100px] rounded-full pointer-events-none" />
-            
+            <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[30%] bg-[#00BD7D]/5 blur-[100px] rounded-full pointer-events-none" />
+
             <header className="relative z-10 flex items-center justify-between px-12 py-6 bg-white border-b border-slate-200 shadow-sm">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
                         <div className="w-2 h-8 bg-[#00BD7D] rounded-full" />
-                        <h1 className="text-4xl font-black tracking-tighter uppercase" style={{ color: '#00BD7D' }}>
+                        <h1 className="font-[family-name:var(--font-display)] text-4xl font-bold tracking-tight uppercase text-[#00BD7D]">
                             BẢNG GỌI SỐ
                         </h1>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200">
-                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${isConnected ? 'bg-[#00BD7D]/5 border-[#00BD7D]/20' : 'bg-red-50 border-red-200'}`}>
+                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-[#00BD7D] animate-pulse' : 'bg-red-500'}`} />
+                        <span className={`text-xs font-bold uppercase tracking-widest ${isConnected ? 'text-[#00BD7D]' : 'text-red-600'}`}>
                             {isConnected ? 'Hệ thống trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
                 </div>
                 <div className="flex items-center gap-6 text-slate-500">
                     <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400">Thời gian</p>
+                        <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-500">Thời gian</p>
                         <p className="text-2xl font-mono font-bold text-slate-700">{timeStr}</p>
                     </div>
                 </div>
             </header>
 
-            <main className="relative z-10 flex-1 p-8 overflow-y-auto">
-                <AnimatePresence mode="wait">
-                    {lastCalledTicket && (
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 1.1 }}
-                            className="mb-12 relative"
-                        >
-                            <div className="relative flex flex-col items-center justify-center p-12 rounded-[40px] bg-white border-4 border-[#00BD7D] shadow-[0_20px_50px_rgba(0,189,125,0.15)]">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <Bell className="w-6 h-6 text-[#00BD7D] animate-ring" />
-                                    <span className="text-[#00BD7D] uppercase tracking-[0.3em] font-black text-sm">Đang gọi số</span>
-                                </div>
-                                <p className="text-[12rem] font-black tracking-tighter leading-none text-slate-900">
-                                    {lastCalledTicket.ticketNumber}
-                                </p>
-                                <div className="flex items-center gap-12 mt-6">
-                                    <div className="text-center">
-                                        <p className="text-slate-400 uppercase text-xs font-bold tracking-widest mb-1">Vị trí</p>
-                                        <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.pos}</p>
-                                    </div>
-                                    <div className="w-px h-12 bg-slate-200" />
-                                    <div className="text-center">
-                                        <p className="text-slate-400 uppercase text-xs font-bold tracking-widest mb-1">Khách hàng</p>
-                                        <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.customerName || 'Quý khách'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8">
-                    {counterDisplayList.map(({ pos, call, isActive, isHighlighted, isBetweenCalls, waitingCount }, index) => (
-                        <motion.div
-                            key={pos}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                        >
-                            <div className={`relative h-full rounded-3xl border transition-all duration-500 p-8 flex flex-col justify-between
-                                ${isHighlighted
-                                    ? 'border-[#00BD7D] bg-emerald-50 shadow-lg shadow-emerald-500/10'
-                                    : isActive
-                                        ? 'border-slate-200 bg-white shadow-sm'
-                                        : isBetweenCalls
-                                            ? 'border-slate-200 bg-slate-50/50 border-dashed'
-                                            : 'border-slate-100 bg-slate-50/30'
-                                }
-                            `}>
-                                <div className="flex items-center justify-between mb-6">
-                                    <span className="text-sm font-bold uppercase tracking-widest text-slate-400">
-                                        {pos}
-                                    </span>
-                                    {isActive && (
-                                        <span className="flex h-2 w-2 rounded-full bg-[#00BD7D] animate-pulse" />
-                                    )}
-                                </div>
-
-                                <div className="flex flex-col items-center justify-center py-6">
-                                    {isActive && call ? (
-                                        <>
-                                            <p className="text-7xl font-black tracking-tighter text-slate-900 mb-2">
-                                                {call.ticketNumber}
-                                            </p>
-                                            {call.customerName && (
-                                                <p className="text-base text-slate-500 font-medium flex items-center gap-1.5">
-                                                    <User className="w-4 h-4" />
-                                                    {call.customerName}
-                                                </p>
-                                            )}
-                                        </>
-                                    ) : isBetweenCalls ? (
-                                        <p className="text-2xl font-bold text-slate-300 italic">
-                                            Đang chuẩn bị...
-                                        </p>
-                                    ) : (
-                                        <p className="text-lg text-slate-400 font-medium">
-                                            Hiện đang rảnh
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        <Users className="w-4 h-4" />
-                                        <span className="text-xs font-bold uppercase tracking-tighter">Đang chờ</span>
-                                    </div>
-                                    <span className="text-xl font-mono font-bold text-slate-600">
-                                        {waitingCount}
-                                    </span>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
+            {!isConnected && (
+                <div className="relative z-10 flex items-center justify-center gap-2 bg-red-50 border-b border-red-200 py-2">
+                    <WifiOff className="w-4 h-4 text-red-600" aria-hidden="true" />
+                    <span className="text-sm font-bold text-red-600">Mất kết nối máy chủ, đang thử kết nối lại...</span>
                 </div>
+            )}
+
+            <main className="relative z-10 flex-1 p-8 overflow-y-auto">
+                {isLoading ? (
+                    <div className="flex h-full flex-col gap-8">
+                        <div className="rounded-[28px] bg-white border border-slate-200 p-12 animate-pulse">
+                            <div className="mx-auto h-6 w-40 rounded-full bg-slate-200" />
+                            <div className="mx-auto mt-8 h-40 w-72 rounded-3xl bg-slate-200" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8">
+                            {[0, 1, 2, 3].map(i => (
+                                <div key={i} className="rounded-[28px] bg-white border border-slate-200 p-8 animate-pulse space-y-4">
+                                    <div className="h-4 w-28 rounded-full bg-slate-200" />
+                                    <div className="mx-auto h-20 w-36 rounded-2xl bg-slate-200" />
+                                    <div className="h-4 w-24 rounded-full bg-slate-200" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <AnimatePresence mode="wait">
+                            {lastCalledTicket && (
+                                <motion.div
+                                    role="status"
+                                    aria-live="polite"
+                                    initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+                                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.1 }}
+                                    className="mb-12 relative"
+                                >
+                                    <div className="relative flex flex-col items-center justify-center p-12 rounded-[28px] bg-white border-4 border-[#00BD7D] shadow-[0_20px_50px_rgba(0,189,125,0.15)]">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <span className="relative flex items-center justify-center">
+                                                <Bell className="w-6 h-6 text-[#00BD7D] animate-ring" aria-hidden="true" />
+                                            </span>
+                                            <span className="text-[#00BD7D] uppercase tracking-[0.3em] font-black text-sm">Đang gọi số</span>
+                                        </div>
+                                        <p className="font-[family-name:var(--font-display)] text-[12rem] font-semibold tracking-tight leading-none text-slate-900">
+                                            {lastCalledTicket.ticketNumber}
+                                        </p>
+                                        <div className="flex items-center gap-12 mt-6">
+                                            <div className="text-center">
+                                                <p className="text-slate-500 uppercase text-xs font-bold tracking-widest mb-1">Vị trí</p>
+                                                <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.pos}</p>
+                                            </div>
+                                            <div className="w-px h-12 bg-slate-200" />
+                                            <div className="text-center">
+                                                <p className="text-slate-500 uppercase text-xs font-bold tracking-widest mb-1">Khách hàng</p>
+                                                <p className="text-5xl font-bold text-slate-800">{lastCalledTicket.customerName || 'Quý khách'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8">
+                            {counterDisplayList.map(({ pos, call, isActive, isHighlighted, isBetweenCalls, waitingCount }, index) => (
+                                <motion.div
+                                    key={pos}
+                                    initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+                                    animate={reduceMotion ? false : { opacity: 1, y: 0 }}
+                                    transition={{ delay: reduceMotion ? 0 : index * 0.05 }}
+                                >
+                                    <div className={`relative h-full rounded-[28px] border transition-all duration-500 p-8 flex flex-col justify-between
+                                        ${isHighlighted
+                                            ? 'border-[#00BD7D] bg-[#00BD7D]/5 shadow-lg shadow-[#00BD7D]/10'
+                                            : isActive
+                                                ? 'border-slate-200 bg-white shadow-sm'
+                                                : isBetweenCalls
+                                                    ? 'border-slate-200 bg-amber-50/60 border-dashed'
+                                                    : 'border-slate-100 bg-slate-50/30'
+                                        }
+                                    `}>
+                                        <div className="flex items-center justify-between mb-6">
+                                            <span className="text-sm font-bold uppercase tracking-widest text-slate-500">
+                                                {pos}
+                                            </span>
+                                            {isActive && (
+                                                <span className="flex h-2.5 w-2.5 rounded-full bg-[#00BD7D] animate-pulse" />
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-col items-center justify-center py-6">
+                                            {isActive && call ? (
+                                                <>
+                                                    <p className="font-[family-name:var(--font-display)] text-7xl font-semibold tracking-tight leading-none text-slate-900 mb-2">
+                                                        {call.ticketNumber}
+                                                    </p>
+                                                    <p className="text-sm font-bold uppercase tracking-wider text-[#00BD7D]">
+                                                        Đang phục vụ
+                                                    </p>
+                                                </>
+                                            ) : isBetweenCalls ? (
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-200 px-4 py-1.5">
+                                                        <Clock className="w-4 h-4 text-amber-600" aria-hidden="true" />
+                                                        <span className="text-sm font-bold text-amber-700">Sắp gọi tiếp</span>
+                                                    </span>
+                                                    <p className="text-base text-slate-500 font-medium">Đang chuẩn bị...</p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <span className="flex h-3 w-3 rounded-full bg-slate-300" />
+                                                    <p className="text-lg text-slate-500 font-medium">Hiện đang rảnh</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-slate-500">
+                                                <Users className="w-4 h-4" aria-hidden="true" />
+                                                <span className="text-xs font-bold uppercase tracking-tighter">Đang chờ</span>
+                                            </div>
+                                            <span className="text-xl font-mono font-bold text-slate-700">
+                                                {waitingCount}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </>
+                )}
             </main>
 
             <style jsx global>{`
@@ -377,6 +414,11 @@ export default function DisplayBoard() {
                     border: 4px solid #00BD7D;
                     border-radius: 50%;
                     animation: ring 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .animate-ring::after {
+                        animation: none;
+                    }
                 }
             `}</style>
         </div>

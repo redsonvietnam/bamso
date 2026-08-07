@@ -128,7 +128,7 @@ RATE_LIMIT_DISABLED=false
 3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?connection_limit=1&socket_timeout=15` vào URL (P2).
 4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
 5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
-6.  **Content-Security-Policy header** trong `next.config.ts`. (P3)
+6.  ✅ ~~**Content-Security-Policy header**~~ trong `next.config.ts`. (P3) — Đã làm, verify header thực tế qua server production.
 7.  **CI/CD** — GitHub Actions hoặc husky + lint-staged. (P3)
 8.  **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`.
 
@@ -169,4 +169,10 @@ RATE_LIMIT_DISABLED=false
 2.  **`QRScanner.tsx`:** bỏ `any` cho `fallbackHtml5Qrcode` (dùng `Html5Qrcode` type từ `html5-qrcode`), `let videoConstraints` → `const`, `console.log` → `logger.debug`, thêm `autoSelected`/`refreshDevices` vào deps.
 3.  **`QrPanel.tsx`:** `<img>` → `next/image` (unoptimized), thêm `images.remotePatterns` cho `api.qrserver.com` trong `next.config.ts`.
 4.  **Verify:** `npm run lint` sạch 100% (0 error, 0 warning), `type-check` pass, `npm test` 67/67, `build` pass.
+
+**Phiên 6c** (opencode, 2026-08-07) — Content-Security-Policy (P3, task 6).
+1.  **CSP trong `next.config.ts`:** theo pattern "Without Nonces" của Next docs (app có static prerendering, không dùng nonce). Directives: `default-src 'self'`, `script-src 'self' 'unsafe-inline'` (+ `'unsafe-eval'` dev cho HMR), `style-src 'self' 'unsafe-inline'`, `img-src 'self' blob: data: https://api.qrserver.com`, `font-src 'self' data:`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `connect-src 'self'`.
+2.  **Không cần whitelist thêm:** TTS/Edge audio đi qua `/api/tts` (same-origin), SSE same-origin, Edge TTS WebSocket chạy server-side (không bị CSP trình duyệt). Nguồn ngoài duy nhất là ảnh QR `api.qrserver.com`.
+3.  **Bỏ `upgrade-insecure-requests`:** dev chạy qua HTTP IP/ngrok sẽ bị vỡ.
+4.  **Verify:** `build` pass, chạy `next start` port 3999 → header `Content-Security-Policy` xuất hiện đúng (HTTP 200).
 
