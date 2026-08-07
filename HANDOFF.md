@@ -184,4 +184,5 @@ RATE_LIMIT_DISABLED=false
 **Phiên 6e** (opencode, 2026-08-07) — Chốt DB production (P3, task 8).
 1.  **User quyết định SQLite** cho production. Đã ghi vào phần "Quyết định cần đưa ra". `.git` đã hoạt động bình thường (`.git_disabled` không tồn tại) — phần "bật lại `.git`" đã xong từ trước.
 2.  **Toàn bộ 8 task HANDOFF ban đầu đã hoàn thành.** Còn lại 2 quyết định mở: Redis production, `DEMO_MODE_ENABLED` production.
+3.  **Báo cáo phiên:** `conversations/archive/phien6/phien6-acc-opencode.md` + snapshot `file changed/`. INDEX cập nhật.
 
