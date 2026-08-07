@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
   // Allow HMR/dev resources from any origin for ngrok/local IP testing
   allowedDevOrigins: ['*', '192.168.1.148'],
   serverExternalPackages: ['ioredis'],
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: 'api.qrserver.com' },
+    ],
+  },
 };
 
 export default nextConfig;

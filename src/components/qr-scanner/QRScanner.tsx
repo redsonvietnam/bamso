@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import type { Html5Qrcode } from 'html5-qrcode';
+import { logger } from '@/lib/logger';
 
 type QRScannerProps = {
     onScanSuccess: (decodedText: string) => void;
@@ -85,7 +87,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
 
     const log = useCallback((msg: string, data?: unknown) => {
         if (debugMode) {
-            console.log(`[QRScanner] ${msg}`, data ?? '');
+            logger.debug(`[QRScanner] ${msg}`, data ?? '');
         }
     }, [debugMode]);
 
@@ -141,7 +143,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
     }, []);
 
     useEffect(() => {
-        let fallbackHtml5Qrcode: any = null;
+        let fallbackHtml5Qrcode: Html5Qrcode | null = null;
         let cancelled = false;
 
         const start = async () => {
@@ -159,7 +161,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
                 return;
             }
 
-            let videoConstraints: MediaTrackConstraints = { 
+            const videoConstraints: MediaTrackConstraints = { 
                 width: { ideal: 1280 }, 
                 height: { ideal: 720 } 
             };
@@ -288,14 +290,15 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
             cancelled = true;
             stopAll();
             if (fallbackHtml5Qrcode) {
-                fallbackHtml5Qrcode.stop().then(() => {
-                    fallbackHtml5Qrcode.clear();
+                const qr = fallbackHtml5Qrcode;
+                qr.stop().then(() => {
+                    qr.clear();
                 }).catch(() => {
-                    fallbackHtml5Qrcode.clear();
+                    qr.clear();
                 });
             }
         };
-    }, [onScanSuccess, onScanError, stopAll, forceFallback, selectedDeviceId, log, retryKey, availableDevices.length]);
+    }, [onScanSuccess, onScanError, stopAll, forceFallback, selectedDeviceId, autoSelected, log, refreshDevices, retryKey, availableDevices.length]);
 
     const handleForceFallbackRetry = useCallback(() => {
         setSelectedDeviceId(null);

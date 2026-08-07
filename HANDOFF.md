@@ -112,7 +112,7 @@ RATE_LIMIT_DISABLED=false
 - **SQLite `connection_limit=1&socket_timeout=15`:** Thêm vào `DATABASE_URL` trong `.env` local (đã verify kết nối OK). `.env.example` bị `.gitignore` chặn nên config chỉ ghi trong HANDOFF này.
 
 **Vấn đề còn tồn tại:**
-- **Linting:** 5 lỗi lint trong `src/app/(public)/get-ticket/page.tsx` vẫn còn + 2 lỗi mới trong `src/components/qr-scanner/QRScanner.tsx` (phiên 4: `no-explicit-any` line 144, `prefer-const` line 162).
+- Không còn. `npm run lint` sạch (0 error, 0 warning).
 
 **Quyết định cần đưa ra:**
 - Database production: SQLite hay PostgreSQL?
@@ -127,7 +127,7 @@ RATE_LIMIT_DISABLED=false
 2.  ✅ ~~**Viết test cho `sse-broker.ts`**~~ — Đã làm (P2, commit `75f0d89`, 18 test).
 3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?connection_limit=1&socket_timeout=15` vào URL (P2).
 4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
-5.  **Fix 5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx`. (P3)
+5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
 6.  **Content-Security-Policy header** trong `next.config.ts`. (P3)
 7.  **CI/CD** — GitHub Actions hoặc husky + lint-staged. (P3)
 8.  **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`.
@@ -163,4 +163,10 @@ RATE_LIMIT_DISABLED=false
 2.  **Sửa lỗi thiếu `x-forwarded-proto`:** `DELETE /api/auth` trong `auth/route.ts` trước đây chỉ check `NODE_ENV` (secure cookie trên HTTP → mất cookie). `demo-token/route.ts` cũng chỉ check `NODE_ENV`.
 3.  **Sửa lỗi clear không kèm `secure`:** `proxy.ts` (2 chỗ clear cookie khi token invalid) — nếu cookie gốc có `secure:true` mà clear thiếu `secure:true` thì trình duyệt không xóa được cookie.
 4.  **Verify:** `type-check` pass, `npm test` 67/67 pass.
+
+**Phiên 6b** (opencode, 2026-08-07) — Sạch toàn bộ lint (P3, task 5).
+1.  **`get-ticket/page.tsx`:** bỏ 5 `any` — `allowedModes` dùng thẳng type Prisma (bỏ cast), Web Speech API được khai báo kiểu tối thiểu (`SpeechRecognitionInstance`, `SpeechRecognitionWindow`).
+2.  **`QRScanner.tsx`:** bỏ `any` cho `fallbackHtml5Qrcode` (dùng `Html5Qrcode` type từ `html5-qrcode`), `let videoConstraints` → `const`, `console.log` → `logger.debug`, thêm `autoSelected`/`refreshDevices` vào deps.
+3.  **`QrPanel.tsx`:** `<img>` → `next/image` (unoptimized), thêm `images.remotePatterns` cho `api.qrserver.com` trong `next.config.ts`.
+4.  **Verify:** `npm run lint` sạch 100% (0 error, 0 warning), `type-check` pass, `npm test` 67/67, `build` pass.
 

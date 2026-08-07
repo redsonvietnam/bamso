@@ -15,10 +15,32 @@ import { parseCCCDName } from '@/lib/cccd-parser';
 import QRScanner from '@/components/qr-scanner/QRScanner';
 
 function parseModes(service: Service): string[] {
-  const m = (service as any).allowedModes;
+  const m = service.allowedModes;
   if (Array.isArray(m)) return m;
   if (typeof m === 'string') try { return JSON.parse(m); } catch { return ['quick', 'manual', 'qr']; }
   return ['quick', 'manual', 'qr'];
+}
+
+interface SpeechRecognitionResult {
+  transcript: string;
+}
+interface SpeechRecognitionEvent {
+  results: { [index: number]: { [index: number]: SpeechRecognitionResult } };
+}
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+interface SpeechRecognitionWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
 }
 
 export default function GetTicketPage() {
@@ -31,7 +53,7 @@ export default function GetTicketPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [isListening, setIsListening] = useState(false);
-    const recognitionRef = useRef<any>(null);
+    const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -130,7 +152,8 @@ const handleScanSuccess = (decodedText: string) => {
     };
 
     const startVoice = () => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const w = window as SpeechRecognitionWindow;
+        const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             toast.error('Trình duyệt không hỗ trợ nhập giọng nói.');
             return;
@@ -141,7 +164,7 @@ const handleScanSuccess = (decodedText: string) => {
         recognition.continuous = false;
         recognition.interimResults = false;
 
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
             const transcript = event.results[0][0].transcript;
             setCustomerName(transcript);
             toast.success('Đã nhận diện giọng nói.');
