@@ -129,7 +129,7 @@ RATE_LIMIT_DISABLED=false
 4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
 5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
 6.  ✅ ~~**Content-Security-Policy header**~~ trong `next.config.ts`. (P3) — Đã làm, verify header thực tế qua server production.
-7.  **CI/CD** — GitHub Actions hoặc husky + lint-staged. (P3)
+7.  ✅ ~~**CI/CD**~~ — GitHub Actions hoặc husky + lint-staged. (P3) — Đã làm: GitHub Actions `.github/workflows/ci.yml`.
 8.  **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`.
 
 
@@ -175,4 +175,9 @@ RATE_LIMIT_DISABLED=false
 2.  **Không cần whitelist thêm:** TTS/Edge audio đi qua `/api/tts` (same-origin), SSE same-origin, Edge TTS WebSocket chạy server-side (không bị CSP trình duyệt). Nguồn ngoài duy nhất là ảnh QR `api.qrserver.com`.
 3.  **Bỏ `upgrade-insecure-requests`:** dev chạy qua HTTP IP/ngrok sẽ bị vỡ.
 4.  **Verify:** `build` pass, chạy `next start` port 3999 → header `Content-Security-Policy` xuất hiện đúng (HTTP 200).
+
+**Phiên 6d** (opencode, 2026-08-07) — CI/CD GitHub Actions (P3, task 7).
+1.  **`.github/workflows/ci.yml`:** job `verify` chạy trên ubuntu-latest, Node 22, `npm ci` → `npx prisma generate` → `npm run lint` → `npm run type-check` → `npm test` → `npm run build`. Trigger: push `main`/`fix` + PR vào `main`.
+2.  **Env cho CI:** `JWT_SECRET` (bắt buộc khi build), `DATABASE_URL` SQLite file, `DEMO_MODE_ENABLED=false`, `RATE_LIMIT_DISABLED=false`.
+3.  **Rút kinh nghiệm:** commit trước (`5ed1771`) cuốn nhầm `DisplayBoard.tsx` của phiên song song do dùng `git add -A`. Từ đây chỉ `git add` đúng file thay đổi; phân phạm vi: phiên này chỉ đụng `src/lib`, `src/proxy`, `src/app/api`, `next.config`, `HANDOFF.md`.
 
