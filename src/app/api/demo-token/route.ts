@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { signJWT } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { isSecureCookie } from '@/lib/cookie';
 
 const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY'] as const;
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
         const response = NextResponse.json({ token, role });
         response.cookies.set('auth_token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isSecureCookie(request),
             sameSite: 'lax',
             path: '/',
             maxAge: 60 * 60,

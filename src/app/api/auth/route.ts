@@ -4,6 +4,7 @@ import { signJWT } from '@/lib/auth';
 import { verifyPassword, hashPassword, needsRehash } from '@/lib/password';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { isSecureCookie } from '@/lib/cookie';
 
 const COOKIE_NAME = 'auth_token';
 const MAX_AGE = 60 * 60 * 24;
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
             user: { id: user.id, username: user.username, name: user.name, role: user.role }
         });
 
-        const isSecure = process.env.NODE_ENV === 'production' && request.headers.get('x-forwarded-proto') === 'https';
+        const isSecure = isSecureCookie(request);
         response.cookies.set(COOKIE_NAME, token, {
             httpOnly: true,
             secure: isSecure,
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
     const response = NextResponse.json({
         success: true,
         message: 'Đăng xuất thành công'
@@ -82,7 +83,7 @@ export async function DELETE() {
     // Clear httpOnly cookie natively
     response.cookies.set(COOKIE_NAME, '', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecureCookie(request),
         sameSite: 'lax',
         path: '/',
         maxAge: 0, // Expires immediately

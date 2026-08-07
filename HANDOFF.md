@@ -126,7 +126,7 @@ RATE_LIMIT_DISABLED=false
 1.  ✅ ~~**Thống nhất auth `/api/settings`**~~ — Đã làm (P1, commit `e59ef71`).
 2.  ✅ ~~**Viết test cho `sse-broker.ts`**~~ — Đã làm (P2, commit `75f0d89`, 18 test).
 3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?connection_limit=1&socket_timeout=15` vào URL (P2).
-4.  **Cookie `secure` flag không nhất quán** — Thống nhất logic giữa các route. (P2)
+4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
 5.  **Fix 5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx`. (P3)
 6.  **Content-Security-Policy header** trong `next.config.ts`. (P3)
 7.  **CI/CD** — GitHub Actions hoặc husky + lint-staged. (P3)
@@ -157,4 +157,10 @@ RATE_LIMIT_DISABLED=false
 3.  **Unit test `sse-broker.ts`:** `src/lib/__tests__/sse-broker.test.ts` (18 test) — broadcast queue/display theo serviceId, redaction theo role (anon bị strip PII, STAFF/ADMIN giữ), fail-open Redis (publish/subscribe lỗi không crash local broadcast), enqueue throw → unsubscribe client. Export class `SSEBroker` (trước là private) để test tạo instance mới, tránh singleton giữ state giữa các test. Toàn bộ suite 67/67 pass. Commit `75f0d89`.
 4.  **SQLite `busy_timeout`:** `DATABASE_URL` thêm `?connection_limit=1&socket_timeout=15` trong `.env` local (verify kết nối OK). `.env.example` bị `.gitignore` chặn (`*.env*`) nên không commit được — config được ghi lại trong HANDOFF.
 5.  **Verify:** `npm test` 67/67 pass, `type-check` pass, lint sạch các file đụng (5 lỗi pre-existing `get-ticket/page.tsx` + 2 lỗi mới `QRScanner.tsx` giữ nguyên).
+
+**Phiên 6** (opencode, 2026-08-07) — Thống nhất cookie `secure` flag.
+1.  **Helper `src/lib/cookie.ts`:** `isSecureCookie(request)` = `NODE_ENV === 'production' && x-forwarded-proto === 'https'`. Áp dụng nhất quán cho **5 nơi** set/clear `auth_token`.
+2.  **Sửa lỗi thiếu `x-forwarded-proto`:** `DELETE /api/auth` trong `auth/route.ts` trước đây chỉ check `NODE_ENV` (secure cookie trên HTTP → mất cookie). `demo-token/route.ts` cũng chỉ check `NODE_ENV`.
+3.  **Sửa lỗi clear không kèm `secure`:** `proxy.ts` (2 chỗ clear cookie khi token invalid) — nếu cookie gốc có `secure:true` mà clear thiếu `secure:true` thì trình duyệt không xóa được cookie.
+4.  **Verify:** `type-check` pass, `npm test` 67/67 pass.
 

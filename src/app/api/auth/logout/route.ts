@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSecureCookie } from '@/lib/cookie';
 
 const COOKIE_NAME = 'auth_token';
 
@@ -9,10 +10,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Clear httpOnly cookie natively
-    const isSecure = process.env.NODE_ENV === 'production' && request.headers.get('x-forwarded-proto') === 'https';
     response.cookies.set(COOKIE_NAME, '', {
         httpOnly: true,
-        secure: isSecure,
+        secure: isSecureCookie(request),
         sameSite: 'lax',
         path: '/',
         maxAge: 0, // Expires immediately

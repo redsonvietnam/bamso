@@ -2,6 +2,7 @@
 import type { NextRequest } from 'next/server';
 import { verifyJWT } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { isSecureCookie } from '@/lib/cookie';
 
 const COOKIE_NAME = 'auth_token';
 
@@ -29,7 +30,7 @@ export async function proxy(request: NextRequest) {
                 }
             } else {
                 const response = NextResponse.next();
-                response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
+                response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/', secure: isSecureCookie(request) });
                 return response;
             }
         }
@@ -116,7 +117,7 @@ export async function proxy(request: NextRequest) {
                 return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
             }
             const response = NextResponse.redirect(new URL('/login', request.url));
-            response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' });
+            response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/', secure: isSecureCookie(request) });
             return response;
         }
 
