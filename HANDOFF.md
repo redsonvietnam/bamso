@@ -90,7 +90,7 @@ node scratch/e2e-test.mjs
 
 **Biến môi trường cần thiết** (xem `.env.example`):
 ```env
-DATABASE_URL="file:./dev.db"          # hoặc postgresql://...
+DATABASE_URL="file:./dev.db?connection_limit=1&socket_timeout=15"  # hoặc postgresql://...
 JWT_SECRET="<>=32 ký tự>"
 # Tùy chọn:
 REDIS_HOST=localhost
@@ -107,10 +107,12 @@ RATE_LIMIT_DISABLED=false
 - **Toàn bộ test suite (`npm test`) đã PASS:** Bao gồm cả các test cũ của `cccd-parser.test.ts` và unit test mới cho `queue-service.ts`.
 - **E2E test (`e2e-test.mjs`) đã PASS:** Xác minh toàn bộ luồng nghiệp vụ và logic PII redaction.
 - **Fix lỗi đồng bộ real-time (SSE):** Đã sửa lỗi mất đồng bộ trên các client khi hot-reload bằng cách quản lý `EventSource` qua biến `global`.
+- **Thống nhất auth `/api/settings`:** `proxy.ts` giờ chặn mọi method khác GET (vd PUT) với session ADMIN; GET vẫn public. Route handler giữ `requireRole` làm lớp phòng thủ kép. (commit `e59ef71`)
+- **Unit test cho `sse-broker.ts`:** 18 test (broadcast theo serviceId, redaction theo role, fail-open Redis, unsubscribe khi enqueue throw). Export class `SSEBroker` để test không phụ thuộc singleton. (commit `75f0d89`)
+- **SQLite `connection_limit=1&socket_timeout=15`:** Thêm vào `DATABASE_URL` trong `.env` local (đã verify kết nối OK). `.env.example` bị `.gitignore` chặn nên config chỉ ghi trong HANDOFF này.
 
 **Vấn đề còn tồn tại:**
-- **Coverage:** `sse-broker.ts` hiện chưa có unit test nào.
-- **Linting:** 5 lỗi lint trong `src/app/(public)/get-ticket/page.tsx` vẫn còn.
+- **Linting:** 5 lỗi lint trong `src/app/(public)/get-ticket/page.tsx` vẫn còn + 2 lỗi mới trong `src/components/qr-scanner/QRScanner.tsx` (phiên 4: `no-explicit-any` line 144, `prefer-const` line 162).
 
 **Quyết định cần đưa ra:**
 - Database production: SQLite hay PostgreSQL?
@@ -121,9 +123,9 @@ RATE_LIMIT_DISABLED=false
 
 ## 2. Việc cần làm tiếp theo (theo thứ tự ưu tiên)
 
-1.  **Thống nhất auth `/api/settings`** — GET public nhưng PUT tự check role, nên đẩy lên proxy. (P1)
-2.  **Viết test cho `sse-broker.ts`** — File này đã có bug, cần được cover bởi unit test. (P2)
-3.  **SQLite `busy_timeout`** — `db.ts` không config; cân nhắc thêm `?connection_limit=1&socket_timeout=15` hoặc pragma `busy_timeout`. (P2)
+1.  ✅ ~~**Thống nhất auth `/api/settings`**~~ — Đã làm (P1, commit `e59ef71`).
+2.  ✅ ~~**Viết test cho `sse-broker.ts`**~~ — Đã làm (P2, commit `75f0d89`, 18 test).
+3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?connection_limit=1&socket_timeout=15` vào URL (P2).
 4.  **Cookie `secure` flag không nhất quán** — Thống nhất logic giữa các route. (P2)
 5.  **Fix 5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx`. (P3)
 6.  **Content-Security-Policy header** trong `next.config.ts`. (P3)
@@ -148,4 +150,11 @@ RATE_LIMIT_DISABLED=false
 4.  **Sửa lỗi test `cccd-parser`:** Sửa lỗi off-by-one index trong `cccd-parser.ts`, giúp toàn bộ `npm test` pass.
 5.  **Fix lỗi SSE hot-reload:** Sửa lỗi mất đồng bộ real-time bằng cách dùng biến `global` để quản lý các instance `EventSource` trong `queue.store.ts` và `DisplayBoard.tsx`, đảm bảo chúng tồn tại duy nhất qua các lần hot-reload.
 6.  **Verify:** `e2e-test.mjs` và `npm test` đều pass. Trạng thái đồng bộ real-time đã hoạt động bình thường.
+
+**Phiên 5** (opencode, 2026-08-07) — Merge `feature/sse-and-parser-fixes` vào `fix` + 3 task đầu tiên trong HANDOFF.
+1.  **Merge:** fast-forward `feature/sse-and-parser-fixes` → `fix` (`bf0887d`). Verify: `npm install` + `type-check` + `build` + `npm test` (49/49) pass. Push lên `origin/fix`.
+2.  **Thống nhất auth `/api/settings`:** `src/proxy.ts` — bỏ `/api/settings` khỏi `PUBLIC_API_ROUTES`, thêm block method-aware: GET public, mọi method khác yêu cầu ADMIN (401/403). Route handler giữ `requireRole('ADMIN')` phòng thủ kép. Commit `e59ef71`.
+3.  **Unit test `sse-broker.ts`:** `src/lib/__tests__/sse-broker.test.ts` (18 test) — broadcast queue/display theo serviceId, redaction theo role (anon bị strip PII, STAFF/ADMIN giữ), fail-open Redis (publish/subscribe lỗi không crash local broadcast), enqueue throw → unsubscribe client. Export class `SSEBroker` (trước là private) để test tạo instance mới, tránh singleton giữ state giữa các test. Toàn bộ suite 67/67 pass. Commit `75f0d89`.
+4.  **SQLite `busy_timeout`:** `DATABASE_URL` thêm `?connection_limit=1&socket_timeout=15` trong `.env` local (verify kết nối OK). `.env.example` bị `.gitignore` chặn (`*.env*`) nên không commit được — config được ghi lại trong HANDOFF.
+5.  **Verify:** `npm test` 67/67 pass, `type-check` pass, lint sạch các file đụng (5 lỗi pre-existing `get-ticket/page.tsx` + 2 lỗi mới `QRScanner.tsx` giữ nguyên).
 
