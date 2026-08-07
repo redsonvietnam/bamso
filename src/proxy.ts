@@ -47,7 +47,6 @@ export async function proxy(request: NextRequest) {
         '/api/services',
         '/api/tickets',
         '/api/tickets/track',
-        '/api/settings',
         '/api/health',
         '/api/tts',
         '/api/sse',
@@ -60,6 +59,31 @@ export async function proxy(request: NextRequest) {
     }
 
     if (isPublicRoute || isPublicApiRoute) {
+        return NextResponse.next();
+    }
+
+    // =====================
+    // 2b. /api/settings: GET public, mọi method khác (vd PUT) yêu cầu ADMIN
+    // =====================
+    if (pathname.startsWith('/api/settings')) {
+        if (request.method === 'GET') {
+            return NextResponse.next();
+        }
+
+        const token = request.cookies.get(COOKIE_NAME)?.value;
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+        }
+
+        const payload = await verifyJWT(token);
+        if (!payload) {
+            return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
+        }
+
+        if (payload.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+        }
+
         return NextResponse.next();
     }
 
