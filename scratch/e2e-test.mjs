@@ -25,8 +25,61 @@ async function runTests() {
         }
         console.log(`   👉 Chọn dịch vụ: ${serviceA.name} (ID: ${serviceA.id})`);
 
-        // 3. Tạo một vé mới (Lấy số nhanh)
-        console.log('\n🔄 3. Giả lập khách hàng lấy số mới...');
+        // 3. Lấy Demo Token của Cán bộ (STAFF) — cần trước để mở SSE STAFF listener
+        //    TRƯỚC KHI tạo vé, để bắt được broadcast đầu tiên của vé này.
+        console.log('\n🔄 3. Lấy Token xác thực quyền Cán bộ (STAFF)...');
+        const tokenRes = await fetch(`${BASE_URL}/api/demo-token?role=STAFF`);
+        const tokenData = await tokenRes.json();
+        if (!tokenData.token) {
+            throw new Error('Không tạo được token cán bộ!');
+        }
+        console.log('   👉 Lấy token thành công.');
+        const authCookie = `auth_token=${tokenData.token}`;
+
+        // Hàm phụ trợ: mở một kết nối SSE, tự abort sau `durationMs`, trả về buffer đã đọc.
+        // (Cùng cách tiếp cận abort-after-timeout mà bản gốc đã dùng — chỉ đơn giản là giờ
+        // ta mở nó SỚM HƠN, trước khi hành động kích hoạt broadcast xảy ra.)
+        function openSseListener(url, headers, durationMs) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), durationMs);
+            const resultPromise = (async () => {
+                let buffer = '';
+                try {
+                    const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'text/event-stream', ...headers } });
+                    if (!res.body) return buffer;
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    // eslint-disable-next-line no-constant-condition
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        if (buffer.length > 50000) break;
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.log(`   ⚠️  Lỗi đọc SSE (${url}): ${err.message}`);
+                    }
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+                return buffer;
+            })();
+            return { controller, resultPromise };
+        }
+
+        // 3b. [PII TEST] Mở SONG SONG 2 kết nối SSE (ẩn danh + STAFF) TRƯỚC KHI tạo vé mới,
+        //     rồi tạo vé để kích hoạt broadcastQueueUpdate — đảm bảo cả hai stream thực sự
+        //     nhận được event chứa vé này (không kiểm tra một buffer rỗng một cách vô nghĩa).
+        console.log('\n🔄 3b. [PII] Mở kết nối SSE ẩn danh + STAFF trước khi tạo vé...');
+        const SSE_WINDOW_MS = 4000;
+        const anonSse = openSseListener(`${BASE_URL}/api/sse/queue?serviceId=${serviceA.id}`, {}, SSE_WINDOW_MS);
+        const staffSse = openSseListener(`${BASE_URL}/api/sse/queue?serviceId=${serviceA.id}`, { Cookie: authCookie }, SSE_WINDOW_MS);
+        // Đợi một nhịp ngắn để cả hai kết nối kịp subscribe trước khi bắn broadcast.
+        await new Promise(r => setTimeout(r, 500));
+
+        // 4. Tạo một vé mới (Lấy số nhanh) — hành động này trigger broadcastQueueUpdate
+        console.log('\n🔄 4. Giả lập khách hàng lấy số mới (trong lúc SSE đang lắng nghe)...');
         const CUSTOMER_NAME = 'Kiểm thử tự động';
         const CUSTOMER_PHONE = '0909999999';
         const ticketRes = await fetch(`${BASE_URL}/api/tickets`, {
@@ -41,8 +94,43 @@ async function runTests() {
         const ticket = await ticketRes.json();
         console.log(`   👉 Lấy số thành công: ${ticket.ticketNumber} (ID: ${ticket.id}, Status: ${ticket.status}, Position: ${ticket.position})`);
 
-        // 3b. [PII TEST] Anonymous GET /api/tickets KHÔNG được thấy customerName/phone
-        console.log('\n🔄 3b. [PII] Kiểm tra GET /api/tickets ẩn danh (không cookie)...');
+        // Mỗi kết nối tự abort sau SSE_WINDOW_MS (đặt lúc mở ở trên); chỉ cần đợi chúng xong.
+        const [anonSseBuffer, staffSseBuffer] = await Promise.all([anonSse.resultPromise, staffSse.resultPromise]);
+
+        // 4a. [PII TEST] SSE ẩn danh: PHẢI thấy vé (để chắc chắn đã bắt được broadcast thật,
+        //     không phải buffer rỗng "không kết luận được"), nhưng KHÔNG được thấy PII thật.
+        console.log('\n🔄 4a. [PII] Kiểm tra SSE ẩn danh nhận được broadcast của vé vừa tạo, không lộ PII...');
+        if (!anonSseBuffer.includes(ticket.id)) {
+            throw new Error(
+                `Kết nối SSE ẩn danh không nhận được broadcast nào chứa vé ID=${ticket.id} trong ${SSE_WINDOW_MS}ms — ` +
+                `không thể kết luận việc redact có hoạt động hay không (test không có ý nghĩa nếu không bắt được sự kiện thật).`
+            );
+        }
+        if (anonSseBuffer.includes(CUSTOMER_NAME) || anonSseBuffer.includes(CUSTOMER_PHONE)) {
+            throw new Error(
+                `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName/phone thật của khách trong broadcast của vé ${ticket.id}.`
+            );
+        }
+        console.log(`   👉 OK — SSE ẩn danh nhận được broadcast của vé (đã bắt được event thật) và không lộ PII (${anonSseBuffer.length} ký tự).`);
+
+        // 4b. [PII TEST] SSE với quyền STAFF: PHẢI thấy vé VÀ PHẢI thấy PII thật (regression
+        //     check chống over-redaction — không chỉ REST mà cả SSE cũng phải phân biệt theo role).
+        console.log('\n🔄 4b. [PII] Kiểm tra SSE STAFF vẫn thấy PII thật trong cùng broadcast...');
+        if (!staffSseBuffer.includes(ticket.id)) {
+            throw new Error(
+                `Kết nối SSE STAFF không nhận được broadcast nào chứa vé ID=${ticket.id} trong ${SSE_WINDOW_MS}ms — ` +
+                `không thể kết luận việc redact có hoạt động đúng theo role hay không.`
+            );
+        }
+        if (!staffSseBuffer.includes(CUSTOMER_NAME) || !staffSseBuffer.includes(CUSTOMER_PHONE)) {
+            throw new Error(
+                `❌ OVER-REDACT qua SSE! STAFF lẽ ra phải thấy PII thật qua SSE nhưng bị ẩn trong broadcast của vé ${ticket.id}.`
+            );
+        }
+        console.log(`   👉 OK — SSE STAFF nhận được broadcast của vé và vẫn thấy đầy đủ customerName/phone thật (${staffSseBuffer.length} ký tự).`);
+
+        // 4c. [PII TEST] Anonymous GET /api/tickets KHÔNG được thấy customerName/phone
+        console.log('\n🔄 4c. [PII] Kiểm tra GET /api/tickets ẩn danh (không cookie)...');
         const anonListRes = await fetch(`${BASE_URL}/api/tickets`);
         if (!anonListRes.ok) {
             throw new Error(`GET /api/tickets ẩn danh trả lỗi HTTP ${anonListRes.status}`);
@@ -61,19 +149,9 @@ async function runTests() {
         }
         console.log(`   👉 OK — anonymous thấy customerName=${JSON.stringify(anonTicket.customerName)}, phone=${JSON.stringify(anonTicket.phone)} (đã redact)`);
 
-        // 4. Lấy Demo Token của Cán bộ (STAFF)
-        console.log('\n🔄 4. Lấy Token xác thực quyền Cán bộ (STAFF)...');
-        const tokenRes = await fetch(`${BASE_URL}/api/demo-token?role=STAFF`);
-        const tokenData = await tokenRes.json();
-        if (!tokenData.token) {
-            throw new Error('Không tạo được token cán bộ!');
-        }
-        console.log('   👉 Lấy token thành công.');
-        const authCookie = `auth_token=${tokenData.token}`;
-
-        // 4b. [PII TEST] STAFF GET /api/tickets PHẢI vẫn thấy customerName/phone thật
+        // 4d. [PII TEST] STAFF GET /api/tickets PHẢI vẫn thấy customerName/phone thật
         //     (regression check — đảm bảo redact đúng theo role, không redact luôn cho STAFF/ADMIN)
-        console.log('\n🔄 4b. [PII] Kiểm tra GET /api/tickets với quyền STAFF vẫn thấy PII thật...');
+        console.log('\n🔄 4d. [PII] Kiểm tra GET /api/tickets với quyền STAFF vẫn thấy PII thật...');
         const staffListRes = await fetch(`${BASE_URL}/api/tickets`, {
             headers: { 'Cookie': authCookie }
         });
@@ -93,53 +171,6 @@ async function runTests() {
             );
         }
         console.log('   👉 OK — STAFF vẫn thấy đầy đủ customerName/phone như thiết kế.');
-
-        // 4c. [PII TEST] Anonymous SSE /api/sse/queue KHÔNG được lọt customerName/phone thật
-        //     LƯU Ý: đây là kiểm tra best-effort trên vài giây đầu của stream.
-        //     Nếu endpoint yêu cầu query param khác (vd ?serviceId=...), cần chỉnh lại URL bên dưới.
-        console.log('\n🔄 4c. [PII] Kiểm tra SSE /api/sse/queue ẩn danh trong 3 giây đầu...');
-        try {
-            const sseController = new AbortController();
-            const sseTimeout = setTimeout(() => sseController.abort(), 3000);
-            const sseRes = await fetch(`${BASE_URL}/api/sse/queue?serviceId=${serviceA.id}`, {
-                signal: sseController.signal,
-                headers: { Accept: 'text/event-stream' }
-            });
-            let sseBuffer = '';
-            if (sseRes.body) {
-                const reader = sseRes.body.getReader();
-                const decoder = new TextDecoder();
-                try {
-                    // eslint-disable-next-line no-constant-condition
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        sseBuffer += decoder.decode(value, { stream: true });
-                        if (sseBuffer.length > 20000) break; // tránh đọc vô hạn
-                    }
-                } catch (readErr) {
-                    // abort do timeout là mong đợi, các lỗi khác thì log lại
-                    if (readErr.name !== 'AbortError') {
-                        console.log(`   ⚠️  Đọc SSE dừng sớm: ${readErr.message}`);
-                    }
-                }
-            }
-            clearTimeout(sseTimeout);
-
-            if (sseBuffer.includes(CUSTOMER_NAME) || sseBuffer.includes(CUSTOMER_PHONE)) {
-                throw new Error(
-                    `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName/phone thật của khách.`
-                );
-            }
-            if (sseBuffer.length === 0) {
-                console.log('   ⚠️  Không đọc được dữ liệu nào từ SSE trong 3s (có thể do chưa có event nào bắn ra) — không kết luận được, cần kiểm tra thủ công.');
-            } else {
-                console.log(`   👉 OK — không thấy PII thật trong ${sseBuffer.length} ký tự đầu của SSE stream.`);
-            }
-        } catch (sseErr) {
-            if (sseErr.message?.startsWith('❌')) throw sseErr;
-            console.log(`   ⚠️  Không thể kiểm tra SSE tự động (${sseErr.message}) — bỏ qua, cần verify thủ công qua trình duyệt.`);
-        }
 
         // 5. Cán bộ gọi số tiếp theo (Call Next)
         console.log('\n🔄 5. Cán bộ Quầy 5 bấm "Gọi số tiếp theo" (Call Next)...');
@@ -217,10 +248,18 @@ async function runTests() {
 
         console.log('\n🎉 THỬ NGHIỆM TỰ ĐỘNG HOÀN TẤT THÀNH CÔNG RỰC RỠ! 🎉');
         console.log('Toàn bộ quy trình Lấy số ➔ Gọi số ➔ Bỏ qua ➔ Gọi lại ➔ Hoàn tất hoạt động hoàn hảo!');
-        console.log('PII redaction (GET /api/tickets ẩn danh + SSE) đã được verify trong bước 3b/4b/4c.');
+        console.log('PII redaction (SSE ẩn danh/STAFF + GET /api/tickets ẩn danh/STAFF) đã được verify trong bước 3b/4a-4d.');
 
     } catch (error) {
         console.error('\n❌ THỬ NGHIỆM THẤT BẠI:', error.message);
+        // Node's fetch wraps the real network error (ECONNREFUSED, ENOTFOUND, v.v.)
+        // trong error.cause — error.message một mình chỉ nói "fetch failed", vô nghĩa.
+        if (error.cause) {
+            console.error('   ↳ Nguyên nhân gốc (error.cause):', error.cause);
+        }
+        if (error.stack) {
+            console.error('   ↳ Stack:', error.stack);
+        }
         process.exit(1);
     }
 }

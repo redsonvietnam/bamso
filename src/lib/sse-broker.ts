@@ -95,13 +95,17 @@ class SSEBroker {
         }
     }
 
-    broadcastQueueUpdate(serviceId?: string) {
-        // Best-effort publish to Redis — don't block on Redis errors
-        redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId })).catch((err) => {
-            logger.error('Redis publish queue update failed:', err);
-        });
-        // Also trigger local update immediately
-        this.broadcastQueueUpdateLocal(serviceId);
+    async broadcastQueueUpdate(serviceId?: string) {
+        // Use Promise.allSettled to ensure both local and Redis broadcasts are attempted.
+        const promises = [
+            this.broadcastQueueUpdateLocal(serviceId).catch((err) => {
+                logger.error('Local queue broadcast failed:', err);
+            }),
+            redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId })).catch((err) => {
+                logger.error('Redis publish queue update failed:', err);
+            })
+        ];
+        await Promise.allSettled(promises);
     }
 
     private async broadcastQueueUpdateLocal(serviceId?: string) {
@@ -136,16 +140,19 @@ class SSEBroker {
         }
     }
 
-    broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
-        // Best-effort publish to Redis — don't block on Redis errors
-        redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
-            logger.error('Redis publish display call failed:', err);
-        });
-        // Also trigger local update immediately
-        this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+    async broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+        const promises = [
+            this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber).catch((err) => {
+                logger.error('Local display call broadcast failed:', err);
+            }),
+            redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
+                logger.error('Redis publish display call failed:', err);
+            })
+        ];
+        await Promise.allSettled(promises);
     }
 
-    private broadcastDisplayCallLocal(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+    private async broadcastDisplayCallLocal(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
         const payload = JSON.stringify({
             type: 'DISPLAY_CALL',
             ticketNumber,
@@ -181,9 +188,7 @@ declare global {
 
 const sseBroker = global.sseBroker || new SSEBroker();
 
-if (process.env.NODE_ENV !== 'production') {
-    global.sseBroker = sseBroker;
-}
+global.sseBroker = sseBroker;
 
 export const subscribeQueue = sseBroker.subscribeQueue.bind(sseBroker);
 export const unsubscribeQueue = sseBroker.unsubscribeQueue.bind(sseBroker);

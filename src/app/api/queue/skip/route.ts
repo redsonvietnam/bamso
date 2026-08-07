@@ -27,7 +27,7 @@ export async function PUT(request: Request) {
             );
         }
 
-        broadcastQueueUpdate(ticket.serviceId);
+        await broadcastQueueUpdate(ticket.serviceId);
 
         return NextResponse.json(ticket);
     } catch (error) {

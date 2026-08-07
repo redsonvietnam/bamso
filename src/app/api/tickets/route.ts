@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         });
 
         // Trigger SSE broadcast to update all queue listeners
-        broadcastQueueUpdate(ticket.serviceId);
+        await broadcastQueueUpdate(ticket.serviceId);
 
         return NextResponse.json(ticket, { status: 201 });
     } catch (error) {

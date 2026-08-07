@@ -29,6 +29,12 @@ interface CurrentCall {
     timestamp: number;
 }
 
+// Store EventSource instances globally to prevent duplicates during hot-reloading in dev.
+declare global {
+    var displayBoard_displayEventSource: EventSource | undefined;
+    var displayBoard_queueEventSource: EventSource | undefined;
+}
+
 export default function DisplayBoard() {
     const [currentCalls, setCurrentCalls] = useState<Record<string, CurrentCall>>({});
     const [counters, setCounters] = useState<string[]>([]);
@@ -92,9 +98,10 @@ export default function DisplayBoard() {
         audioRef.current = new Audio('/sounds/chime.mp3');
         audioRef.current.load();
 
-        const displayEventSource = new EventSource('/api/sse/display');
-        displayEventSource.onopen = () => setIsConnected(true);
-        displayEventSource.onmessage = (event) => {
+        if (global.displayBoard_displayEventSource) global.displayBoard_displayEventSource.close();
+        global.displayBoard_displayEventSource = new EventSource('/api/sse/display');
+        global.displayBoard_displayEventSource.onopen = () => setIsConnected(true);
+        global.displayBoard_displayEventSource.onmessage = (event) => {
             try {
                 const data: DisplayCallEvent = JSON.parse(event.data);
                 if (data.type === 'DISPLAY_CALL') {
@@ -119,11 +126,12 @@ export default function DisplayBoard() {
                 logger.error('Error parsing display SSE message:', error);
             }
         };
-        displayEventSource.onerror = () => setIsConnected(false);
+        global.displayBoard_displayEventSource.onerror = () => setIsConnected(false);
 
-        const queueEventSource = new EventSource('/api/sse/queue');
-        queueEventSource.onopen = () => setIsConnected(true);
-        queueEventSource.onmessage = (event) => {
+        if (global.displayBoard_queueEventSource) global.displayBoard_queueEventSource.close();
+        global.displayBoard_queueEventSource = new EventSource('/api/sse/queue');
+        global.displayBoard_queueEventSource.onopen = () => setIsConnected(true);
+        global.displayBoard_queueEventSource.onmessage = (event) => {
             try {
                 const data: QueueUpdateEvent = JSON.parse(event.data);
                 if (data.type === 'QUEUE_UPDATE' && Array.isArray(data.tickets)) {
@@ -174,11 +182,17 @@ export default function DisplayBoard() {
                 logger.error('Error parsing queue SSE message:', error);
             }
         };
-        queueEventSource.onerror = () => setIsConnected(false);
+        global.displayBoard_queueEventSource.onerror = () => setIsConnected(false);
 
         return () => {
-            displayEventSource.close();
-            queueEventSource.close();
+            if (global.displayBoard_displayEventSource) {
+                global.displayBoard_displayEventSource.close();
+                global.displayBoard_displayEventSource = undefined;
+            }
+            if (global.displayBoard_queueEventSource) {
+                global.displayBoard_queueEventSource.close();
+                global.displayBoard_queueEventSource = undefined;
+            }
         };
     }, [speakAnnouncement, speakPrepare]);
 

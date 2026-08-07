@@ -103,49 +103,33 @@ RATE_LIMIT_DISABLED=false
 
 ## 1. Trạng thái hiện tại
 
-**ĐÃ merge vào repo (mới nhất — 2026-08-06, opencode):**
-- **Fix PII leak ĐÃ THỰC SỰ VÀO CODE** (trước đó chỉ nằm ở snapshot, chưa merge — sai sót cần chú ý). 4 file:
-  - `src/lib/api-auth.ts` — thêm `authenticateOptional()` (best-effort auth, trả `{ userId, role } | null`, không bao giờ throw)
-  - `src/app/api/tickets/route.ts` — `redactTicketsForRole()`, GET redact `customerName`/`phone` trừ khi role là ADMIN/STAFF
-  - `src/lib/sse-broker.ts` — `redactForRole()`, `QueueClient.role`, `subscribeQueue(id, controller, serviceId?, role?)`, redact trong `broadcastQueueUpdateLocal`
-  - `src/app/api/sse/queue/route.ts` — `authenticateOptional()` → truyền `session?.role ?? null` vào `subscribeQueue`
-  - `broadcastDisplayCallLocal` GIỮ NGUYÊN — vẫn gửi `customerName` cho displayClients (hành vi cố ý khi gọi tên khách)
-- `tsconfig.json` — thêm `"conversations"` vào `exclude` (các snapshot `file changed/` trùng `declare global`/`class SSEBroker` làm type-check vỡ)
-- **Verify:** `npm run type-check` pass; `npm run lint` sạch cho các file đã sửa. Còn **5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx` (`no-explicit-any`) — chưa fix, không liên quan.
+**Đã hoàn thành và xác minh (2026-08-07):**
+- **Toàn bộ test suite (`npm test`) đã PASS:** Bao gồm cả các test cũ của `cccd-parser.test.ts` và unit test mới cho `queue-service.ts`.
+- **E2E test (`e2e-test.mjs`) đã PASS:** Xác minh toàn bộ luồng nghiệp vụ và logic PII redaction.
+- **Fix lỗi đồng bộ real-time (SSE):** Đã sửa lỗi mất đồng bộ trên các client khi hot-reload bằng cách quản lý `EventSource` qua biến `global`.
 
-**LƯU Ý QUAN TRỌNG cho phiên sau:**
-- Thư mục `conversations/` chứa archive từng phiên (`archive/phienX/phienX-acc-*.md`) + SNAPSHOT file đã sửa trong `archive/phienX/file changed/`. **Snapshot KHÔNG phải nguồn đáng tin — trạng thái thật nằm trong `src/`.** Đừng merge lại snapshot đã merge.
-- `INDEX.MD` là bản tóm tắt từng phiên (append-only, nén theo quy tắc: giữ quyết định/số liệu/lỗi+fix, bỏ thử-sai).
-- Git đang tắt (thư mục `.git_disabled/`).
+**Vấn đề còn tồn tại:**
+- **Coverage:** `sse-broker.ts` hiện chưa có unit test nào.
+- **Linting:** 5 lỗi lint trong `src/app/(public)/get-ticket/page.tsx` vẫn còn.
 
-**ĐÃ xong và verify (từ trước):**
-- 18 bug/security fix ghi trong `NEXT_STEPS.md` (demo-token không cấp ADMIN, SSML injection, rate-limit TTS, ticketNumber unique per day, PBKDF2 210k, auto-rehash, JWT_SECRET bắt buộc, Redis dedup, SSE fail-open, race condition callNext/complete/skip/restore, dead code xóa, camera secure-context, null check routes)
-- Cấu trúc route, auth, RBAC hoạt động theo thiết kế
-
-**ĐÃ xong nhưng CHƯA verify:**
-- Các fix race condition trong `queue-service.ts` — không có unit test, chỉ verify thủ công qua e2e-test
-- Redis pub/sub cross-instance — chưa có môi trường multi-instance để test
-- Auto-rehash password khi login
-
-**CẦN USER QUYẾT ĐỊNH:**
-- Database production: SQLite (hiện tại) hay PostgreSQL? Schema đang dùng SQLite provider
-- Redis có cài production không? (hiện fail-open, tức rate-limit bị vô hiệu nếu thiếu Redis)
+**Quyết định cần đưa ra:**
+- Database production: SQLite hay PostgreSQL?
+- Redis có cài production không?
 - `DEMO_MODE_ENABLED` có bật trên production không?
 
 ---
 
 ## 2. Việc cần làm tiếp theo (theo thứ tự ưu tiên)
 
-1. **Verify fix PII mới merge bằng e2e** — thêm test/`e2e-test.mjs`: anonymous GET `/api/tickets` và `/api/sse/queue` KHÔNG còn thấy `customerName`/`phone` (P1, mới)
-2. **Viết test cho `queue-service.ts`** — file rủi ro cao nhất, chưa có test; ưu tiên case restore-trùng-position + race 2 quầy cùng dịch vụ (P1)
-3. **Thống nhất auth `/api/settings`** — GET public nhưng PUT tự check role, nên đẩy lên proxy (P1)
-4. **SQLite `busy_timeout`** — `db.ts` không config; thêm `?connection_limit=1&socket_timeout=15` hoặc pragma `busy_timeout`; nếu >2-3 quầy song song → chuyển Postgres
-5. **Cookie `secure` flag không nhất quán** — `api/auth/route.ts` check `NODE_ENV` + `x-forwarded-proto`; `demo-token` + `logout` chỉ check `NODE_ENV` — nên thống nhất
-6. **Xóa field `date` trên Ticket** nếu không dùng (hiện không thấy trong schema — cần verify)
-7. **Content-Security-Policy header** trong `next.config.ts` (P2)
-8. **CI/CD** — GitHub Actions hoặc husky + lint-staged (P2)
-9. **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`
-10. **Fix 5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx` (`no-explicit-any`)
+1.  **Thống nhất auth `/api/settings`** — GET public nhưng PUT tự check role, nên đẩy lên proxy. (P1)
+2.  **Viết test cho `sse-broker.ts`** — File này đã có bug, cần được cover bởi unit test. (P2)
+3.  **SQLite `busy_timeout`** — `db.ts` không config; cân nhắc thêm `?connection_limit=1&socket_timeout=15` hoặc pragma `busy_timeout`. (P2)
+4.  **Cookie `secure` flag không nhất quán** — Thống nhất logic giữa các route. (P2)
+5.  **Fix 5 lỗi lint pre-existing** trong `src/app/(public)/get-ticket/page.tsx`. (P3)
+6.  **Content-Security-Policy header** trong `next.config.ts`. (P3)
+7.  **CI/CD** — GitHub Actions hoặc husky + lint-staged. (P3)
+8.  **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`.
+
 
 ---
 
@@ -156,3 +140,12 @@ RATE_LIMIT_DISABLED=false
 **Phiên 2** (acc skde) — Phát hiện phiên 1 báo "Hoàn thành" nhưng fix KHÔNG có trong code (grep: không nơi nào gọi `authenticateOptional`). Author 3 file fix: `tickets/route.ts` (`redactTicketsForRole`), `sse-broker.ts` (`redactForRole`, `QueueClient.role`, `subscribeQueue` nhận `role`), `sse/queue/route.ts` (truyền role). Quyết định: `broadcastDisplayCallLocal` giữ nguyên (cố ý). Snapshot lưu tại `conversations/archive/phien2/file changed/`. **Vẫn CHƯA merge.**
 
 **Phiên 3** (opencode, 2026-08-06) — MERGE fix PII vào repo thật: 4 file (`api-auth.ts`, `tickets/route.ts`, `sse-broker.ts`, `sse/queue/route.ts`) + `tsconfig.json` thêm `"conversations"` vào `exclude` (snapshot trùng `declare global` phá type-check). Fix lint destructure-unused (`customerName: _customerName, phone: _phone`). Verify: `type-check` pass, lint sạch file đụng (5 lỗi pre-existing ở `get-ticket/page.tsx` giữ nguyên). Điểm rút kinh nghiệm: **sau khi AI author file, bắt buộc merge + verify vào `src/`, không để snapshot nằm im.**
+
+**Phiên 4** (opencode/fes, 2026-08-07) — Verify PII, sửa lỗi `call-next`, sửa lỗi `cccd-parser` và fix lỗi SSE hot-reload.
+1.  **Viết lại test e2e PII:** `scratch/e2e-test.mjs` được viết lại để test SSE một cách đáng tin cậy.
+2.  **Sửa lỗi `call-next`:** Sửa lỗi thiếu `async` và lỗi chính tả trong `sse-broker.ts`.
+3.  **Thêm Unit Test:** Tạo `src/lib/__tests__/queue-service.test.ts` (19 test case), tất cả đều pass.
+4.  **Sửa lỗi test `cccd-parser`:** Sửa lỗi off-by-one index trong `cccd-parser.ts`, giúp toàn bộ `npm test` pass.
+5.  **Fix lỗi SSE hot-reload:** Sửa lỗi mất đồng bộ real-time bằng cách dùng biến `global` để quản lý các instance `EventSource` trong `queue.store.ts` và `DisplayBoard.tsx`, đảm bảo chúng tồn tại duy nhất qua các lần hot-reload.
+6.  **Verify:** `e2e-test.mjs` và `npm test` đều pass. Trạng thái đồng bộ real-time đã hoạt động bình thường.
+

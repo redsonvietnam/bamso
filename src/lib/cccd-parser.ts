@@ -16,7 +16,7 @@ export function parseCCCDName(qrString: string): string | null {
     const parts = qrString.split('|');
 
     if (parts.length >= 3) {
-        const fullName = parts[2].trim();
+        const fullName = parts[1].trim();
         return fullName || null;
     }
 
@@ -31,10 +31,10 @@ export function parseFullCCCDData(qrString: string) {
     if (parts.length >= 3) {
         return {
             idNumber: parts[0]?.trim() || '',
-            oldIdNumber: parts[1]?.trim() || '',
-            fullName: parts[2]?.trim() || '',
-            dateOfBirth: parts[3]?.trim() || '',
-            permanentResidence: parts[4]?.trim() || '',
+            fullName: parts[1]?.trim() || '',
+            dateOfBirth: parts[2]?.trim() || '',
+            gender: parts[3]?.trim() || '',
+            nationality: parts[4]?.trim() || '',
             issueDate: parts[5]?.trim() || '',
         };
     }

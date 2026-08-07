@@ -362,6 +362,74 @@ git diff           # Chi tiết từng dòng
 
 ---
 
+## 11. Điện thoại không vào được qua mạng LAN
+
+### Triệu chứng
+- Server chạy `npm run start`, máy tính truy cập `localhost:3000` OK
+- Điện thoại truy cập `http://192.168.x.x:3000` không được
+
+### Nguyên nhân gốc rễ
+**`npm run start` thiếu `--hostname 0.0.0.0`**
+
+Next.js production server mặc định chỉ bind vào interface cụ thể, không phải tất cả. Cần thêm flag `--hostname 0.0.0.0`.
+
+### Cách fix
+```json
+// package.json
+"start": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" next start --hostname 0.0.0.0"
+```
+
+### Bài học
+> **Dev script có `--hostname 0.0.0.0` không có nghĩa production script cũng có.**
+> Luôn check cả hai script `dev` và `start`.
+
+---
+
+## 12. Firewall Windows chặn port kết nối
+
+### Triệu chứng
+- Server listen `0.0.0.0:3000` OK
+- Máy tính truy cập `http://192.168.x.x:3000` OK
+- Điện thoại cùng mạng vẫn không vào được
+
+### Nguyên nhân gốc rễ
+**Windows Defender Firewall chặn kết nối TCP inbound trên port 3000.**
+
+### Cách fix
+```powershell
+# Chạy PowerShell với quyền Admin
+netsh advfirewall firewall add rule name="Bamso Next.js 3000" dir=in action=allow protocol=TCP localport=3000
+```
+
+### Bài học
+> **Server listen OK ≠ từ ngoài vào được.**
+> Luôn check firewall khi truy cập từ thiết bị khác trong mạng LAN.
+
+---
+
+## 13. Too Many Requests khi mới chạy
+
+### Triệu chứng
+- Mới build xong, truy cập từ điện thoại
+- Lỗi "Too Many Requests" khi bấm nút
+
+### Nguyên nhân gốc rễ
+**Rate limit quá chặt cho testing.** Cần tắt hoàn toàn khi dev/test.
+
+### Cách fix
+```bash
+# .env
+RATE_LIMIT_DISABLED="true"
+```
+
+Lưu ý: env var này chỉ có hiệu lực khi build lại. Nếu đã build mà muốn tắt rate limit → phải rebuild lại.
+
+### Bài học
+> **Khi thêm env var cho rate limit → phải rebuild lại production build.**
+> `next start` đọc env từ build time, không phải runtime (trừ khi dùng `process.env` ở server-side route).
+
+---
+
 ## Tóm tắt nguyên tắc vàng
 
 | # | Nguyên tắc |
@@ -374,6 +442,8 @@ git diff           # Chi tiết từng dòng
 | 6 | Thêm unique constraint = **cần backfill plan** |
 | 7 | Đổi return type = **check toàn bộ callers** |
 | 8 | Redis error khi build = **bình thường**, fail-open OK |
+| 9 | Production start **phải có `--hostname 0.0.0.0`** để truy cập từ LAN |
+| 10 | Server listen OK ≠ từ ngoài vào được → **check firewall** |
 
 ---
 

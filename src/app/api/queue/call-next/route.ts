@@ -43,8 +43,12 @@ export async function POST(request: Request) {
             orderBy: { position: 'asc' },
         });
 
-        broadcastQueueUpdate(ticket.serviceId);
-        broadcastDisplayCall(ticket.ticketNumber, pos, ticket.customerName, nextPending?.ticketNumber);
+        logger.debug('Preparing to broadcast call. Ticket and nextPending are valid.');
+
+        await Promise.all([
+            broadcastQueueUpdate(ticket.serviceId),
+            broadcastDisplayCall(ticket.ticketNumber, pos, ticket.customerName, nextPending?.ticketNumber)
+        ]);
 
         return NextResponse.json(ticket);
     } catch (error) {

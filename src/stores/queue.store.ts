@@ -25,7 +25,9 @@ interface QueueState {
     disconnectSSE: () => void;
 }
 
-let currentEventSource: EventSource | null = null;
+declare global {
+    var queueEventSource: EventSource | undefined;
+}
 
 function buildSnapshot(tickets: ExtendedTicket[]): QueueSnapshot {
     return {
@@ -48,8 +50,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     setConnected: (connected) => set({ isConnected: connected }),
     connectSSE: async (serviceId: string) => {
         // Disconnect existing if any
-        if (currentEventSource) {
-            currentEventSource.close();
+        if (global.queueEventSource) {
+            global.queueEventSource.close();
         }
 
         set({ serviceId });
@@ -64,11 +66,11 @@ export const useQueueStore = create<QueueState>((set, get) => ({
             logger.error('Error fetching initial tickets:', error);
         }
 
-        currentEventSource = new EventSource(`/api/sse/queue?serviceId=${serviceId}`);
+        global.queueEventSource = new EventSource(`/api/sse/queue?serviceId=${serviceId}`);
 
-        currentEventSource.onopen = () => set({ isConnected: true });
+        global.queueEventSource.onopen = () => set({ isConnected: true });
 
-        currentEventSource.onmessage = (event) => {
+        global.queueEventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'QUEUE_UPDATE' && Array.isArray(data.tickets)) {
@@ -79,14 +81,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
             }
         };
 
-        currentEventSource.onerror = () => {
+        global.queueEventSource.onerror = () => {
             set({ isConnected: false });
         };
     },
     disconnectSSE: () => {
-        if (currentEventSource) {
-            currentEventSource.close();
-            currentEventSource = null;
+        if (global.queueEventSource) {
+            global.queueEventSource.close();
+            global.queueEventSource = undefined;
         }
         set({ isConnected: false, serviceId: null, tickets: [], snapshot: null });
     },
