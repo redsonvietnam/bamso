@@ -33,7 +33,7 @@ type DisplayClient = {
     controller: ReadableStreamDefaultController;
 };
 
-class SSEBroker {
+export class SSEBroker {
     private queueClients = new Set<QueueClient>();
     private displayClients = new Set<DisplayClient>();
     private initialized = false;
