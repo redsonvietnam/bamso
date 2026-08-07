@@ -115,9 +115,9 @@ RATE_LIMIT_DISABLED=false
 - Không còn. `npm run lint` sạch (0 error, 0 warning).
 
 **Quyết định cần đưa ra:**
-- Database production: SQLite hay PostgreSQL?
-- Redis có cài production không?
-- `DEMO_MODE_ENABLED` có bật trên production không?
+- Database production: **SQLite** (user đã chốt). Chú ý: tránh chạy nhiều instance write song song — đã dùng `connection_limit=1&socket_timeout=15`.
+- Redis có cài production không? (chưa chốt)
+- `DEMO_MODE_ENABLED` có bật trên production không? (chưa chốt)
 
 ---
 
@@ -130,7 +130,7 @@ RATE_LIMIT_DISABLED=false
 5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
 6.  ✅ ~~**Content-Security-Policy header**~~ trong `next.config.ts`. (P3) — Đã làm, verify header thực tế qua server production.
 7.  ✅ ~~**CI/CD**~~ — GitHub Actions hoặc husky + lint-staged. (P3) — Đã làm: GitHub Actions `.github/workflows/ci.yml`.
-8.  **Xác nhận DB provider** cho production (SQLite vs PostgreSQL) + bật lại `.git`.
+8.  ✅ ~~**Xác nhận DB provider**~~ cho production (SQLite vs PostgreSQL) + bật lại `.git`. — SQLite (user quyết định). `.git` đã hoạt động bình thường.
 
 
 ---
@@ -180,4 +180,8 @@ RATE_LIMIT_DISABLED=false
 1.  **`.github/workflows/ci.yml`:** job `verify` chạy trên ubuntu-latest, Node 22, `npm ci` → `npx prisma generate` → `npm run lint` → `npm run type-check` → `npm test` → `npm run build`. Trigger: push `main`/`fix` + PR vào `main`.
 2.  **Env cho CI:** `JWT_SECRET` (bắt buộc khi build), `DATABASE_URL` SQLite file, `DEMO_MODE_ENABLED=false`, `RATE_LIMIT_DISABLED=false`.
 3.  **Rút kinh nghiệm:** commit trước (`5ed1771`) cuốn nhầm `DisplayBoard.tsx` của phiên song song do dùng `git add -A`. Từ đây chỉ `git add` đúng file thay đổi; phân phạm vi: phiên này chỉ đụng `src/lib`, `src/proxy`, `src/app/api`, `next.config`, `HANDOFF.md`.
+
+**Phiên 6e** (opencode, 2026-08-07) — Chốt DB production (P3, task 8).
+1.  **User quyết định SQLite** cho production. Đã ghi vào phần "Quyết định cần đưa ra". `.git` đã hoạt động bình thường (`.git_disabled` không tồn tại) — phần "bật lại `.git`" đã xong từ trước.
+2.  **Toàn bộ 8 task HANDOFF ban đầu đã hoàn thành.** Còn lại 2 quyết định mở: Redis production, `DEMO_MODE_ENABLED` production.
 
