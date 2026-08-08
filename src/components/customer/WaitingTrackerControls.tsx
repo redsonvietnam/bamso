@@ -9,8 +9,8 @@ export function SoundToggle({ soundEnabled, onToggle }: {
       onClick={onToggle}
       className={`rounded-full border px-3 py-2 text-sm transition ${
         soundEnabled
-          ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-          : 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200'
+          ? 'border-border bg-card text-muted-foreground hover:bg-muted'
+          : 'border-border bg-muted text-muted-foreground hover:bg-muted'
       }`}
       title={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
     >
@@ -25,9 +25,9 @@ export function SoundToggle({ soundEnabled, onToggle }: {
 export function ConnectionBadge({ isConnected }: { isConnected: boolean }) {
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
+      className={`inline-flex items-center gap-2 sticker rounded-full border px-3 py-2 text-sm ${
         isConnected
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          ? 'border-primary/20 bg-primary/5 text-primary'
           : 'border-rose-200 bg-rose-50 text-rose-700'
       }`}
     >

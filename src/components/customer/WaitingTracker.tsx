@@ -68,13 +68,13 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
             <span className="text-base font-bold">{ticket.service.prefix}</span>
           </div>
             <div>
-              <p className="text-sm font-semibold text-slate-900">{ticket.service.name}</p>
+              <p className="text-sm font-semibold text-foreground">{ticket.service.name}</p>
               {ticket.customerName && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Khách: <span className="font-medium">{ticket.customerName}</span>
                 </p>
               )}
-              <p className="text-xs text-slate-500">Cập nhật realtime</p>
+              <p className="text-xs text-muted-foreground">Cập nhật realtime</p>
             </div>
         </div>
         <div className="flex items-center gap-2">
@@ -86,16 +86,16 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
       <QueueStatusCard ticket={ticket} queueAhead={queueAhead} proximityLevel={proximityLevel} />
 
       {ticket.status === 'PENDING' && currentServed && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.1em] text-emerald-600">
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.1em] text-primary">
             Hiện đang phục vụ
           </p>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-800">
+            <span className="text-2xl font-bold text-primary">
               {currentServed.ticketNumber}
             </span>
             {currentServed.pos && (
-              <span className="text-sm text-emerald-600">
+              <span className="text-sm text-primary/80">
                 &middot; Quầy {currentServed.pos}
               </span>
             )}
@@ -106,7 +106,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
       <div className="flex gap-3">
         <Button
           variant="outline"
-          className="flex-1 rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+          className="flex-1 rounded-2xl border-border bg-card py-6 text-base font-semibold text-foreground shadow-sm hover:bg-muted"
           onClick={() => router.push('/get-ticket')}
         >
           <ExternalLink className="mr-2 h-4 w-4" />
@@ -114,7 +114,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
         </Button>
         <Button
           variant="outline"
-          className="flex-1 rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+          className="flex-1 rounded-2xl border-border bg-card py-6 text-base font-semibold text-foreground shadow-sm hover:bg-muted"
           onClick={() =>
             document.getElementById('service-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }

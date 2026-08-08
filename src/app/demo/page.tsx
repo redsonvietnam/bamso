@@ -91,7 +91,7 @@ export default function DemoPage() {
 
     if (isSettingUp) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-12">
+            <div className="min-h-full bg-background px-4 py-12">
                 <div className="max-w-5xl mx-auto">
                     <div className="text-center mb-10">
                         <Skeleton className="h-10 w-96 mx-auto mb-3" />
@@ -114,7 +114,7 @@ export default function DemoPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-12">
+        <div className="min-h-full bg-background px-4 py-12">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-10">
                     <h1 className="text-4xl font-bold tracking-tight">Demo — Hệ thống quản lý hàng đợi</h1>

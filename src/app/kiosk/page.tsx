@@ -10,6 +10,7 @@ import { parseCCCDName } from '@/lib/cccd-parser';
 import { useSpeech } from '@/hooks/useSpeech';
 import { logger } from '@/lib/logger';
 import QRScanner from '@/components/qr-scanner/QRScanner';
+import { PageWatermark } from '@/components/ui/dong-son-motif';
 
 type KioskStep = 'service' | 'scan' | 'creating' | 'success';
 
@@ -203,7 +204,7 @@ export default function KioskPage() {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col md:flex-row h-screen w-screen bg-slate-50">
+            <div className="flex flex-col md:flex-row h-screen w-screen bg-muted">
                 <div className="flex-1 flex items-center justify-center p-6 md:p-12">
                     <div className="space-y-6 md:space-y-8 w-full max-w-lg">
                         <Skeleton className="h-10 md:h-12 w-56 md:w-64 mx-auto" />
@@ -215,7 +216,7 @@ export default function KioskPage() {
                         </div>
                     </div>
                 </div>
-                <div className="h-64 md:h-auto md:w-[45%] bg-white border-t md:border-t-0 md:border-l border-slate-200 p-6 md:p-8">
+                <div className="h-64 md:h-auto md:w-[45%] bg-card border-t md:border-t-0 md:border-l border-border p-6 md:p-8">
                     <Skeleton className="h-7 md:h-8 w-40 md:w-48 mb-4 md:mb-6" />
                     <div className="grid grid-cols-2 gap-4 md:gap-6">
                         {[1, 2, 3, 4].map(i => (
@@ -228,20 +229,32 @@ export default function KioskPage() {
     }
 
     return (
-        <div className="flex flex-col md:flex-row min-h-screen h-screen bg-slate-50 overflow-hidden select-none">
+        <div className="flex flex-col md:flex-row min-h-screen h-screen bg-background overflow-hidden select-none">
             {/* LEFT PANEL — Ticket Flow */}
-            <div className="flex-1 md:w-[55%] flex flex-col bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 relative overflow-hidden min-h-0">
+            <div className="flex-1 md:w-[55%] flex flex-col bg-gradient-to-br from-muted via-card to-primary/5 relative overflow-hidden min-h-0">
+                <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[62.5rem] w-[62.5rem] opacity-[0.10]" />
+                <div className="h-1.5 bg-brand-red shrink-0" />
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 md:px-8 py-3 md:py-5 border-b border-slate-200/60 shrink-0">
-                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                        <div className="w-2 md:w-2.5 h-7 md:h-10 bg-[#00BD7D] rounded-full shrink-0" />
-                        <h1 className="text-lg md:text-2xl font-black tracking-tight truncate" style={{ color: '#00BD7D' }}>
-                            {agencyName}
-                        </h1>
+                <div className="header-chrome flex items-center justify-between px-4 md:px-8 py-3 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-lg md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                            <h1 className="text-2xl md:text-3xl font-black uppercase text-foreground">
+                                CÔNG AN XÃ NÂM NUNG
+                            </h1>
+                            <p className="text-sm text-muted-foreground">{agencyName}</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-400 shrink-0">
-                        <Volume2 className="w-4 h-4 hidden md:block" />
-                        <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">{timeStr}</span>
+                    <div className="flex flex-col items-end gap-1 text-muted-foreground shrink-0">
+                        <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Hệ thống lấy số dịch vụ công</span>
+                        <span className="flex items-center gap-2">
+                            <Volume2 className="w-4 h-4 hidden md:block" />
+                            <span className="text-sm md:text-base font-bold uppercase tracking-widest">{timeStr}</span>
+                        </span>
                     </div>
                 </div>
 
@@ -251,10 +264,10 @@ export default function KioskPage() {
                     {step === 'service' && (
                         <div className="w-full max-w-xl space-y-6 md:space-y-8">
                             <div className="text-center space-y-1 md:space-y-2">
-                                <h2 className="text-2xl md:text-4xl font-black text-slate-800 tracking-tight">
+                                <h2 className="text-2xl md:text-4xl font-black text-foreground tracking-tight">
                                     Chọn dịch vụ
                                 </h2>
-                                <p className="text-base md:text-lg text-slate-500">
+                                <p className="text-base md:text-lg text-muted-foreground">
                                     Chạm vào dịch vụ bạn cần
                                 </p>
                             </div>
@@ -268,8 +281,8 @@ export default function KioskPage() {
                                             setSelectedService(service);
                                             setStep('scan');
                                         }}
-                                        className="group relative flex flex-col items-center gap-3 md:gap-4 p-4 md:p-8 rounded-2xl md:rounded-3xl bg-white border-2 border-slate-100 
-                                            hover:border-[#00BD7D] hover:shadow-xl hover:shadow-[#00BD7D]/10 
+                                        className="group relative flex flex-col items-center gap-3 md:gap-4 p-4 md:p-8 sketch-radius riso-paper-card glass-card rounded-2xl md:rounded-3xl bg-card border-2 border-border 
+                                            hover:border-primary hover:shadow-xl hover:shadow-primary/10 
                                             active:scale-[0.97] transition-all duration-200 cursor-pointer"
                                     >
                                         <div
@@ -280,9 +293,9 @@ export default function KioskPage() {
                                             {service.prefix}
                                         </div>
                                         <div className="text-center min-w-0 w-full">
-                                            <p className="text-base md:text-xl font-bold text-slate-800 truncate">{service.name}</p>
+                                            <p className="text-base md:text-xl font-bold text-foreground truncate">{service.name}</p>
                                             {service.description && (
-                                                <p className="text-xs md:text-sm text-slate-400 mt-0.5 md:mt-1 truncate">{service.description}</p>
+                                                <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1 truncate">{service.description}</p>
                                             )}
                                         </div>
                                     </button>
@@ -290,7 +303,7 @@ export default function KioskPage() {
                             </div>
 
                             {services.length === 0 && (
-                                <div className="text-center py-10 md:py-16 text-slate-400 text-lg md:text-xl">
+                                <div className="text-center py-10 md:py-16 text-muted-foreground text-lg md:text-xl">
                                     Hiện chưa có dịch vụ nào
                                 </div>
                             )}
@@ -302,7 +315,7 @@ export default function KioskPage() {
                         <div className="w-full max-w-xl space-y-4 md:space-y-6">
                             <button
                                 onClick={() => { setStep('service'); setSelectedService(null); setScanError(null); }}
-                                className="flex items-center gap-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all"
+                                className="flex items-center gap-2 text-muted-foreground hover:text-muted-foreground active:scale-95 transition-all"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                                 <span className="font-medium text-sm md:text-base">Đổi dịch vụ</span>
@@ -315,10 +328,10 @@ export default function KioskPage() {
                                 >
                                     {selectedService.prefix}
                                 </div>
-                                <h2 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight">
+                                <h2 className="text-xl md:text-3xl font-black text-foreground tracking-tight">
                                     Quét CCCD / VNeID
                                 </h2>
-                                <p className="text-sm md:text-base text-slate-500">
+                                <p className="text-sm md:text-base text-muted-foreground">
                                     Đưa mã QR vào khung camera
                                 </p>
                             </div>
@@ -335,7 +348,7 @@ export default function KioskPage() {
                                     <p className="text-red-500 font-medium text-sm md:text-base">{scanError}</p>
                                     <button
                                         onClick={() => setScanError(null)}
-                                        className="inline-flex items-center gap-2 px-5 md:px-6 py-2.5 md:py-3 rounded-xl bg-[#00BD7D] text-white font-bold text-sm md:text-base
+                                        className="inline-flex items-center gap-2 px-5 md:px-6 py-2.5 md:py-3 rounded-xl bg-primary text-white font-bold text-sm md:text-base
                                             active:scale-95 transition-transform"
                                     >
                                         <QrCode className="w-4 h-4 md:w-5 md:h-5" />
@@ -345,11 +358,11 @@ export default function KioskPage() {
                             )}
 
                             <div className="text-center">
-                                <p className="text-xs md:text-sm text-slate-400">
+                                <p className="text-xs md:text-sm text-muted-foreground">
                                     Hoặc{' '}
                                     <button
                                         onClick={() => handleCreateTicket()}
-                                        className="text-[#00BD7D] font-bold underline underline-offset-2 hover:no-underline"
+                                        className="text-primary font-bold underline underline-offset-2 hover:no-underline"
                                     >
                                         lấy số nhanh không cần quét
                                     </button>
@@ -361,31 +374,31 @@ export default function KioskPage() {
                     {/* Step: Creating */}
                     {step === 'creating' && (
                         <div className="text-center space-y-4 md:space-y-6">
-                            <Loader2 className="w-12 h-12 md:w-16 md:h-16 text-[#00BD7D] animate-spin mx-auto" />
-                            <p className="text-xl md:text-2xl font-bold text-slate-600">Đang tạo phiếu...</p>
+                            <Loader2 className="w-12 h-12 md:w-16 md:h-16 text-primary animate-spin mx-auto" />
+                            <p className="text-xl md:text-2xl font-bold text-muted-foreground">Đang tạo phiếu...</p>
                         </div>
                     )}
 
                     {/* Step: Success */}
                     {step === 'success' && createdTicket && (
                         <div className="text-center space-y-4 md:space-y-6 animate-in fade-in zoom-in duration-300">
-                            <CheckCircle2 className="w-16 h-16 md:w-20 md:h-20 text-[#00BD7D] mx-auto" />
+                            <CheckCircle2 className="w-16 h-16 md:w-20 md:h-20 text-primary mx-auto" />
                             <div className="space-y-1 md:space-y-2">
-                                <p className="text-lg md:text-xl text-slate-500 font-medium">Số phiếu của bạn là</p>
-                                <p className="text-6xl md:text-[7rem] font-black leading-none tracking-tighter" style={{ color: '#00BD7D' }}>
+                                <p className="text-lg md:text-xl text-muted-foreground font-medium">Số phiếu của bạn là</p>
+                                <p className="text-6xl md:text-[7rem] font-black leading-none tracking-tighter text-primary">
                                     {createdTicket}
                                 </p>
                                 {createdCustomerName && (
-                                    <p className="text-base md:text-lg text-slate-500">
+                                <p className="text-base md:text-lg text-muted-foreground">
                                         <User className="w-4 h-4 inline mr-1" />
                                         {createdCustomerName}
                                     </p>
                                 )}
                             </div>
-                            <p className="text-sm md:text-base text-slate-400">
+                            <p className="text-sm md:text-base text-muted-foreground">
                                 Vui lòng chờ gọi số tại khu vực chờ
                             </p>
-                            <p className="text-xs md:text-sm text-slate-300 animate-pulse">
+                            <p className="text-xs md:text-sm text-muted-foreground animate-pulse">
                                 Tự động quay về sau 5 giây...
                             </p>
                         </div>
@@ -394,18 +407,18 @@ export default function KioskPage() {
             </div>
 
             {/* RIGHT PANEL — Live Queue */}
-            <div className="h-72 md:h-auto md:w-[45%] flex flex-col bg-white border-t md:border-t-0 md:border-l border-slate-200 overflow-hidden min-h-0">
+            <div className="h-72 md:h-auto md:w-[45%] flex flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 md:px-8 py-3 md:py-5 border-b border-slate-200/60 shrink-0">
+                <div className="flex items-center justify-between px-4 md:px-8 py-3 md:py-5 border-b border-border/60 shrink-0">
                     <div className="flex items-center gap-2 md:gap-3">
-                        <div className="w-2 md:w-2.5 h-7 md:h-10 bg-slate-800 rounded-full shrink-0" />
-                        <h2 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight uppercase">
+                        <div className="w-2 md:w-2.5 h-7 md:h-10 bg-brand-gold rounded-full shrink-0" />
+                        <h2 className="text-lg md:text-2xl font-black text-foreground tracking-tight uppercase">
                             Đang phục vụ
                         </h2>
                     </div>
-                    <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-slate-100 border border-slate-200">
-                        <span className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${isConnected ? 'bg-[#00BD7D] animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-2 sticker px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-muted border border-border">
+                        <span className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${isConnected ? 'bg-primary animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">
                             {isConnected ? 'Trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
@@ -419,20 +432,20 @@ export default function KioskPage() {
                                 <div
                                     key={call.pos}
                                     className="relative flex flex-col items-center justify-center p-4 md:p-8 rounded-2xl md:rounded-3xl 
-                                        bg-gradient-to-br from-[#00BD7D]/5 to-[#00BD7D]/10 
-                                        border-2 border-[#00BD7D]/20 shadow-lg shadow-[#00BD7D]/5"
+                                        bg-gradient-to-br from-primary/5 to-primary/10 
+                                        border-2 border-primary/20 shadow-lg shadow-primary/5"
                                 >
                                     <div className="flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-3">
-                                        <span className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full bg-[#00BD7D] animate-pulse" />
-                                        <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-[#00BD7D]">
+                                        <span className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full bg-primary animate-pulse" />
+                                        <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-primary">
                                             {call.pos}
                                         </span>
                                     </div>
-                                    <p className="text-3xl md:text-6xl font-black text-slate-800 tracking-tighter">
+                                    <p className="text-3xl md:text-6xl font-black text-foreground tracking-tighter">
                                         {call.ticketNumber}
                                     </p>
                                     {call.customerName && (
-                                        <p className="mt-1 md:mt-2 text-xs md:text-sm text-slate-500 font-medium flex items-center gap-1 truncate max-w-full">
+                                        <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground font-medium flex items-center gap-1 truncate max-w-full">
                                             <User className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
                                             <span className="truncate">{call.customerName}</span>
                                         </p>
@@ -442,12 +455,12 @@ export default function KioskPage() {
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center space-y-3 md:space-y-4">
-                            <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-slate-100 flex items-center justify-center">
-                                <TicketIcon className="w-7 h-7 md:w-10 md:h-10 text-slate-300" />
+                            <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-muted flex items-center justify-center">
+                                <TicketIcon className="w-7 h-7 md:w-10 md:h-10 text-muted-foreground" />
                             </div>
                             <div>
-                                <p className="text-lg md:text-2xl font-bold text-slate-300">Đang chờ gọi số</p>
-                                <p className="text-sm md:text-base text-slate-400 mt-1">
+                                <p className="text-lg md:text-2xl font-bold text-muted-foreground">Đang chờ gọi số</p>
+                                <p className="text-sm md:text-base text-muted-foreground mt-1">
                                     {queueState.pendingCount > 0
                                         ? `${queueState.pendingCount} phiếu đang chờ`
                                         : 'Chưa có phiếu chờ'}
@@ -458,8 +471,8 @@ export default function KioskPage() {
 
                     {/* Waiting Summary */}
                     {queueState.pendingCount > 0 && (
-                        <div className="mt-4 md:mt-8 pt-4 md:pt-6 border-t border-slate-100">
-                            <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-3">
+                        <div className="mt-4 md:mt-8 pt-4 md:pt-6 border-t border-border">
+                            <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 md:mb-3">
                                 Đang chờ phục vụ
                             </p>
                             <div className="flex flex-wrap gap-2 md:gap-3">
@@ -469,14 +482,14 @@ export default function KioskPage() {
                                     return (
                                         <div
                                             key={service.id}
-                                            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl bg-slate-50 border border-slate-100"
+                                            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl bg-muted border border-border"
                                         >
                                             <div
                                                 className="w-2 h-2 md:w-3 md:h-3 rounded-full shrink-0"
                                                 style={{ backgroundColor: service.color }}
                                             />
-                                            <span className="text-xs md:text-sm font-medium text-slate-600 truncate">{service.name}</span>
-                                            <span className="text-xs md:text-sm font-bold text-slate-800">{count}</span>
+                                            <span className="text-xs md:text-sm font-medium text-muted-foreground truncate">{service.name}</span>
+                                            <span className="text-xs md:text-sm font-bold text-foreground">{count}</span>
                                         </div>
                                     );
                                 })}

@@ -113,10 +113,12 @@ export class SSEBroker {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
+        // Always fetch all of today's tickets, then filter per-client below.
+        // Filtering the query by serviceId would make client-all subscribers
+        // (e.g. the display) receive only the updated service's tickets.
         const tickets = await prisma.ticket.findMany({
             where: {
                 createdAt: { gte: startOfDay, lte: endOfDay },
-                ...(serviceId && { serviceId }),
             },
             orderBy: { position: 'asc' },
             include: { service: true },

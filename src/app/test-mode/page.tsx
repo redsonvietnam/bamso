@@ -11,6 +11,7 @@ import { parseCCCDName } from '@/lib/cccd-parser';
 import { useSpeech } from '@/hooks/useSpeech';
 import { logger } from '@/lib/logger';
 import QRScanner from '@/components/qr-scanner/QRScanner';
+import { PageWatermark } from '@/components/ui/dong-son-motif';
 
 type TestStep = 'ready' | 'service-select' | 'creating' | 'success';
 
@@ -56,7 +57,6 @@ function processTickets(tickets: Ticket[]): QueueState {
 
 export default function TestModePage() {
     const [services, setServices] = useState<Service[]>([]);
-    const [agencyName, setAgencyName] = useState('Hệ thống quản lý hàng đợi');
     const [step, setStep] = useState<TestStep>('ready');
     const [pendingName, setPendingName] = useState<string | null>(null);
     const [createdTicket, setCreatedTicket] = useState<string | null>(null);
@@ -80,12 +80,8 @@ export default function TestModePage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [servicesRes, settingsRes] = await Promise.all([
-                    apiClient.get<Service[]>('/api/services'),
-                    apiClient.get<{ value: string }>('/api/settings?key=agency_name'),
-                ]);
+                const servicesRes = await apiClient.get<Service[]>('/api/services');
                 setServices(servicesRes);
-                if (settingsRes.value) setAgencyName(settingsRes.value);
             } catch {
                 toast.error('Không thể tải dữ liệu.');
             } finally {
@@ -215,13 +211,13 @@ export default function TestModePage() {
 
     if (isLoading) {
         return (
-            <div className="flex flex-row h-screen w-screen bg-slate-50">
+            <div className="flex flex-row h-screen w-screen bg-background">
                 <div className="flex-1 flex flex-col gap-4 p-6">
                     <Skeleton className="h-10 w-48" />
                     <Skeleton className="flex-1 rounded-2xl" />
                     <Skeleton className="h-36 rounded-2xl" />
                 </div>
-                <div className="w-[45%] bg-white border-l border-slate-200 p-6">
+                <div className="w-[45%] bg-card border-l border-border p-6">
                     <Skeleton className="h-8 w-40 mb-6" />
                     <div className="grid grid-cols-2 gap-4">
                         {[1, 2, 3, 4].map(i => (
@@ -234,17 +230,17 @@ export default function TestModePage() {
     }
 
     return (
-        <div className="flex flex-row h-screen w-screen bg-slate-50 overflow-hidden select-none">
+        <div className="flex flex-row h-screen w-screen bg-background overflow-hidden select-none">
 
             {/* SERVICE SELECT MODAL OVERLAY */}
             {step === 'service-select' && (
                 <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 space-y-6">
+                    <div className="bg-card rounded-3xl shadow-2xl w-full max-w-lg p-8 space-y-6">
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Chọn dịch vụ</h2>
+                                <h2 className="text-2xl font-black text-foreground tracking-tight">Chọn dịch vụ</h2>
                                 {pendingName && (
-                                    <p className="text-sm text-slate-500 flex items-center gap-1">
+                                    <p className="text-sm text-muted-foreground flex items-center gap-1">
                                         <User className="w-3.5 h-3.5" />
                                         {pendingName}
                                     </p>
@@ -252,9 +248,9 @@ export default function TestModePage() {
                             </div>
                             <button
                                 onClick={reset}
-                                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted transition-colors"
                             >
-                                <X className="w-4 h-4 text-slate-500" />
+                                <X className="w-4 h-4 text-muted-foreground" />
                             </button>
                         </div>
 
@@ -265,8 +261,8 @@ export default function TestModePage() {
                                     onClick={() => {
                                         handleCreateTicket(service.id, pendingName || undefined);
                                     }}
-                                    className="group flex flex-col items-center gap-3 p-5 rounded-2xl bg-slate-50 border-2 border-slate-100
-                                        hover:border-[#00BD7D] hover:shadow-lg hover:shadow-[#00BD7D]/10
+                                    className="group flex flex-col items-center gap-3 p-5 sketch-radius riso-paper-card glass-card rounded-2xl bg-muted border-2 border-border
+                                        hover:border-primary hover:shadow-lg hover:shadow-primary/10
                                         active:scale-[0.97] transition-all duration-200 cursor-pointer"
                                 >
                                     <div
@@ -276,7 +272,7 @@ export default function TestModePage() {
                                     >
                                         {service.prefix}
                                     </div>
-                                    <p className="text-sm font-bold text-slate-800 text-center leading-tight">{service.name}</p>
+                                    <p className="text-sm font-bold text-foreground text-center leading-tight">{service.name}</p>
                                 </button>
                             ))}
                         </div>
@@ -285,19 +281,30 @@ export default function TestModePage() {
             )}
 
             {/* LEFT PANEL */}
-            <div className="flex-1 w-[55%] flex flex-col bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 relative overflow-hidden min-h-0">
-
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/60 shrink-0">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-2.5 h-8 bg-[#00BD7D] rounded-full shrink-0" />
-                        <h1 className="text-xl font-black tracking-tight truncate" style={{ color: '#00BD7D' }}>
-                            {agencyName}
-                        </h1>
+            <div className="flex-1 w-[55%] flex flex-col bg-gradient-to-br from-muted via-card to-primary/5 relative overflow-hidden min-h-0">
+                <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+                <div className="h-1.5 bg-brand-red shrink-0" />
+ 
+                 {/* Header */}
+                 <div className="header-chrome flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-lg font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                            <h1 className="text-2xl font-black tracking-tight truncate text-foreground">
+                                CÔNG AN XÃ NÂM NUNG
+                            </h1>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-400 shrink-0">
-                        <Volume2 className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-widest">{timeStr}</span>
+                    <div className="flex flex-col items-end gap-1 text-muted-foreground shrink-0">
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Hệ thống lấy số dịch vụ công</span>
+                        <span className="flex items-center gap-2">
+                            <Volume2 className="w-4 h-4" />
+                            <span className="text-sm font-bold uppercase tracking-widest">{timeStr}</span>
+                        </span>
                     </div>
                 </div>
 
@@ -330,16 +337,16 @@ export default function TestModePage() {
                                 onScanError={handleScanError}
                             />
                         ) : step === 'creating' ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-900">
-                                <Loader2 className="w-14 h-14 text-[#00BD7D] animate-spin" />
-                                <p className="text-white text-xl font-bold">Đang tạo phiếu...</p>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-background">
+                                <Loader2 className="w-14 h-14 text-primary animate-spin" />
+                                <p className="text-foreground text-xl font-bold">Đang tạo phiếu...</p>
                             </div>
                         ) : step === 'success' && createdTicket ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 to-emerald-950 animate-in fade-in duration-300">
-                                <CheckCircle2 className="w-16 h-16 text-[#00BD7D]" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-primary to-primary animate-in fade-in duration-300">
+                                <CheckCircle2 className="w-16 h-16 text-brand-gold" />
                                 <div className="text-center space-y-1">
                                     <p className="text-slate-300 text-lg font-medium">Số phiếu của bạn là</p>
-                                    <p className="text-[5rem] font-black leading-none tracking-tighter" style={{ color: '#00BD7D' }}>
+                                    <p className="text-[5rem] font-black leading-none tracking-tighter text-brand-gold">
                                         {createdTicket}
                                     </p>
                                     {createdCustomerName && (
@@ -353,12 +360,12 @@ export default function TestModePage() {
                                 <p className="text-slate-600 text-xs animate-pulse">Tự động quay về sau 5 giây...</p>
                             </div>
                         ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
-                                <CameraOff className="w-10 h-10 text-slate-600" />
-                                <p className="text-slate-500 text-sm font-medium">Camera đã tắt</p>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background">
+                                <CameraOff className="w-10 h-10 text-muted-foreground" />
+                                <p className="text-muted-foreground text-sm font-medium">Camera đã tắt</p>
                                 <button
                                     onClick={() => { setCameraEnabled(true); setScanKey(k => k + 1); }}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00BD7D] text-white text-sm font-bold
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold
                                         active:scale-95 transition-transform"
                                 >
                                     <Camera className="w-4 h-4" /> Bật camera
@@ -393,8 +400,8 @@ export default function TestModePage() {
                     </div>
 
                     {/* QR Code panel — bottom */}
-                    <div className="shrink-0 flex items-center gap-5 bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-                        <div className="shrink-0 p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
+                    <div className="shrink-0 flex items-center gap-5 bg-card rounded-2xl border border-border shadow-sm px-5 py-4">
+                        <div className="shrink-0 p-2 bg-card rounded-xl border border-border shadow-sm">
                             <QRCodeSVG
                                 value={getTicketUrl}
                                 size={80}
@@ -403,28 +410,28 @@ export default function TestModePage() {
                             />
                         </div>
                         <div className="min-w-0 space-y-1">
-                            <p className="text-sm font-black text-slate-800 uppercase tracking-wide">Lấy số qua điện thoại</p>
-                            <p className="text-xs text-slate-500 leading-relaxed">
+                            <p className="text-sm font-black text-foreground uppercase tracking-wide">Lấy số qua điện thoại</p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
                                 Quét mã QR bằng điện thoại để truy cập trang lấy số nhanh
                             </p>
-                            <p className="text-[10px] text-slate-300 font-mono truncate">{getTicketUrl}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">{getTicketUrl}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* RIGHT PANEL — Live Queue */}
-            <div className="w-[45%] flex flex-col bg-white border-l border-slate-200 overflow-hidden min-h-0">
+            <div className="w-[45%] flex flex-col bg-card border-l border-border overflow-hidden min-h-0">
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/60 shrink-0">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-8 bg-slate-800 rounded-full shrink-0" />
-                        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Đang phục vụ</h2>
+                        <div className="w-2.5 h-8 bg-primary rounded-full shrink-0" />
+                        <h2 className="text-xl font-black text-foreground tracking-tight uppercase">Đang phục vụ</h2>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200">
-                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00BD7D] animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-2 sticker px-3 py-1.5 rounded-full bg-muted border border-border">
+                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                             {isConnected ? 'Trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
@@ -438,20 +445,20 @@ export default function TestModePage() {
                                 <div
                                     key={call.pos}
                                     className="relative flex flex-col items-center justify-center p-6 rounded-3xl
-                                        bg-gradient-to-br from-[#00BD7D]/5 to-[#00BD7D]/10
-                                        border-2 border-[#00BD7D]/20 shadow-lg shadow-[#00BD7D]/5"
+                                        bg-gradient-to-br from-primary/5 to-primary/10
+                                        border-2 border-primary/20 shadow-lg shadow-primary/5"
                                 >
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="w-2 h-2 rounded-full bg-[#00BD7D] animate-pulse" />
-                                        <span className="text-xs font-bold uppercase tracking-widest text-[#00BD7D]">
+                                        <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                                        <span className="text-xs font-bold uppercase tracking-widest text-primary">
                                             {call.pos}
                                         </span>
                                     </div>
-                                    <p className="text-5xl font-black text-slate-800 tracking-tighter">
+                                    <p className="text-5xl font-black text-foreground tracking-tighter">
                                         {call.ticketNumber}
                                     </p>
                                     {call.customerName && (
-                                        <p className="mt-2 text-xs text-slate-500 font-medium flex items-center gap-1 truncate max-w-full">
+                                        <p className="mt-2 text-xs text-muted-foreground font-medium flex items-center gap-1 truncate max-w-full">
                                             <User className="w-3 h-3 shrink-0" />
                                             <span className="truncate">{call.customerName}</span>
                                         </p>
@@ -461,12 +468,12 @@ export default function TestModePage() {
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                            <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
-                                <TicketIcon className="w-9 h-9 text-slate-300" />
+                            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
+                                <TicketIcon className="w-9 h-9 text-muted-foreground" />
                             </div>
                             <div>
-                                <p className="text-xl font-bold text-slate-300">Đang chờ gọi số</p>
-                                <p className="text-sm text-slate-400 mt-1">
+                                <p className="text-xl font-bold text-muted-foreground">Đang chờ gọi số</p>
+                                <p className="text-sm text-muted-foreground mt-1">
                                     {queueState.pendingCount > 0
                                         ? `${queueState.pendingCount} phiếu đang chờ`
                                         : 'Chưa có phiếu chờ'}
@@ -477,8 +484,8 @@ export default function TestModePage() {
 
                     {/* Waiting summary */}
                     {queueState.pendingCount > 0 && (
-                        <div className="mt-6 pt-5 border-t border-slate-100">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                        <div className="mt-6 pt-5 border-t border-border">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
                                 Đang chờ phục vụ
                             </p>
                             <div className="flex flex-wrap gap-2">
@@ -488,14 +495,14 @@ export default function TestModePage() {
                                     return (
                                         <div
                                             key={service.id}
-                                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100"
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted border border-border"
                                         >
                                             <div
                                                 className="w-2.5 h-2.5 rounded-full shrink-0"
                                                 style={{ backgroundColor: service.color }}
                                             />
-                                            <span className="text-xs font-medium text-slate-600 truncate">{service.name}</span>
-                                            <span className="text-xs font-bold text-slate-800">{count}</span>
+                                            <span className="text-xs font-medium text-muted-foreground truncate">{service.name}</span>
+                                            <span className="text-xs font-bold text-foreground">{count}</span>
                                         </div>
                                     );
                                 })}

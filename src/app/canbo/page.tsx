@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
+import { PageWatermark } from '@/components/ui/dong-son-motif';
+import { useHeaderRight } from '@/components/layout/app-shell';
 import {
     Select,
     SelectContent,
@@ -76,9 +78,15 @@ export default function CanboPage() {
         window.location.href = '/login';
     };
 
+    useHeaderRight(
+        <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
+        </Button>
+    );
+
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-12">
+            <div className="min-h-full bg-background px-4 py-12">
                 <div className="max-w-4xl mx-auto">
                     <div className="flex justify-between items-center mb-8">
                         <div className="space-y-2">
@@ -108,30 +116,26 @@ export default function CanboPage() {
     // TRẠNG THÁI B: Đã chọn service và quầy → Hiển thị QueuePanel
     if (selectedService && selectedPos) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-                <header className="bg-white/80 backdrop-blur-sm border-b px-6 py-4 flex justify-between items-center shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                setSelectedService(null);
-                                setSelectedPos('');
-                            }}
-                        >
-                            <ArrowLeft className="w-4 h-4 mr-2" /> Đổi dịch vụ / Quầy
-                        </Button>
-                        <div>
-                            <h1 className="text-xl font-bold" style={{ color: selectedService.color }}>
-                                {selectedService.name}
-                            </h1>
-                            <p className="text-sm text-muted-foreground">Đang trực tại: {selectedPos}</p>
-                        </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleLogout}>
-                        <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
+            <div className="relative min-h-full bg-background overflow-hidden">
+                <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+                <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-4 flex items-center gap-3 flex-wrap">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            setSelectedService(null);
+                            setSelectedPos('');
+                        }}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2" /> Đổi dịch vụ / Quầy
                     </Button>
-                </header>
+                    <div className="min-w-0">
+                        <h1 className="text-lg sm:text-xl font-bold truncate" style={{ color: selectedService.color }}>
+                            {selectedService.name}
+                        </h1>
+                        <p className="text-sm text-muted-foreground">Đang trực tại: {selectedPos}</p>
+                    </div>
+                </div>
                 <QueuePanel serviceId={selectedService.id} pos={selectedPos} />
             </div>
         );
@@ -140,8 +144,9 @@ export default function CanboPage() {
     // TRẠNG THÁI A2: Đã chọn service → Chọn quầy
     if (selectedService) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4">
-                <Card className="w-full max-w-md">
+            <div className="relative flex min-h-full items-center justify-center bg-background px-4 overflow-hidden">
+                <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+                <Card className="w-full max-w-md relative">
                     <CardHeader>
                         <Button
                             variant="ghost"
@@ -210,23 +215,21 @@ export default function CanboPage() {
 
     // TRẠNG THÁI A1: Chọn dịch vụ
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 py-12">
-            <div className="max-w-4xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
+            <div className="relative min-h-full bg-background px-4 py-8 sm:py-12 overflow-hidden">
+            <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+            <div className="max-w-4xl mx-auto relative">
+                <div className="flex justify-between items-center mb-6 sm:mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Chọn dịch vụ bạn sẽ trực hôm nay</h1>
-                        <p className="text-muted-foreground mt-1">Xin chào, {user?.name}</p>
+                        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Chọn dịch vụ bạn sẽ trực hôm nay</h1>
+                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">Xin chào, {user?.name}</p>
                     </div>
-                    <Button variant="outline" onClick={handleLogout}>
-                        <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
-                    </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     {services.map((service) => (
                         <Card
                             key={service.id}
-                            className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary/50"
+                            className="cursor-pointer sketch-radius riso-paper-card glass-card hover:shadow-lg transition-shadow border-2 hover:border-primary/50"
                             onClick={() => setSelectedService(service)}
                         >
                             <CardHeader>

@@ -54,9 +54,9 @@ export default function CameraPanel() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-sm w-full max-w-sm aspect-square">
-      <h2 className="text-2xl font-bold text-slate-800">Lấy số bằng CCCD</h2>
-      <p className="text-slate-600 mt-2 mb-4">Chạm chọn dịch vụ, sau đó đưa CCCD vào khung quét.</p>
+    <div className="flex flex-col items-center justify-center bg-card rounded-2xl p-6 text-center border border-border shadow-sm w-full max-w-sm aspect-square">
+      <h2 className="text-2xl font-bold text-foreground">Lấy số bằng CCCD</h2>
+      <p className="text-muted-foreground mt-2 mb-4">Chạm chọn dịch vụ, sau đó đưa CCCD vào khung quét.</p>
 
       <div className="w-full mb-4">
         <RadioGroup 
@@ -65,20 +65,20 @@ export default function CameraPanel() {
           className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2"
         >
           {services.map(service => (
-            <div key={service.id} className="flex items-center space-x-2 p-2 bg-slate-50 rounded-lg border border-slate-200 hover:border-primary hover:bg-white transition-colors cursor-pointer">
+            <div key={service.id} className="flex items-center space-x-2 p-2 bg-muted rounded-lg border border-border hover:border-primary hover:bg-card transition-colors cursor-pointer">
               <RadioGroupItem value={service.id} className="flex-shrink-0" />
-              <Label className="text-sm font-medium text-slate-700 cursor-pointer">{service.name}</Label>
+              <Label className="text-sm font-medium text-muted-foreground cursor-pointer">{service.name}</Label>
             </div>
           ))}
         </RadioGroup>
       </div>
 
-      <div className="w-full aspect-square bg-slate-100 rounded-lg overflow-hidden relative">
+      <div className="w-full aspect-square bg-muted rounded-lg overflow-hidden relative">
         {isCameraEnabled ? (
           <QRScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} debugMode={true} />
         ) : (
-          <div className="flex items-center justify-center h-full bg-slate-200">
-            <p className="text-slate-500">Camera đang tắt</p>
+          <div className="flex items-center justify-center h-full bg-muted">
+            <p className="text-muted-foreground">Camera đang tắt</p>
           </div>
         )}
       </div>

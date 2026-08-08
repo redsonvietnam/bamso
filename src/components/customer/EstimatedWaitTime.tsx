@@ -19,9 +19,9 @@ export function EstimatedWaitTime({ ticket, queueAhead }: EstimatedWaitTimeProps
   const queueText = getQueueText(ticket, queueAhead);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-sm font-semibold text-slate-900">Trạng thái hiện tại</p>
-      <p className="mt-1 text-sm text-slate-600">{queueText}</p>
+    <div className="rounded-2xl border border-border bg-muted p-4">
+      <p className="text-sm font-semibold text-foreground">Trạng thái hiện tại</p>
+      <p className="mt-1 text-sm text-muted-foreground">{queueText}</p>
     </div>
   );
 }

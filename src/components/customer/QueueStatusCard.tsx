@@ -24,8 +24,8 @@ function getStatusConfig(status: string, proximityLevel: ProximityLevel) {
       };
       return {
         label: 'Đã nhận số', icon: Clock,
-        badge: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-400',
-        accent: 'bg-slate-400',
+        badge: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground',
+        accent: 'bg-muted-foreground',
       };
     }
     case 'CALLED':
@@ -35,7 +35,7 @@ function getStatusConfig(status: string, proximityLevel: ProximityLevel) {
     case 'COMPLETED':
       return { label: 'Hoàn tất', icon: CheckCircle2, badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', accent: 'bg-emerald-500' };
     default:
-      return { label: status, icon: AlertTriangle, badge: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-400', accent: 'bg-slate-400' };
+      return { label: status, icon: AlertTriangle, badge: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground', accent: 'bg-muted-foreground' };
   }
 }
 
@@ -55,45 +55,45 @@ export function QueueStatusCard({ ticket, queueAhead, proximityLevel }: QueueSta
   const Icon = config.icon;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50">
+    <div className="overflow-hidden sketch-radius riso-paper-card glass-card rounded-3xl border border-border bg-card shadow-lg shadow-border/50">
       <div className={`h-1.5 w-full ${config.accent}`} />
 
       <div className="p-6">
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${config.badge}`}>
+        <span className={`inline-flex items-center gap-1.5 sticker rounded-full border px-3 py-1 text-xs font-semibold ${config.badge}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
           <Icon className="h-3.5 w-3.5" />
           {config.label}
         </span>
 
-        <p className="mt-5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
+        <p className="mt-5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
           Số của bạn
         </p>
 
-        <p className="mt-1 font-[family-name:var(--font-display)] text-6xl font-bold tracking-tight text-slate-950 leading-none">
+        <p className="mt-1 font-display text-6xl font-bold tracking-tight text-foreground leading-none">
           {ticket.ticketNumber}
         </p>
 
         {ticket.customerName && (
-          <p className="mt-2 text-base font-semibold text-slate-700">
+          <p className="mt-2 text-base font-semibold text-muted-foreground">
             {ticket.customerName}
           </p>
         )}
 
         {ticket.status === 'PENDING' ? (
-          <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4">
+          <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl bg-muted p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
-                <Users className="h-5 w-5 text-slate-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-card shadow-sm">
+                <Users className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">Phía trước</p>
-                <p className="text-xl font-bold text-slate-900">{queueAhead} người</p>
+                <p className="text-xs text-muted-foreground">Phía trước</p>
+                <p className="text-xl font-bold text-foreground">{queueAhead} người</p>
               </div>
             </div>
-            <p className="text-right text-sm font-medium text-slate-600">{queueText}</p>
+            <p className="text-right text-sm font-medium text-muted-foreground">{queueText}</p>
           </div>
         ) : (
-          <p className="mt-5 text-sm text-slate-600">{queueText}</p>
+          <p className="mt-5 text-sm text-muted-foreground">{queueText}</p>
         )}
       </div>
     </div>

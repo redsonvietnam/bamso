@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { PageWatermark } from '@/components/ui/dong-son-motif';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -67,46 +68,50 @@ export default function LoginPage() {
         }
     };
 
-    return (<div className="flex min-h-screen items-center justify-center px-4 py-12 font-sans">
-            <Card className="w-full max-w-md shadow-md">
-                <CardHeader className="space-y-1 text-center">
-                    <CardTitle className="text-2xl font-bold tracking-tight">Đăng nhập hệ thống</CardTitle>
-                    <CardDescription>
-                        Nhập tài khoản của bạn để truy cập hệ thống quản lý hàng đợi
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="username">Tên đăng nhập</Label>
-                            <Input
-                                id="username"
-                                type="text"
-                                placeholder="admin hoặc canbo1"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                disabled={isLoading}
-                                className="h-10"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Mật khẩu</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                disabled={isLoading}
-                                className="h-10"
-                            />
-                        </div>
-                        <Button type="submit" className="w-full h-10 font-medium" disabled={isLoading}>
-                            {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-                        </Button>
-                    </form>
-                </CardContent>
-            </Card>
+    return (
+        <div className="relative min-h-full bg-background font-sans overflow-hidden">
+            <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+            <div className="flex min-h-full items-center justify-center px-4 py-8">
+                <Card className="w-full max-w-md sketch-radius riso-paper-card glass-card shadow-md">
+                    <CardHeader className="space-y-1 text-center">
+                        <CardTitle className="text-2xl font-bold tracking-tight">Đăng nhập hệ thống</CardTitle>
+                        <CardDescription>
+                            Nhập tài khoản của bạn để truy cập hệ thống quản lý hàng đợi
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="username">Tên đăng nhập</Label>
+                                <Input
+                                    id="username"
+                                    type="text"
+                                    placeholder="admin hoặc canbo1"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    disabled={isLoading}
+                                    className="h-10"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Mật khẩu</Label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    disabled={isLoading}
+                                    className="h-10"
+                                />
+                            </div>
+                            <Button type="submit" className="w-full h-10 font-medium" disabled={isLoading}>
+                                {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

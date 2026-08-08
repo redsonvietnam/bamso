@@ -4,4 +4,4 @@ This folder contains the design system guidance for Bamso.
 
 The active workflow currently points to `docs/design-system/perspective/` for UI/UX work.
 
-If you want, I can continue by restoring the full `perspective` docs or adding the current design tokens and style guidance here.
+Active brand language: **navy primary** (`#142E6B`) + **red state band** (`#C8102E`) + **gold accents** (`#C9A227`) — state-service / Công an xã identity. Body font: Be Vietnam Pro; display font: Oswald. See `perspective/DESIGN.md` for the full token set.

@@ -65,8 +65,8 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
                     <span className="text-base font-bold">{ticket.service.prefix}</span>
                 </div>
                 <div>
-                    <p className="text-sm font-semibold text-slate-900">{ticket.service.name}</p>
-                    <p className="text-xs text-slate-500">Tra cứu vé</p>
+                    <p className="text-sm font-semibold text-foreground">{ticket.service.name}</p>
+                    <p className="text-xs text-muted-foreground">Tra cứu vé</p>
                 </div>
             </div>
 
@@ -83,7 +83,7 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Button
                     variant="outline"
-                    className="rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm"
+                    className="rounded-2xl border-border bg-card py-6 text-base font-semibold text-foreground shadow-sm"
                     onClick={() => router.push('/track')}
                 >
                     <Search className="mr-2 h-4 w-4" />
@@ -91,7 +91,7 @@ export default function LiveTracker({ initialTicket }: LiveTrackerProps) {
                 </Button>
                 <Button
                     variant="outline"
-                    className="rounded-2xl border-slate-300 bg-white py-6 text-base font-semibold text-slate-900 shadow-sm"
+                    className="rounded-2xl border-border bg-card py-6 text-base font-semibold text-foreground shadow-sm"
                     onClick={() =>
                         document.getElementById('service-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }

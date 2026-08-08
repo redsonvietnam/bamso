@@ -361,7 +361,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
                         <select 
                             value={selectedDeviceId || ''} 
                             onChange={e => { setSelectedDeviceId(e.target.value || null); setAutoSelected(false); setIsIRMode(false); }}
-                            className="w-full bg-slate-800 text-white text-xs p-1 rounded border border-slate-600"
+                            className="w-full bg-background text-foreground text-xs p-1 rounded border border-border"
                         >
                             <option value="">Auto (facingMode)</option>
                             {availableDevices.map(d => (
@@ -371,13 +371,13 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
                             ))}
                         </select>
                     </div>
-                    <div className="text-[10px] text-slate-400">
+                    <div className="text-[10px] text-muted-foreground">
                         Current: {useFallback ? 'Fallback (html5-qrcode)' : 'Native (BarcodeDetector)'}
                         {isIRMode && ' | IR Crop: ON'}
                     </div>
                     <button 
                         onClick={handleForceFallbackRetry}
-                        className="mt-2 text-[10px] text-slate-300 hover:text-white underline"
+                        className="mt-2 text-[10px] text-muted-foreground hover:text-foreground underline"
                     >
                         Force Fallback & Retry
                     </button>

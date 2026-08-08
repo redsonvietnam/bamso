@@ -24,13 +24,13 @@ export default function ThankYouOverlay({
   const router = useRouter();
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white animate-in fade-in duration-500">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background animate-in fade-in duration-500">
       <div className="flex flex-col items-center text-center px-6 max-w-sm">
-        <div className="rounded-full bg-emerald-50 p-4 mb-6">
-          <CheckCircle2 className="w-16 h-16" style={{ color: serviceColor }} />
+        <div className="rounded-full bg-primary/5 p-4 mb-6">
+          <CheckCircle2 className="w-16 h-16 text-brand-gold" />
         </div>
 
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">
+        <h1 className="text-2xl font-bold text-foreground mb-6">
           {message}
         </h1>
 
@@ -45,8 +45,8 @@ export default function ThankYouOverlay({
           <span className="text-sm font-bold" style={{ color: serviceColor }}>
             {servicePrefix}
           </span>
-          <span className="text-sm text-slate-500">&middot;</span>
-          <span className="text-sm text-slate-600">{serviceName}</span>
+          <span className="text-sm text-muted-foreground">&middot;</span>
+          <span className="text-sm text-muted-foreground">{serviceName}</span>
         </div>
 
         <div className="flex gap-3 w-full mt-6">
@@ -60,7 +60,7 @@ export default function ThankYouOverlay({
           </Button>
           <Button
             variant="outline"
-            className="flex-1 py-6 rounded-2xl border-slate-300 text-base font-semibold"
+            className="flex-1 py-6 rounded-2xl border-border text-base font-semibold"
             onClick={() => router.push('/')}
           >
             <Home className="mr-2 h-4 w-4" />
@@ -70,7 +70,7 @@ export default function ThankYouOverlay({
 
         <button
           onClick={onDismiss}
-          className="mt-6 text-sm text-slate-400 underline underline-offset-2 hover:text-slate-600 transition-colors"
+          className="mt-6 text-sm text-muted-foreground underline underline-offset-2 hover:text-muted-foreground transition-colors"
         >
           Tiếp tục xem thông tin
         </button>

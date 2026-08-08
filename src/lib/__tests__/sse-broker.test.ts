@@ -142,14 +142,29 @@ describe('subscribeDisplay / unsubscribeDisplay', () => {
 });
 
 describe('broadcastQueueUpdate — lọc theo serviceId', () => {
+    const tickets = [
+        { id: 't-a', serviceId: 'svc-a', position: 1 },
+        { id: 't-b', serviceId: 'svc-b', position: 2 },
+    ];
+
+    /**
+     * Mô phỏng đúng hành vi DB: query `where.serviceId` (nếu có) lọc vé,
+     * không có thì trả toàn bộ. Giúp test bắt được bug query lọc theo
+     * serviceId làm client-all nhận vé thiếu.
+     */
+    function mockFindManyLikeQuery() {
+        mockedPrisma.ticket.findMany.mockImplementation((args: { where?: { serviceId?: string } }) => {
+            const where = args?.where;
+            return Promise.resolve(
+                where?.serviceId ? tickets.filter((t) => t.serviceId === where.serviceId) : tickets
+            );
+        });
+    }
+
     it('client theo dõi 1 dịch vụ chỉ nhận vé của dịch vụ đó', async () => {
         const broker = createBroker();
         const { controller } = makeController();
-        const tickets = [
-            { id: 't-a', serviceId: 'svc-a', position: 1 },
-            { id: 't-b', serviceId: 'svc-b', position: 2 },
-        ];
-        mockedPrisma.ticket.findMany.mockResolvedValue(tickets);
+        mockFindManyLikeQuery();
 
         broker.subscribeQueue('client-a', controller, 'svc-a');
         await broker.broadcastQueueUpdate('svc-a');
@@ -158,14 +173,10 @@ describe('broadcastQueueUpdate — lọc theo serviceId', () => {
         expect(event.tickets.map((t) => t.id)).toEqual(['t-a']);
     });
 
-    it('client không filter theo serviceId sẽ nhận toàn bộ vé', async () => {
+    it('client không filter theo serviceId sẽ nhận toàn bộ vé kể cả khi broadcast cho 1 dịch vụ', async () => {
         const broker = createBroker();
         const { controller } = makeController();
-        const tickets = [
-            { id: 't-a', serviceId: 'svc-a', position: 1 },
-            { id: 't-b', serviceId: 'svc-b', position: 2 },
-        ];
-        mockedPrisma.ticket.findMany.mockResolvedValue(tickets);
+        mockFindManyLikeQuery();
 
         broker.subscribeQueue('client-all', controller);
         await broker.broadcastQueueUpdate('svc-a');

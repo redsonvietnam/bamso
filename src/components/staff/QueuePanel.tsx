@@ -104,13 +104,13 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
     const restore = (ticketId: string) => handleAction('/api/queue/restore', 'PUT', { ticketId }, 'Đã khôi phục vé vào hàng đợi');
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 h-full max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 p-4 h-full max-w-7xl mx-auto">
 
-            <div className="md:col-span-2 space-y-6">
+            <div className="md:col-span-2 space-y-4 md:space-y-6">
                 <Card className="border-2 border-primary/20 shadow-lg overflow-hidden">
-                    <CardHeader className="bg-primary/5 border-b">
-                        <div className="flex justify-between items-center">
-                            <CardTitle className="flex items-center gap-2">
+                    <CardHeader className="bg-primary/5 border-b py-3 sm:py-6">
+                        <div className="flex justify-between items-center gap-2 flex-wrap">
+                            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                                 <Monitor className="w-5 h-5 text-primary" />
                                 {pos} - Đang phục vụ
                             </CardTitle>
@@ -128,23 +128,23 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-8 pb-8 text-center">
+                    <CardContent className="pt-6 pb-6 sm:pt-8 sm:pb-8 text-center">
                         {currentTicket ? (
-                            <div className="space-y-6">
+                            <div className="space-y-5 sm:space-y-6">
                                 <div>
-                                    <h2 className="text-7xl font-black text-primary tracking-tighter">
+                                    <h2 className="text-6xl sm:text-7xl font-black text-primary tracking-tighter">
                                         {currentTicket.ticketNumber}
                                     </h2>
-                                    <p className="text-muted-foreground mt-2 uppercase tracking-widest text-sm">
+                                    <p className="text-muted-foreground mt-2 uppercase tracking-widest text-xs sm:text-sm">
                                         {currentTicket.customerName || 'Khách hàng vãng lai'}
                                     </p>
                                 </div>
 
-                                <div className="flex flex-wrap justify-center gap-4 pt-4">
+                                <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-4">
                                     <Button
                                         size="lg"
                                         variant="default"
-                                        className="px-8 h-14 text-lg font-bold"
+                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
                                         onClick={complete}
                                         disabled={isLoading}
                                     >
@@ -153,7 +153,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                     <Button
                                         size="lg"
                                         variant="outline"
-                                        className="px-8 h-14 text-lg font-bold text-destructive border-destructive/30 hover:bg-destructive/10"
+                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold text-destructive border-destructive/30 hover:bg-destructive/10"
                                         onClick={skip}
                                         disabled={isLoading}
                                     >
@@ -162,16 +162,16 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                 </div>
                             </div>
                         ) : (
-                            <div className="py-12 space-y-4">
+                            <div className="py-8 sm:py-12 space-y-4">
                                 <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto">
                                     <Users className="w-8 h-8 text-muted-foreground" />
                                 </div>
-                                <p className="text-muted-foreground font-medium italic">Hiện chưa có số nào đang được phục vụ tại quầy.</p>
+                                <p className="text-muted-foreground font-medium italic text-sm sm:text-base">Hiện chưa có số nào đang được phục vụ tại quầy.</p>
                                 <Button
                                     size="lg"
                                     onClick={callNext}
                                     disabled={isLoading || pendingTickets.length === 0}
-                                    className="mt-4 font-bold h-14 px-10"
+                                    className="mt-4 font-bold h-12 sm:h-14 px-8 sm:px-10 text-base sm:text-lg"
                                 >
                                     <UserPlus className="mr-2 w-5 h-5" /> Gọi số tiếp theo
                                 </Button>
