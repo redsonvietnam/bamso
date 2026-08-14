@@ -5,13 +5,13 @@
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
+  --color-card: color-mix(in srgb, hsl(var(--card)) var(--surface-alpha, 100%), transparent);
   --color-card-foreground: hsl(var(--card-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
+  --color-secondary: color-mix(in srgb, hsl(var(--secondary)) var(--surface-alpha, 100%), transparent);
   --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
+  --color-muted: color-mix(in srgb, hsl(var(--muted)) var(--surface-alpha, 100%), transparent);
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
@@ -53,6 +53,9 @@
 
 @layer base {
   :root {
+    /* Admin-configurable surface opacity for card/muted/secondary surfaces.
+       Glass theme ignores this and keeps its own translucency. */
+    --surface-alpha: 100%;
     --background: 210 20% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -179,7 +182,7 @@
   .bca {
     --background: 45 100% 97%; /* warm paper */
     --foreground: 210 37% 19%; /* #1E2F41 */
-    --card: 0 0% 100% / 0.92; /* duc hon it: card du ngu to cho chu noi tren nen trom dong */
+    --card: 0 0% 100%; /* dac - khong trong suot */
     --card-foreground: 210 37% 19%;
     --primary: 358 79% 47%; /* BCA red #D71920 */
     --primary-foreground: 0 0% 100%;
@@ -651,15 +654,14 @@
 }
 
 /* Cards - white on cream, crisp 1px border like the portal.
-   More opaque + strong frosted blur so the drum pattern behind is blurred
-   out and text/details stay readable ON TOP of the card surface. */
+   Solid (opaque) surface so text stays readable; content is lifted above. */
 .bca [class~="bg-card"],
 .surface-bca [class~="bg-card"] {
   position: relative;
   border-color: rgb(30 47 65 / 0.12);
   box-shadow: 0 1px 3px rgb(30 47 65 / 0.08);
-  background-image: linear-gradient(to bottom, hsl(var(--card)) 80%, hsl(var(--secondary)));
-  backdrop-filter: blur(24px) saturate(1.2);
+  background-image: none;
+  backdrop-filter: none;
 }
 
 /* Content inside BCA cards always sits above the frosted surface. */
@@ -675,9 +677,8 @@
   border-top-width: 6px;
 }
 
-/* Header trong suot trong theme BCA - do nen trong dong xuyen qua */
-.bca header[class~="bg-white/80"],
-.bca header[class~="backdrop-blur-sm"],
+/* Header trong suot chi khi chon kieu "bca-transparent" (theme tùy chỉnh).
+   Theme bca mặc định dùng chrome đặc (bg-white/80) thay vì trong suốt. */
 .header-bca-transparent header[class~="bg-white/80"],
 .header-bca-transparent header[class~="backdrop-blur-sm"] {
   background-color: transparent;

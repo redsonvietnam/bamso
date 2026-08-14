@@ -44,27 +44,48 @@ export class APIClient {
           await delay(Math.min(1000 * 2 ** attempt, 5000));
         }
 
-        const res = await fetch(url, fetchOptions);
+        // Chỉ tạo timeout nếu fetchOptions.signal chưa có sẵn
+        // (tránh xung đột với signal từ component/router)
+        const timeout = !fetchOptions.signal
+          ? (() => {
+              const abortController = new AbortController();
+              const timeoutId = setTimeout(() => abortController.abort(), 10000);
+              return { controller: abortController, clear: () => clearTimeout(timeoutId) };
+            })()
+          : null;
 
-        if (!res.ok) {
-          const errorBody = await res.json().catch(() => ({}));
-          const error = new Error(errorBody.error ?? `Request failed with status ${res.status}`);
-          (error as Error & { status?: number }).status = res.status;
-          throw error;
+        try {
+          const res = await fetch(url, fetchOptions);
+
+          // Hủy timeout nếu có
+          if (timeout) {
+            timeout.clear();
+          }
+
+          if (!res.ok) {
+            const errorBody = await res.json().catch(() => ({}));
+            const error = new Error(
+              errorBody.error ?? `Request failed with status ${res.status}`
+            );
+            (error as Error & { status?: number }).status = res.status;
+            throw error;
+          }
+
+          return (await res.json()) as T;
+        } finally {
+          if (timeout) {
+            timeout.clear();
+          }
         }
-
-        return (await res.json()) as T;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        // IMPORTANT: Do NOT retry non-idempotent requests (POST, PATCH) 
-        // to prevent duplicate data creation on the server.
-        if (method === 'POST' || method === 'PATCH') {
-          throw lastError;
-        }
-
         if (error instanceof DOMException && error.name === 'AbortError') {
           throw error;
+        }
+
+        if (method === 'POST' || method === 'PATCH') {
+          throw lastError;
         }
         logger.warn(`API request failed (attempt ${attempt + 1}/3): ${endpoint}`, {
           error: lastError.message,

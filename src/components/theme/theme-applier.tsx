@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useThemes } from "@/lib/theme/use-themes";
 import { TOKEN_VARS } from "@/lib/theme/types";
 import type { ThemeSpec } from "@/lib/theme/types";
 import { fontStack, googleFontFamily, googleFontUrl, sansStack } from "@/lib/theme/fonts";
+import { apiClient } from "@/lib/api-client";
 
 const ROLE_CLASSES: Record<ThemeSpec["cardStyle"], string> = {
   flat: "",
@@ -91,14 +92,61 @@ export function clearTheme() {
   root.classList.remove(...ALL_ROLE_CLASSES);
 }
 
+/** Loads any Google Fonts a global setting uses (dedupe by family name). */
+function loadGlobalGoogleFont(font: string) {
+  const family = googleFontFamily(font);
+  if (!family) return;
+  const url = googleFontUrl(family);
+  if (document.querySelector(`link[data-theme-font="${family}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = url;
+  link.dataset.themeFont = family;
+  document.head.appendChild(link);
+}
+
 /**
  * Applies a custom theme (from DB) at runtime: CSS vars + role classes +
  * Google Font links. Preset themes keep their own class-based CSS, so this
- * only kicks in for custom theme ids.
+ * only kicks in for custom theme ids. Also applies the admin "Cài đặt chung"
+ * overrides: surface opacity (--surface-alpha) + global font overrides.
  */
 export function ThemeApplier() {
   const { theme } = useTheme();
   const { all, loading } = useThemes();
+  const [globalFonts, setGlobalFonts] = useState<{ fontSans?: string; fontDisplay?: string }>({});
+  const [surfaceOpacity, setSurfaceOpacity] = useState<string>("100%");
+
+  // Load admin overrides from settings (custom-theme builder + global UI).
+  useEffect(() => {
+    let cancelled = false;
+    const loadSettings = () => {
+      apiClient
+        .get<{ key: string; value: string }[]>("/api/settings")
+        .then((settings) => {
+          if (cancelled) return;
+          const map: Record<string, string> = {};
+          settings.forEach((s) => {
+            map[s.key] = s.value;
+          });
+          const opacity = map["surface_opacity"];
+          setSurfaceOpacity(opacity && !Number.isNaN(Number(opacity)) ? `${opacity}%` : "100%");
+          setGlobalFonts({
+            fontSans: map["font_sans"] || undefined,
+            fontDisplay: map["font_display"] || undefined,
+          });
+        })
+        .catch(() => {});
+    };
+    loadSettings();
+    // Admin saves via /api/settings -> re-apply live without a page reload.
+    const onSettingsUpdated = () => loadSettings();
+    window.addEventListener("bamso:settings-updated", onSettingsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("bamso:settings-updated", onSettingsUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     if (loading || !theme) return;
@@ -108,7 +156,30 @@ export function ThemeApplier() {
     } else {
       clearTheme();
     }
-  }, [theme, all, loading]);
+
+    const root = document.documentElement;
+    const style = root.style;
+
+    // Surface opacity override (non-glass themes only). The glass theme keeps
+    // its own translucent tokens, so we reset --surface-alpha to 100% there.
+    const isGlass = theme === "glass" || (spec?.cardStyle ?? all.find((t) => t.id === theme)?.cardStyle) === "glass";
+    if (isGlass) {
+      style.setProperty("--surface-alpha", "100%");
+    } else {
+      style.setProperty("--surface-alpha", surfaceOpacity);
+    }
+
+    // Global font overrides (apply to every theme incl. presets).
+    if (globalFonts.fontSans) {
+      const sans = sansStack(globalFonts.fontSans);
+      if (sans) style.setProperty("--font-sans", sans);
+      loadGlobalGoogleFont(globalFonts.fontSans);
+    }
+    if (globalFonts.fontDisplay) {
+      style.setProperty("--font-display", fontStack(globalFonts.fontDisplay));
+      loadGlobalGoogleFont(globalFonts.fontDisplay);
+    }
+  }, [theme, all, loading, surfaceOpacity, globalFonts]);
 
   return null;
 }

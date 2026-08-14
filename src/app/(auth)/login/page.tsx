@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login, user, isLoading, fetchMe } = useAuthStore();
+    const { login, isLoading, fetchMe } = useAuthStore();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
@@ -20,21 +20,6 @@ export default function LoginPage() {
     useEffect(() => {
         fetchMe();
     }, [fetchMe]);
-
-    // Redirect based on user role when user updates
-    useEffect(() => {
-        if (user) {
-            if (user.role === 'ADMIN') {
-                router.push('/admin');
-            } else if (user.role === 'STAFF') {
-                router.push('/canbo');
-            } else if (user.role === 'KIOSK') {
-                router.push('/kiosk');
-            } else if (user.role === 'DISPLAY') {
-                router.push('/display');
-            }
-        }
-    }, [user, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

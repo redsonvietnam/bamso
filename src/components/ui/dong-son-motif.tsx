@@ -1,4 +1,5 @@
 import type { SVGProps } from 'react';
+import { motion } from 'framer-motion';
 
 interface Point {
     x: number;
@@ -64,13 +65,14 @@ export function DongSonSun(props: SVGProps<SVGSVGElement>) {
 export function PageWatermark({ className = '' }: { className?: string }) {
     return (
         <div aria-hidden="true" className={`pointer-events-none select-none absolute overflow-hidden scale-[3] ${className}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-                src="/brand/trong-dong-dong-son.svg"
-                alt=""
-                draggable={false}
-                className="h-full w-full object-contain"
-            />
+            <motion.img
+    src="/brand/trong-dong-dong-son.svg"
+    alt=""
+    draggable={false}
+    className="h-full w-full object-contain"
+    animate={{ rotate: -360 }}
+    transition={{ ease: "linear", duration: 270, repeat: Infinity }}
+/>
         </div>
     );
 }
