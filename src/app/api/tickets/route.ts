@@ -42,8 +42,10 @@ export async function POST(request: Request) {
             phone,
         });
 
-        // Trigger SSE broadcast to update all queue listeners
-        await broadcastQueueUpdate(ticket.serviceId);
+        // Trigger SSE broadcast to update all queue listeners without blocking ticket creation.
+        void broadcastQueueUpdate(ticket.serviceId).catch((err) => {
+            logger.error('Ticket queue broadcast failed:', err);
+        });
 
         return NextResponse.json(ticket, { status: 201 });
     } catch (error) {

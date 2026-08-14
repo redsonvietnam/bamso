@@ -6,8 +6,48 @@ const DEFAULT_CONFIG: APIClientConfig = {
   headers: { 'Content-Type': 'application/json' },
 };
 
+const DEFAULT_TIMEOUT = 10000;
+
+type RequestMethodOptions = Omit<RequestOptions, 'method' | 'body'>;
+
 async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  return !!value && typeof value === 'object' && 'aborted' in value && 'addEventListener' in value;
+}
+
+function normalizeOptions(optionsOrSignal?: RequestMethodOptions | AbortSignal): RequestMethodOptions {
+  return isAbortSignal(optionsOrSignal) ? { signal: optionsOrSignal } : optionsOrSignal ?? {};
+}
+
+function combineSignals(signals: AbortSignal[]): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const cleanupCallbacks: Array<() => void> = [];
+
+  const abort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  };
+
+  for (const signal of signals) {
+    if (signal.aborted) {
+      abort();
+      continue;
+    }
+
+    signal.addEventListener('abort', abort, { once: true });
+    cleanupCallbacks.push(() => signal.removeEventListener('abort', abort));
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      for (const cleanup of cleanupCallbacks) cleanup();
+    },
+  };
 }
 
 export class APIClient {
@@ -23,44 +63,45 @@ export class APIClient {
 
   async request<T>(endpoint: string, options: RequestOptions): Promise<T> {
     const url = `${this.config.baseUrl ?? ''}${endpoint}`;
-    const { body, method, headers, signal } = options;
+    const { body, method, headers, signal, timeout = DEFAULT_TIMEOUT } = options;
 
-    const fetchOptions: RequestInit = {
-      method,
-      credentials: this.config.credentials,
-      signal,
-      headers: { ...this.config.headers, ...headers },
-    };
-
-    if (body && method !== 'GET') {
-      fetchOptions.body = JSON.stringify(body);
-    }
+    const requestBody = body && method !== 'GET' ? JSON.stringify(body) : undefined;
 
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      let cleanup = () => {};
+      let finalSignal: AbortSignal | undefined;
+
       try {
         if (attempt > 0) {
           await delay(Math.min(1000 * 2 ** attempt, 5000));
         }
 
-        // Chỉ tạo timeout nếu fetchOptions.signal chưa có sẵn
-        // (tránh xung đột với signal từ component/router)
-        const timeout = !fetchOptions.signal
-          ? (() => {
-              const abortController = new AbortController();
-              const timeoutId = setTimeout(() => abortController.abort(), 10000);
-              return { controller: abortController, clear: () => clearTimeout(timeoutId) };
-            })()
-          : null;
+        const timeoutController = new AbortController();
+        const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
+        const combined = signal
+          ? combineSignals([signal, timeoutController.signal])
+          : { signal: timeoutController.signal, cleanup: () => {} };
+        finalSignal = combined.signal;
+        cleanup = () => {
+          clearTimeout(timeoutId);
+          combined.cleanup();
+        };
+
+        const fetchOptions: RequestInit = {
+          method,
+          credentials: this.config.credentials,
+          signal: combined.signal,
+          headers: { ...this.config.headers, ...headers },
+        };
+
+        if (requestBody) {
+          fetchOptions.body = requestBody;
+        }
 
         try {
           const res = await fetch(url, fetchOptions);
-
-          // Hủy timeout nếu có
-          if (timeout) {
-            timeout.clear();
-          }
 
           if (!res.ok) {
             const errorBody = await res.json().catch(() => ({}));
@@ -73,16 +114,14 @@ export class APIClient {
 
           return (await res.json()) as T;
         } finally {
-          if (timeout) {
-            timeout.clear();
-          }
+          cleanup();
         }
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (finalSignal?.aborted) {
           throw error;
         }
+
+        lastError = error instanceof Error ? error : new Error(String(error));
 
         if (method === 'POST' || method === 'PATCH') {
           throw lastError;
@@ -96,20 +135,24 @@ export class APIClient {
     throw lastError ?? new Error('Request failed');
   }
 
-  get<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET', signal });
+  get<T>(endpoint: string, optionsOrSignal?: RequestMethodOptions | AbortSignal): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET', ...normalizeOptions(optionsOrSignal) });
   }
 
-  post<T>(endpoint: string, body?: unknown): Promise<T> {
-    return this.request<T>(endpoint, { method: 'POST', body });
+  post<T>(endpoint: string, body?: unknown, options?: RequestMethodOptions): Promise<T> {
+    return this.request<T>(endpoint, { method: 'POST', body, ...options });
   }
 
-  put<T>(endpoint: string, body?: unknown): Promise<T> {
-    return this.request<T>(endpoint, { method: 'PUT', body });
+  put<T>(endpoint: string, body?: unknown, options?: RequestMethodOptions): Promise<T> {
+    return this.request<T>(endpoint, { method: 'PUT', body, ...options });
   }
 
-  delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  patch<T>(endpoint: string, body?: unknown, options?: RequestMethodOptions): Promise<T> {
+    return this.request<T>(endpoint, { method: 'PATCH', body, ...options });
+  }
+
+  delete<T>(endpoint: string, options?: RequestMethodOptions): Promise<T> {
+    return this.request<T>(endpoint, { method: 'DELETE', ...options });
   }
 }
 
