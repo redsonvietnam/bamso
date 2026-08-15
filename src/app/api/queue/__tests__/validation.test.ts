@@ -55,6 +55,7 @@ beforeEach(() => vi.clearAllMocks());
 describe('queue mutation route validation', () => {
     it.each(routes)('%s rejects malformed JSON with HTTP 400', async (_name, handler, method) => {
         const response = await handler(request(method, '{invalid'));
+        if (!response) throw new Error('Expected route handler to return a response');
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_JSON' });
@@ -62,6 +63,7 @@ describe('queue mutation route validation', () => {
 
     it.each(routes)('%s rejects non-object JSON with HTTP 400', async (_name, handler, method) => {
         const response = await handler(request(method, JSON.stringify(['ticket'])));
+        if (!response) throw new Error('Expected route handler to return a response');
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_BODY' });
