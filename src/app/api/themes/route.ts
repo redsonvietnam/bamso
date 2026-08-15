@@ -109,7 +109,8 @@ export async function POST(request: Request) {
       }
 
       const themes = body.themes.map(validateTheme);
-      if (themes.some((theme): theme is null => theme === null)) {
+      const validThemes = themes.filter((theme): theme is CustomTheme => theme !== null);
+      if (validThemes.length !== themes.length) {
         return NextResponse.json({ error: "Có giao diện không hợp lệ", code: "INVALID_THEME_IMPORT" }, { status: 400 });
       }
 
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
       const batchIds = new Set<string>();
       const created: CustomTheme[] = [];
 
-      for (const theme of themes) {
+      for (const theme of validThemes) {
         const id = theme.id || slugify(theme.name);
         if (existingIds.has(id) || batchIds.has(id)) {
           return NextResponse.json({ error: "Đã tồn tại giao diện trùng mã", code: "DUPLICATE_ID" }, { status: 409 });
