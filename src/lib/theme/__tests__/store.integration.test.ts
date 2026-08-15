@@ -21,7 +21,7 @@ const theme = (name: string) => [
 ];
 
 describeIntegration("saveCustomThemes SQLite concurrency integration", () => {
-  let originalValue: string | null | undefined;
+  let originalValue: string | undefined;
 
   beforeAll(async () => {
     const existing = await prisma.settings.findUnique({ where: { key: "custom_themes" } });
