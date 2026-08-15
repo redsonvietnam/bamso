@@ -10,7 +10,10 @@ const getJwtSecret = () => {
     if (process.env.NODE_ENV === 'production' && secret.length < 32) {
         throw new Error('JWT_SECRET must be at least 32 characters in production');
     }
-    return new TextEncoder().encode(secret);
+    // Normalize into the current runtime's Uint8Array realm. This avoids
+    // cross-realm TypedArray failures under jsdom/Vitest while remaining
+    // compatible with jose's Node and Web Crypto key handling.
+    return Uint8Array.from(new TextEncoder().encode(secret));
 };
 
 function isUserRole(value: unknown): value is UserRoleType {
