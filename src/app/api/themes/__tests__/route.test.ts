@@ -52,6 +52,10 @@ describe("Theme API runtime validation", () => {
     ["colors array", { colors: [] }],
     ["unknown color token", { colors: { madeUp: "red" } }],
     ["non-string color", { colors: { primary: 123 } }],
+    ["malformed color", { colors: { primary: "not-a-color" } }],
+    ["malformed color syntax", { colors: { primary: "222 68%" } }],
+    ["invalid alpha", { colors: { primary: "222 68% 25% / 2" } }],
+    ["hex on non-display token", { colors: { primary: "#C9A227" } }],
     ["empty fontSans", { fontSans: "   " }],
     ["empty radius", { radius: "" }],
     ["non-string id", { id: 123 }],
@@ -60,6 +64,33 @@ describe("Theme API runtime validation", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_THEME" });
     expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
+  it("accepts valid HSL with alpha", async () => {
+    const response = await POST(
+      request({
+        ...validTheme,
+        colors: { primary: "226 60% 97% / 0.35" },
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockedSaveCustomThemes).toHaveBeenCalledOnce();
+  });
+
+  it("accepts valid hex colors for display tokens", async () => {
+    const response = await POST(
+      request({
+        ...validTheme,
+        colors: {
+          "display-accent": "#C9A227",
+          "display-red": "#C8102E",
+        },
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockedSaveCustomThemes).toHaveBeenCalledOnce();
   });
 
   it("accepts a valid payload and persists it", async () => {
@@ -93,11 +124,24 @@ describe("Theme API runtime validation", () => {
     });
   });
 
+  it("rejects malformed color on PUT without persisting", async () => {
+    const existing = { id: "theme-1", ...validTheme };
+    mockedGetCustomThemes.mockResolvedValue([existing]);
+
+    const response = await PUT(
+      request({ ...existing, colors: { primary: "not-a-color" } }, "PUT")
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "INVALID_THEME" });
+    expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
   it("validates PUT payloads with the same runtime rules", async () => {
     const existing = { id: "theme-1", ...validTheme };
     mockedGetCustomThemes.mockResolvedValue([existing]);
 
-    const response = await PUT(request({ ...existing, colors: { unknown: "x" } }, "PUT"));
+    const response = await PUT(request({ ...existing, colors: { unknown: "222 68% 25%" } }, "PUT"));
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_THEME" });
     expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
