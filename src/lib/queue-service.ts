@@ -28,6 +28,30 @@ async function withPosLock<T>(pos: string, fn: () => Promise<T>): Promise<T> {
     }
 }
 
+// Restores change queue positions, so concurrent restores for the same service
+// must be serialized to avoid calculating the same position from one snapshot.
+const restoreLocks = new Map<string, Promise<void>>();
+
+async function withRestoreLock<T>(serviceId: string, fn: () => Promise<T>): Promise<T> {
+    const previous = restoreLocks.get(serviceId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+
+    restoreLocks.set(serviceId, current);
+    await previous;
+
+    try {
+        return await fn();
+    } finally {
+        release();
+        if (restoreLocks.get(serviceId) === current) {
+            restoreLocks.delete(serviceId);
+        }
+    }
+}
+
 function getTodayBounds() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -242,46 +266,58 @@ export async function skipTicket(ticketId: string) {
  * Restores a MISSED ticket with guard against concurrent state changes.
  */
 export async function restoreTicket(ticketId: string) {
-    const { startOfDay, endOfDay } = getTodayBounds();
-    const dayKey = getDayKey(new Date());
+    // Read only enough state to select the service-level lock. The ticket is
+    // re-read inside the lock/transaction before calculating its new position.
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
 
-    return await prisma.$transaction(async (tx) => {
-        const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
+    if (ticket.status !== TicketStatus.MISSED) {
+        throw new Error('Chỉ có thể khôi phục các vé ở trạng thái nhỡ lượt.');
+    }
 
-        if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
-        if (ticket.status !== TicketStatus.MISSED) {
-            throw new Error('Chỉ có thể khôi phục các vé ở trạng thái nhỡ lượt.');
-        }
+    return withRestoreLock(ticket.serviceId, async () => {
+        const { startOfDay, endOfDay } = getTodayBounds();
+        const dayKey = getDayKey(new Date());
 
-        const expectedStatus = ticket.status;
+        return prisma.$transaction(async (tx) => {
+            // Re-read after waiting for the service lock to avoid stale state.
+            const currentTicket = await tx.ticket.findUnique({ where: { id: ticketId } });
 
-        // Find minimum position of pending tickets today
-        const minPosResult = await tx.ticket.aggregate({
-            where: {
-                serviceId: ticket.serviceId,
-                status: TicketStatus.PENDING,
-                dayKey,
-                createdAt: { gte: startOfDay, lte: endOfDay },
-            },
-            _min: { position: true },
-        });
+            if (!currentTicket) throw new Error('Không tìm thấy phiếu yêu cầu.');
+            if (currentTicket.status !== TicketStatus.MISSED) {
+                throw new Error('Chỉ có thể khôi phục các vé ở trạng thái nhỡ lượt.');
+            }
 
-        const newPos = minPosResult._min.position !== null ? minPosResult._min.position - 1 : 1;
+            const expectedStatus = currentTicket.status;
 
-        // Guard: status must still match
-        const result = await tx.ticket.updateMany({
-            where: { id: ticketId, status: expectedStatus },
-            data: {
-                status: TicketStatus.PENDING,
-                position: newPos,
-                missCount: 0,
-                pos: null,
-                calledAt: null,
-                completedAt: null,
-            },
-        });
-        if (result.count === 0) throw new Error('Trạng thái vé đã thay đổi, vui lòng thử lại.');
+            // Find minimum position of pending tickets today
+            const minPosResult = await tx.ticket.aggregate({
+                where: {
+                    serviceId: currentTicket.serviceId,
+                    status: TicketStatus.PENDING,
+                    dayKey,
+                    createdAt: { gte: startOfDay, lte: endOfDay },
+                },
+                _min: { position: true },
+            });
 
-        return tx.ticket.findUnique({ where: { id: ticketId }, include: { service: true } });
-    }, { timeout: 15000 });
+            const newPos = minPosResult._min.position !== null ? minPosResult._min.position - 1 : 1;
+
+            // Guard: status must still match
+            const result = await tx.ticket.updateMany({
+                where: { id: ticketId, status: expectedStatus },
+                data: {
+                    status: TicketStatus.PENDING,
+                    position: newPos,
+                    missCount: 0,
+                    pos: null,
+                    calledAt: null,
+                    completedAt: null,
+                },
+            });
+            if (result.count === 0) throw new Error('Trạng thái vé đã thay đổi, vui lòng thử lại.');
+
+            return tx.ticket.findUnique({ where: { id: ticketId }, include: { service: true } });
+        }, { timeout: 15000 });
+    });
 }
