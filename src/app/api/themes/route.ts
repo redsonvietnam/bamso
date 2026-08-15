@@ -40,6 +40,10 @@ const BUTTON_STYLES = new Set<ThemeSpec["buttonStyle"]>(["solid", "glass", "bca"
 const CANVAS_STYLES = new Set<ThemeSpec["canvasStyle"]>(["plain", "mesh", "halftone", "paper-radial"]);
 const HEADER_STYLES = new Set<ThemeSpec["headerStyle"]>(["default", "glass", "bca", "bca-transparent"]);
 
+const HSL_COLOR_PATTERN = /^[-+]?\d+(?:\.\d+)?\s+\d+(?:\.\d+)?%\s+\d+(?:\.\d+)?%(?:\s*\/\s*(?:0|1|0?\.\d+))?$/;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const HEX_COLOR_TOKENS = new Set<keyof ThemeSpec["colors"]>(["display-accent", "display-red"]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -48,12 +52,20 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isValidColorValue(key: string, value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false;
+
+  const color = value.trim();
+  if (HSL_COLOR_PATTERN.test(color)) return true;
+  return HEX_COLOR_TOKENS.has(key as keyof ThemeSpec["colors"]) && HEX_COLOR_PATTERN.test(color);
+}
+
 function validateColors(value: unknown): ThemeSpec["colors"] | null {
   if (value === undefined) return {};
   if (!isRecord(value)) return null;
 
   for (const [key, color] of Object.entries(value)) {
-    if (!THEME_TOKEN_KEYS.has(key as keyof ThemeSpec["colors"]) || !isNonEmptyString(color)) {
+    if (!THEME_TOKEN_KEYS.has(key as keyof ThemeSpec["colors"]) || !isValidColorValue(key, color)) {
       return null;
     }
   }
