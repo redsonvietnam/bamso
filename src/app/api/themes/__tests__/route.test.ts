@@ -9,10 +9,12 @@ vi.mock("@/lib/theme/presets", () => ({ PRESET_THEMES: [] }));
 vi.mock("@/lib/theme/store", () => ({
   getCustomThemes: vi.fn(),
   saveCustomThemes: vi.fn(),
+  ThemeConflictError: class ThemeConflictError extends Error {},
 }));
 
 import { POST, PUT } from "@/app/api/themes/route";
 import { getCustomThemes, saveCustomThemes } from "@/lib/theme/store";
+import { ThemeConflictError } from "@/lib/theme/store";
 
 const mockedGetCustomThemes = vi.mocked(getCustomThemes);
 const mockedSaveCustomThemes = vi.mocked(saveCustomThemes);
@@ -145,5 +147,20 @@ describe("Theme API runtime validation", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_THEME" });
     expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 and does not persist when PUT loses the update race", async () => {
+    const existing = { id: "theme-1", ...validTheme };
+    mockedGetCustomThemes.mockResolvedValue([existing]);
+    mockedSaveCustomThemes.mockRejectedValue(new ThemeConflictError());
+
+    const response = await PUT(request({ ...existing, name: "Updated" }, "PUT"));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "THEME_CONFLICT" });
+    expect(mockedSaveCustomThemes).toHaveBeenCalledWith(
+      [{ ...existing, name: "Updated", builtIn: false }],
+      [existing]
+    );
   });
 });
