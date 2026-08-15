@@ -27,7 +27,7 @@ describe('JWT claim validation', () => {
             .setProtectedHeader({ alg: 'HS256' })
             .setIssuedAt()
             .setExpirationTime('24h')
-            .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+            .sign(Buffer.from(process.env.JWT_SECRET, 'utf8'));
 
         await expect(verifyJWT(token)).resolves.toBeNull();
     });
