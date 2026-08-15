@@ -299,7 +299,46 @@ export async function restoreTicket(ticketId: string) {
                 _min: { position: true },
             });
 
-            const newPos = minPosResult._min.position !== null ? minPosResult._min.position - 1 : 1;
+            let newPos = 1;
+
+            if (minPosResult._min.position === null) {
+                newPos = 1;
+            } else if (minPosResult._min.position > 1) {
+                newPos = minPosResult._min.position - 1;
+            } else {
+                const maxPosResult = await tx.ticket.aggregate({
+                    where: {
+                        serviceId: currentTicket.serviceId,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                    },
+                    _max: { position: true },
+                });
+                const offset = Math.max(1, (maxPosResult._max.position || 0) + 1);
+
+                await tx.ticket.updateMany({
+                    where: {
+                        serviceId: currentTicket.serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                    },
+                    data: { position: { increment: offset } },
+                });
+
+                await tx.ticket.updateMany({
+                    where: {
+                        serviceId: currentTicket.serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        position: { gte: 1 + offset },
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                    },
+                    data: { position: { decrement: offset - 1 } },
+                });
+
+                newPos = 1;
+            }
 
             const result = await tx.ticket.updateMany({
                 where: { id: ticketId, status: expectedStatus },
