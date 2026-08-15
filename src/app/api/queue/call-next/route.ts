@@ -5,23 +5,26 @@ import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
+import { readJsonObject, requiredPositiveInteger, requiredStringFields } from '@/lib/api-validation';
 
 export async function POST(request: Request) {
     try {
         const auth = await requireRole('STAFF', 'ADMIN');
         if ('error' in auth) return auth.error;
 
-        const body = await request.json();
-        const { serviceId, pos } = body;
+        const parsed = await readJsonObject(request);
+        if (!parsed.ok) return NextResponse.json(await parsed.response.json(), { status: parsed.response.status });
+        const { serviceId, pos } = parsed.value;
 
-        if (!serviceId || !pos) {
+        const missing = requiredStringFields(parsed.value, ['serviceId']);
+        if (missing.length > 0 || !requiredPositiveInteger(pos)) {
             return NextResponse.json(
-                { error: 'Thiếu thông tin serviceId hoặc pos', code: 'MISSING_FIELDS' },
+                { error: 'serviceId phải là chuỗi không rỗng và pos phải là số nguyên dương', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
 
-        const ticket = await callNextTicket(serviceId, pos);
+        const ticket = await callNextTicket(serviceId as string, pos as number);
         if (!ticket) {
             return NextResponse.json(
                 { error: 'Không thể gọi vé', code: 'CALL_FAILED' },
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
 
         const nextPending = await prisma.ticket.findFirst({
             where: {
-                serviceId,
+                serviceId: ticket.serviceId,
                 status: TicketStatus.PENDING,
                 createdAt: { gte: startOfDay, lte: endOfDay },
                 id: { not: ticket.id },
@@ -43,11 +46,9 @@ export async function POST(request: Request) {
             orderBy: { position: 'asc' },
         });
 
-        logger.debug('Preparing to broadcast call. Ticket and nextPending are valid.');
-
         await Promise.all([
             broadcastQueueUpdate(ticket.serviceId),
-            broadcastDisplayCall(ticket.ticketNumber, pos, ticket.customerName, nextPending?.ticketNumber)
+            broadcastDisplayCall(ticket.ticketNumber, pos as number, ticket.customerName, nextPending?.ticketNumber)
         ]);
 
         return NextResponse.json(ticket);
