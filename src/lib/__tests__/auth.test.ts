@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { SignJWT } from 'jose';
 import { describe, expect, it, vi } from 'vitest';
 import { signJWT, verifyJWT } from '@/lib/auth';
