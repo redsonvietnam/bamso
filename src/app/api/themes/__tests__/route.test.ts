@@ -25,10 +25,10 @@ const validTheme = {
   fontSans: "Inter",
   fontDisplay: "Inter",
   radius: "0.5rem",
-  cardStyle: "flat",
-  buttonStyle: "solid",
-  canvasStyle: "plain",
-  headerStyle: "default",
+  cardStyle: "flat" as const,
+  buttonStyle: "solid" as const,
+  canvasStyle: "plain" as const,
+  headerStyle: "default" as const,
 };
 
 function request(body: unknown, method: "POST" | "PUT" = "POST") {
@@ -159,7 +159,7 @@ describe("Theme API runtime validation", () => {
 
   it("rejects an import batch when an ID already exists in the DB", async () => {
     mockedGetCustomThemes.mockResolvedValue([
-      { ...validTheme, id: "existing-id" },
+      { ...validTheme, id: "existing-id", builtIn: false },
     ]);
 
     const response = await POST(
@@ -194,7 +194,7 @@ describe("Theme API runtime validation", () => {
   });
 
   it("rejects malformed color on PUT without persisting", async () => {
-    const existing = { id: "theme-1", ...validTheme };
+    const existing = { id: "theme-1", ...validTheme, builtIn: false };
     mockedGetCustomThemes.mockResolvedValue([existing]);
 
     const response = await PUT(
@@ -207,7 +207,7 @@ describe("Theme API runtime validation", () => {
   });
 
   it("validates PUT payloads with the same runtime rules", async () => {
-    const existing = { id: "theme-1", ...validTheme };
+    const existing = { id: "theme-1", ...validTheme, builtIn: false };
     mockedGetCustomThemes.mockResolvedValue([existing]);
 
     const response = await PUT(request({ ...existing, colors: { unknown: "222 68% 25%" } }, "PUT"));
@@ -217,7 +217,7 @@ describe("Theme API runtime validation", () => {
   });
 
   it("returns 409 and does not persist when PUT loses the update race", async () => {
-    const existing = { id: "theme-1", ...validTheme };
+    const existing = { id: "theme-1", ...validTheme, builtIn: false };
     mockedGetCustomThemes.mockResolvedValue([existing]);
     mockedSaveCustomThemes.mockRejectedValue(new ThemeConflictError());
 
