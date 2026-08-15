@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const evalMock = vi.fn();
-const errorMock = vi.fn();
+const mocks = vi.hoisted(() => ({
+    evalMock: vi.fn(),
+    errorMock: vi.fn(),
+}));
 
 vi.mock('@/lib/redis', () => ({
     default: {
-        eval: evalMock,
+        eval: mocks.evalMock,
     },
 }));
 
 vi.mock('@/lib/logger', () => ({
     logger: {
-        error: errorMock,
+        error: mocks.errorMock,
     },
 }));
 
@@ -27,22 +29,22 @@ beforeEach(() => {
 
 describe('checkRateLimit', () => {
     it('uses one atomic Redis eval for a request', async () => {
-        evalMock.mockResolvedValue([1, 2]);
+        mocks.evalMock.mockResolvedValue([1, 2]);
 
         await expect(checkRateLimit('auth:127.0.0.1', config)).resolves.toEqual({
             allowed: true,
             remaining: 2,
         });
 
-        expect(evalMock).toHaveBeenCalledTimes(1);
-        expect(evalMock.mock.calls[0][1]).toBe(1);
-        expect(evalMock.mock.calls[0][2]).toBe('ratelimit:auth:127.0.0.1');
-        expect(evalMock.mock.calls[0][3]).toBe('60000');
-        expect(evalMock.mock.calls[0][4]).toBe('3');
+        expect(mocks.evalMock).toHaveBeenCalledTimes(1);
+        expect(mocks.evalMock.mock.calls[0][1]).toBe(1);
+        expect(mocks.evalMock.mock.calls[0][2]).toBe('ratelimit:auth:127.0.0.1');
+        expect(mocks.evalMock.mock.calls[0][3]).toBe('60000');
+        expect(mocks.evalMock.mock.calls[0][4]).toBe('3');
     });
 
     it('denies the request when Redis reports the limit is exceeded', async () => {
-        evalMock.mockResolvedValue([0, 0]);
+        mocks.evalMock.mockResolvedValue([0, 0]);
 
         await expect(checkRateLimit('tickets:127.0.0.1', config)).resolves.toEqual({
             allowed: false,
@@ -53,13 +55,13 @@ describe('checkRateLimit', () => {
     it('does not honor RATE_LIMIT_DISABLED in production', async () => {
         vi.stubEnv('NODE_ENV', 'production');
         vi.stubEnv('RATE_LIMIT_DISABLED', 'true');
-        evalMock.mockResolvedValue([0, 0]);
+        mocks.evalMock.mockResolvedValue([0, 0]);
 
         await expect(checkRateLimit('auth:127.0.0.1', config)).resolves.toEqual({
             allowed: false,
             remaining: 0,
         });
-        expect(evalMock).toHaveBeenCalledTimes(1);
+        expect(mocks.evalMock).toHaveBeenCalledTimes(1);
     });
 
     it('honors RATE_LIMIT_DISABLED outside production', async () => {
@@ -70,17 +72,17 @@ describe('checkRateLimit', () => {
             allowed: true,
             remaining: 3,
         });
-        expect(evalMock).not.toHaveBeenCalled();
+        expect(mocks.evalMock).not.toHaveBeenCalled();
     });
 
     it('fails open when Redis is unavailable', async () => {
-        evalMock.mockRejectedValue(new Error('redis unavailable'));
+        mocks.evalMock.mockRejectedValue(new Error('redis unavailable'));
 
         await expect(checkRateLimit('auth:127.0.0.1', config)).resolves.toEqual({
             allowed: true,
             remaining: 0,
         });
-        expect(errorMock).toHaveBeenCalledTimes(1);
+        expect(mocks.errorMock).toHaveBeenCalledTimes(1);
     });
 
     it('rejects invalid rate limit configuration by failing open', async () => {
@@ -88,8 +90,8 @@ describe('checkRateLimit', () => {
             allowed: true,
             remaining: 0,
         });
-        expect(errorMock).toHaveBeenCalledTimes(1);
-        expect(evalMock).not.toHaveBeenCalled();
+        expect(mocks.errorMock).toHaveBeenCalledTimes(1);
+        expect(mocks.evalMock).not.toHaveBeenCalled();
     });
 });
 
