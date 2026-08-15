@@ -72,6 +72,41 @@ beforeEach(() => {
 });
 
 describe('POST /api/tickets', () => {
+    it('returns 400 for malformed JSON', async () => {
+        const response = await POST(new Request('http://localhost/api/tickets', {
+            method: 'POST',
+            body: '{invalid',
+            headers: { 'Content-Type': 'application/json' },
+        }));
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_JSON' });
+    });
+
+    it('returns 400 for non-object JSON body', async () => {
+        const response = await POST(makePostRequest(['ticket']));
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_BODY' });
+    });
+
+    it.each([
+        ['missing', {}],
+        ['null', { serviceId: null }],
+        ['number', { serviceId: 123 }],
+        ['boolean', { serviceId: true }],
+        ['object', { serviceId: { id: 'svc-1' } }],
+        ['array', { serviceId: ['svc-1'] }],
+        ['empty string', { serviceId: '' }],
+        ['whitespace', { serviceId: '   ' }],
+    ])('returns 400 for invalid serviceId: %s', async (_label, body) => {
+        const response = await POST(makePostRequest(body));
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_FIELDS' });
+        expect(mockedCreateTicket).not.toHaveBeenCalled();
+    });
+
     it('returns 201 even when queue broadcast rejects', async () => {
         mockedBroadcastQueueUpdate.mockRejectedValue(new Error('SSE down'));
 
