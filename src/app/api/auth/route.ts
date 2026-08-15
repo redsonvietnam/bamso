@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { signJWT } from '@/lib/auth';
+import { signJWT, isUserRole } from '@/lib/auth';
 import { verifyPassword, hashPassword, needsRehash } from '@/lib/password';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
@@ -46,6 +46,13 @@ export async function POST(request: Request) {
                 data: { passwordHash: newHash },
             });
             logger.log(`Auto-rehashed password for user: ${user.username}`);
+        }
+
+        if (!isUserRole(user.role)) {
+            return NextResponse.json(
+                { error: 'Đã xảy ra lỗi trong quá trình đăng nhập', code: 'SERVER_ERROR' },
+                { status: 500 }
+            );
         }
 
         const token = await signJWT({ userId: user.id, role: user.role });

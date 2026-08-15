@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { signJWT } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { isSecureCookie } from '@/lib/cookie';
+import type { UserRole } from '@/lib/constants';
 
 const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY'] as const;
 
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
             ? requestedRole
             : 'STAFF';
 
-        const demoPayloads: Record<string, { userId: string; role: string }> = {
+        const demoPayloads: Record<string, { userId: string; role: UserRole }> = {
             STAFF: { userId: 'demo-staff', role: 'STAFF' },
             KIOSK: { userId: 'demo-kiosk', role: 'KIOSK' },
             DISPLAY: { userId: 'demo-display', role: 'DISPLAY' },

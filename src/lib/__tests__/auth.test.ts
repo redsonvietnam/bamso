@@ -2,7 +2,7 @@
 
 import { SignJWT } from 'jose';
 import { describe, expect, it, vi } from 'vitest';
-import { signJWT, verifyJWT } from '@/lib/auth';
+import { signJWT, verifyJWT, isUserRole } from '@/lib/auth';
 
 vi.mock('@/lib/logger', () => ({
     logger: { error: vi.fn() },
@@ -32,5 +32,23 @@ describe('JWT claim validation', () => {
             .sign(Buffer.from(process.env.JWT_SECRET, 'utf8'));
 
         await expect(verifyJWT(token)).resolves.toBeNull();
+    });
+});
+
+describe('isUserRole', () => {
+    it.each(['ADMIN', 'STAFF', 'KIOSK', 'DISPLAY'])('accepts the valid role %s', (role) => {
+        expect(isUserRole(role)).toBe(true);
+    });
+
+    it.each([
+        ['empty string', ''],
+        ['lowercase role', 'staff'],
+        ['unknown role', 'SUPERADMIN'],
+        ['number', 123],
+        ['null', null],
+        ['undefined', undefined],
+        ['object', {}],
+    ])('rejects %s', (_label, value) => {
+        expect(isUserRole(value)).toBe(false);
     });
 });

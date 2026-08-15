@@ -13,7 +13,7 @@ const getJwtSecret = () => {
     return Buffer.from(secret, 'utf8');
 };
 
-function isUserRole(value: unknown): value is UserRoleType {
+export function isUserRole(value: unknown): value is UserRoleType {
     return typeof value === 'string' && Object.values(UserRole).includes(value as UserRoleType);
 }
 
