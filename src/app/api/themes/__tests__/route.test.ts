@@ -109,6 +109,54 @@ describe("Theme API runtime validation", () => {
     });
   });
 
+  it("imports a valid theme batch atomically", async () => {
+    const first = { ...validTheme, id: "theme-first" };
+    const second = { ...validTheme, id: "theme-second", name: "Second Theme" };
+
+    const response = await POST(request({ themes: [first, second] }));
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toHaveLength(2);
+    expect(mockedSaveCustomThemes).toHaveBeenCalledOnce();
+    expect(mockedSaveCustomThemes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "theme-first" }),
+        expect.objectContaining({ id: "theme-second" }),
+      ]),
+      []
+    );
+  });
+
+  it("rejects the entire import batch when one theme is invalid", async () => {
+    const response = await POST(
+      request({
+        themes: [
+          { ...validTheme, id: "valid-theme" },
+          { ...validTheme, id: "invalid-theme", colors: { primary: "not-a-color" } },
+        ],
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "INVALID_THEME_IMPORT" });
+    expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate IDs in an import batch without persisting any theme", async () => {
+    const response = await POST(
+      request({
+        themes: [
+          { ...validTheme, id: "same-id" },
+          { ...validTheme, id: "same-id", name: "Second Theme" },
+        ],
+      })
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "DUPLICATE_ID" });
+    expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
   it("applies defaults for optional style fields", async () => {
     const payload = { ...validTheme };
     delete (payload as Partial<typeof payload>).cardStyle;

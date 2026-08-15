@@ -100,6 +100,38 @@ export async function POST(request: Request) {
   if (adminError) return adminError;
   try {
     const body = await request.json();
+
+    // Theme imports are all-or-nothing: validate and resolve the entire batch
+    // before the single optimistic-locked write.
+    if (isRecord(body) && Array.isArray(body.themes)) {
+      if (body.themes.length === 0) {
+        return NextResponse.json({ error: "Danh sách giao diện trống", code: "INVALID_THEME_IMPORT" }, { status: 400 });
+      }
+
+      const themes = body.themes.map(validateTheme);
+      if (themes.some((theme): theme is null => theme === null)) {
+        return NextResponse.json({ error: "Có giao diện không hợp lệ", code: "INVALID_THEME_IMPORT" }, { status: 400 });
+      }
+
+      const customs = await getCustomThemes();
+      const existingIds = new Set(customs.map((t) => t.id));
+      const batchIds = new Set<string>();
+      const created: CustomTheme[] = [];
+
+      for (const theme of themes) {
+        const id = theme.id || slugify(theme.name);
+        if (existingIds.has(id) || batchIds.has(id)) {
+          return NextResponse.json({ error: "Đã tồn tại giao diện trùng mã", code: "DUPLICATE_ID" }, { status: 409 });
+        }
+        batchIds.add(id);
+        created.push({ ...theme, id, builtIn: false });
+      }
+
+      const conflict = await saveThemesOrConflict([...customs, ...created], customs);
+      if (conflict) return conflict;
+      return NextResponse.json(created, { status: 201 });
+    }
+
     const theme = validateTheme(body);
     if (!theme) return NextResponse.json({ error: "Thông tin giao diện không hợp lệ", code: "INVALID_THEME" }, { status: 400 });
     const customs = await getCustomThemes();

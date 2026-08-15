@@ -136,9 +136,7 @@ export default function ThemeBuilderPanel() {
         const data = JSON.parse(String(reader.result));
         const imported = Array.isArray(data) ? data : data.customs;
         if (!Array.isArray(imported)) throw new Error("bad format");
-        for (const theme of imported) {
-          await apiClient.post<CustomTheme>("/api/themes", theme);
-        }
+        await apiClient.post<CustomTheme[]>("/api/themes", { themes: imported });
         toast.success("Đã nhập giao diện.");
         await reload();
       } catch (error) {
