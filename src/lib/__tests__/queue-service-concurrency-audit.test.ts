@@ -67,9 +67,7 @@ describe('queue service concurrency audit', () => {
         mockedPrisma.ticket.findUnique
             .mockResolvedValueOnce(first)
             .mockResolvedValueOnce(second)
-            .mockResolvedValueOnce(first)
             .mockResolvedValueOnce(finalFirst)
-            .mockResolvedValueOnce(second)
             .mockResolvedValueOnce(finalSecond);
         mockedPrisma.settings.findUnique
             .mockResolvedValueOnce({ value: '1' })
@@ -78,8 +76,6 @@ describe('queue service concurrency audit', () => {
             .mockResolvedValueOnce([{ id: 'pending-1', position: 3 }])
             .mockResolvedValueOnce([{ id: 'pending-1', position: 4 }]);
         mockedPrisma.ticket.updateMany
-            .mockResolvedValueOnce({ count: 1 })
-            .mockResolvedValueOnce({ count: 1 })
             .mockResolvedValueOnce({ count: 1 })
             .mockResolvedValueOnce({ count: 1 });
 
@@ -103,7 +99,7 @@ describe('queue service concurrency audit', () => {
             })
         );
         expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
-            3,
+            2,
             expect.objectContaining({
                 where: expect.objectContaining({ id: second.id, status: TicketStatus.CALLED }),
                 data: expect.objectContaining({ status: TicketStatus.PENDING, position: 5 }),
@@ -132,9 +128,7 @@ describe('queue service concurrency audit', () => {
         mockedPrisma.ticket.findUnique
             .mockResolvedValueOnce(called)
             .mockResolvedValueOnce(missed)
-            .mockResolvedValueOnce(called)
             .mockResolvedValueOnce(finalCalled)
-            .mockResolvedValueOnce(missed)
             .mockResolvedValueOnce(finalMissed);
         mockedPrisma.settings.findUnique.mockResolvedValueOnce({ value: '1' });
         mockedPrisma.ticket.findMany.mockResolvedValueOnce([{ id: 'pending-1', position: 2 }]);
@@ -168,19 +162,21 @@ describe('queue service concurrency audit', () => {
             return cb(mockedPrisma);
         });
 
-        mockedPrisma.ticket.findUnique
-            .mockResolvedValueOnce(serviceA)
-            .mockResolvedValueOnce(serviceB)
-            .mockResolvedValueOnce(serviceA)
-            .mockResolvedValueOnce({ ...serviceA, status: TicketStatus.MISSED, missCount: 1 })
-            .mockResolvedValueOnce(serviceB)
-            .mockResolvedValueOnce({ ...serviceB, status: TicketStatus.MISSED, missCount: 1 });
-        mockedPrisma.settings.findUnique
-            .mockResolvedValueOnce({ value: 'MISSED' })
-            .mockResolvedValueOnce({ value: 'MISSED' });
-        mockedPrisma.ticket.updateMany
-            .mockResolvedValueOnce({ count: 1 })
-            .mockResolvedValueOnce({ count: 1 });
+        // Không phụ thuộc thứ tự tiêu thụ mockResolvedValueOnce trong Promise.all:
+        // mỗi service tự đếm số lần đọc, lần 1 trả trạng thái ban đầu, lần 2 trả kết quả.
+        const findCalls: Record<string, number> = {};
+        mockedPrisma.ticket.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+            findCalls[where.id] = (findCalls[where.id] ?? 0) + 1;
+            if (where.id === serviceA.id) {
+                return findCalls[where.id] === 1 ? serviceA : { ...serviceA, status: TicketStatus.MISSED, missCount: 1 };
+            }
+            if (where.id === serviceB.id) {
+                return findCalls[where.id] === 1 ? serviceB : { ...serviceB, status: TicketStatus.MISSED, missCount: 1 };
+            }
+            return null;
+        });
+        mockedPrisma.settings.findUnique.mockResolvedValue({ value: 'MISSED' });
+        mockedPrisma.ticket.updateMany.mockResolvedValue({ count: 1 });
 
         const [resultA, resultB] = await Promise.all([skipTicket(serviceA.id), skipTicket(serviceB.id)]);
 

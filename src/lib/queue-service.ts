@@ -180,17 +180,8 @@ export async function skipTicket(ticketId: string) {
         const dayKey = getDayKey(new Date());
 
         return prisma.$transaction(async (tx) => {
-            // Re-read after waiting for the service lock so position calculations
-            // and the final state transition use current queue state.
-            const currentTicket = await tx.ticket.findUnique({ where: { id: ticketId } });
-
-            if (!currentTicket) throw new Error('Không tìm thấy phiếu yêu cầu.');
-            if (currentTicket.status !== TicketStatus.CALLED && currentTicket.status !== TicketStatus.IN_PROGRESS) {
-                throw new Error('Vé không ở trạng thái đang phục vụ để bỏ qua.');
-            }
-
-            const expectedStatus = currentTicket.status;
-            const newMissCount = currentTicket.missCount + 1;
+            const expectedStatus = ticket.status;
+            const newMissCount = ticket.missCount + 1;
 
             const skipRulesSetting = await tx.settings.findUnique({ where: { key: 'skip_rules' } });
             const skipRules = skipRulesSetting ? skipRulesSetting.value.split(',') : ['1', '3', '5', 'MISSED'];
@@ -211,7 +202,7 @@ export async function skipTicket(ticketId: string) {
 
             const pendingTickets = await tx.ticket.findMany({
                 where: {
-                    serviceId: currentTicket.serviceId,
+                    serviceId: ticket.serviceId,
                     status: TicketStatus.PENDING,
                     dayKey,
                     id: { not: ticketId },
@@ -224,7 +215,7 @@ export async function skipTicket(ticketId: string) {
 
             if (pendingTickets.length === 0) {
                 const maxPosResult = await tx.ticket.aggregate({
-                    where: { serviceId: currentTicket.serviceId, dayKey, createdAt: { gte: startOfDay, lte: endOfDay } },
+                    where: { serviceId: ticket.serviceId, dayKey, createdAt: { gte: startOfDay, lte: endOfDay } },
                     _max: { position: true },
                 });
                 targetPos = (maxPosResult._max.position || 0) + 1;
@@ -236,7 +227,7 @@ export async function skipTicket(ticketId: string) {
 
                 await tx.ticket.updateMany({
                     where: {
-                        serviceId: currentTicket.serviceId,
+                        serviceId: ticket.serviceId,
                         status: TicketStatus.PENDING,
                         dayKey,
                         position: { gte: targetPos },
@@ -280,18 +271,11 @@ export async function restoreTicket(ticketId: string) {
         const dayKey = getDayKey(new Date());
 
         return prisma.$transaction(async (tx) => {
-            const currentTicket = await tx.ticket.findUnique({ where: { id: ticketId } });
-
-            if (!currentTicket) throw new Error('Không tìm thấy phiếu yêu cầu.');
-            if (currentTicket.status !== TicketStatus.MISSED) {
-                throw new Error('Chỉ có thể khôi phục các vé ở trạng thái nhỡ lượt.');
-            }
-
-            const expectedStatus = currentTicket.status;
+            const expectedStatus = ticket.status;
 
             const minPosResult = await tx.ticket.aggregate({
                 where: {
-                    serviceId: currentTicket.serviceId,
+                    serviceId: ticket.serviceId,
                     status: TicketStatus.PENDING,
                     dayKey,
                     createdAt: { gte: startOfDay, lte: endOfDay },
@@ -308,7 +292,7 @@ export async function restoreTicket(ticketId: string) {
             } else {
                 const maxPosResult = await tx.ticket.aggregate({
                     where: {
-                        serviceId: currentTicket.serviceId,
+                        serviceId: ticket.serviceId,
                         dayKey,
                         createdAt: { gte: startOfDay, lte: endOfDay },
                     },
@@ -318,7 +302,7 @@ export async function restoreTicket(ticketId: string) {
 
                 await tx.ticket.updateMany({
                     where: {
-                        serviceId: currentTicket.serviceId,
+                        serviceId: ticket.serviceId,
                         status: TicketStatus.PENDING,
                         dayKey,
                         createdAt: { gte: startOfDay, lte: endOfDay },
@@ -328,7 +312,7 @@ export async function restoreTicket(ticketId: string) {
 
                 await tx.ticket.updateMany({
                     where: {
-                        serviceId: currentTicket.serviceId,
+                        serviceId: ticket.serviceId,
                         status: TicketStatus.PENDING,
                         dayKey,
                         position: { gte: 1 + offset },

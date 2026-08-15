@@ -54,7 +54,6 @@ describe('restoreTicket position integrity', () => {
 
         mockedPrisma.ticket.findUnique
             .mockResolvedValueOnce(missed)
-            .mockResolvedValueOnce(missed)
             .mockResolvedValueOnce(restored);
         mockedPrisma.ticket.aggregate
             .mockResolvedValueOnce({ _min: { position: 1 } })
@@ -105,7 +104,6 @@ describe('restoreTicket position integrity', () => {
         };
 
         mockedPrisma.ticket.findUnique
-            .mockResolvedValueOnce(missed)
             .mockResolvedValueOnce(missed)
             .mockResolvedValueOnce(restored);
         mockedPrisma.ticket.aggregate.mockResolvedValueOnce({ _min: { position: 5 } });
