@@ -19,6 +19,14 @@ function mockFetchJson(data: unknown) {
   });
 }
 
+function mockFetchStatus(status: number) {
+  fetchMock.mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn().mockResolvedValue({}),
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('fetch', fetchMock);
@@ -115,5 +123,177 @@ describe('APIClient timeout and abort handling', () => {
         body: JSON.stringify({ theme: 'dark' }),
       })
     );
+  });
+});
+
+describe('APIClient retry policy', () => {
+  it('retries GET on network error (default retries = 2, 3 attempts)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    const request = client.get('/api/x');
+    const expectation = expect(request).rejects.toThrow('network down');
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries GET on HTTP 502 (3 attempts)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    mockFetchStatus(502);
+
+    const request = client.get('/api/x');
+    const expectation = expect(request).rejects.toMatchObject({ status: 502 });
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries GET on HTTP 503 (3 attempts)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    mockFetchStatus(503);
+
+    const request = client.get('/api/x');
+    const expectation = expect(request).rejects.toMatchObject({ status: 503 });
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries GET on HTTP 504 (3 attempts)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    mockFetchStatus(504);
+
+    const request = client.get('/api/x');
+    const expectation = expect(request).rejects.toMatchObject({ status: 504 });
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([400, 401, 403, 404, 409])('does not retry GET on HTTP %i', async (status) => {
+    const client = new APIClient();
+    mockFetchStatus(status);
+
+    await expect(client.get('/api/x')).rejects.toMatchObject({ status });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry POST after network error', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.post('/api/x', { a: 1 })).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry PUT after network error', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.put('/api/x', { a: 1 })).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry PATCH after network error', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.patch('/api/x', { a: 1 })).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry DELETE after network error', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.delete('/api/x')).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry POST on HTTP 503', async () => {
+    const client = new APIClient();
+    mockFetchStatus(503);
+
+    await expect(client.post('/api/x', { a: 1 })).rejects.toMatchObject({ status: 503 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry GET on abort/timeout (single attempt)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    });
+
+    const request = client.get('/api/slow', { timeout: 100 });
+    const expectation = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+
+    await vi.advanceTimersByTimeAsync(100);
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors retries: 0 (single attempt)', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.get('/api/x', { retries: 0 })).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors retries: 2 (3 attempts)', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    const request = client.get('/api/x', { retries: 2 });
+    const expectation = expect(request).rejects.toThrow('network down');
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('passes retries option through the get() convenience method', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+    fetchMock
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue({ ok: true }) });
+
+    const request = client.get('/api/x', { retries: 1 });
+    const expectation = expect(request).resolves.toEqual({ ok: true });
+
+    await vi.runAllTimersAsync();
+    await expectation;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

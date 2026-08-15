@@ -63,13 +63,15 @@ export class APIClient {
 
   async request<T>(endpoint: string, options: RequestOptions): Promise<T> {
     const url = `${this.config.baseUrl ?? ''}${endpoint}`;
-    const { body, method, headers, signal, timeout = DEFAULT_TIMEOUT } = options;
+    const { body, method, headers, signal, timeout = DEFAULT_TIMEOUT, retries = 2 } = options;
 
     const requestBody = body && method !== 'GET' ? JSON.stringify(body) : undefined;
 
+    const maxAttempts = method === 'GET' ? retries + 1 : 1;
+
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let cleanup = () => {};
       let finalSignal: AbortSignal | undefined;
 
@@ -123,10 +125,15 @@ export class APIClient {
 
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        if (method === 'POST' || method === 'PATCH') {
+        const status = (lastError as { status?: number }).status;
+        const isNetworkError = status === undefined;
+        const isRetryable = isNetworkError || status === 502 || status === 503 || status === 504;
+
+        if (!isRetryable || attempt >= maxAttempts - 1) {
           throw lastError;
         }
-        logger.warn(`API request failed (attempt ${attempt + 1}/3): ${endpoint}`, {
+
+        logger.warn(`API request failed (attempt ${attempt + 1}/${maxAttempts}): ${endpoint}`, {
           error: lastError.message,
         });
       }
