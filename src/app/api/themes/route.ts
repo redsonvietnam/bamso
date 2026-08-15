@@ -5,6 +5,103 @@ import { PRESET_THEMES } from "@/lib/theme/presets";
 import { getCustomThemes, saveCustomThemes } from "@/lib/theme/store";
 import type { CustomTheme, ThemeSpec } from "@/lib/theme/types";
 
+const THEME_TOKEN_KEYS = new Set<keyof ThemeSpec["colors"]>([
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "primary",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "muted",
+  "muted-foreground",
+  "accent",
+  "accent-foreground",
+  "destructive",
+  "destructive-foreground",
+  "border",
+  "input",
+  "ring",
+  "sidebar-background",
+  "sidebar-foreground",
+  "sidebar-primary",
+  "sidebar-primary-foreground",
+  "sidebar-accent",
+  "sidebar-accent-foreground",
+  "sidebar-border",
+  "sidebar-ring",
+  "display-accent",
+  "display-red",
+]);
+
+const CARD_STYLES = new Set<ThemeSpec["cardStyle"]>(["flat", "sketch", "riso", "glass", "bca"]);
+const BUTTON_STYLES = new Set<ThemeSpec["buttonStyle"]>(["solid", "glass", "bca"]);
+const CANVAS_STYLES = new Set<ThemeSpec["canvasStyle"]>(["plain", "mesh", "halftone", "paper-radial"]);
+const HEADER_STYLES = new Set<ThemeSpec["headerStyle"]>(["default", "glass", "bca", "bca-transparent"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function validateColors(value: unknown): ThemeSpec["colors"] | null {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return null;
+
+  for (const [key, color] of Object.entries(value)) {
+    if (!THEME_TOKEN_KEYS.has(key as keyof ThemeSpec["colors"]) || !isNonEmptyString(color)) {
+      return null;
+    }
+  }
+
+  return value as ThemeSpec["colors"];
+}
+
+function validateTheme(body: unknown): CustomTheme | null {
+  if (!isRecord(body)) return null;
+
+  const t = body as Partial<ThemeSpec>;
+  const colors = validateColors(t.colors);
+  if (!isNonEmptyString(t.name)) return null;
+  if (!isNonEmptyString(t.fontSans) || !isNonEmptyString(t.fontDisplay)) return null;
+  if (!isNonEmptyString(t.radius)) return null;
+  if (t.id !== undefined && !isNonEmptyString(t.id)) return null;
+  if (t.cardStyle !== undefined && !CARD_STYLES.has(t.cardStyle)) return null;
+  if (t.buttonStyle !== undefined && !BUTTON_STYLES.has(t.buttonStyle)) return null;
+  if (t.canvasStyle !== undefined && !CANVAS_STYLES.has(t.canvasStyle)) return null;
+  if (t.headerStyle !== undefined && !HEADER_STYLES.has(t.headerStyle)) return null;
+  if (colors === null) return null;
+
+  return {
+    id: t.id ?? "",
+    name: t.name.trim(),
+    builtIn: false,
+    colors,
+    fontSans: t.fontSans,
+    fontDisplay: t.fontDisplay,
+    radius: t.radius,
+    cardStyle: t.cardStyle ?? "flat",
+    buttonStyle: t.buttonStyle ?? "solid",
+    canvasStyle: t.canvasStyle ?? "plain",
+    headerStyle: t.headerStyle ?? "default",
+  };
+}
+
+function slugify(name: string): string {
+  const base = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || `theme-${Date.now()}`;
+}
+
 export async function GET() {
   try {
     const customs = await getCustomThemes();
@@ -22,38 +119,6 @@ async function requireAdmin() {
   const auth = await requireRole("ADMIN");
   if ("error" in auth) return auth.error;
   return null;
-}
-
-function validateTheme(body: unknown): CustomTheme | null {
-  const t = body as Partial<ThemeSpec>;
-  if (typeof t !== "object" || t === null) return null;
-  if (!t.name || typeof t.name !== "string" || !t.name.trim()) return null;
-  if (typeof t.fontSans !== "string" || typeof t.fontDisplay !== "string") return null;
-  if (typeof t.radius !== "string") return null;
-  return {
-    id: t.id && typeof t.id === "string" ? t.id : "",
-    name: t.name.trim(),
-    builtIn: false,
-    colors: t.colors && typeof t.colors === "object" ? (t.colors as ThemeSpec["colors"]) : {},
-    fontSans: t.fontSans,
-    fontDisplay: t.fontDisplay,
-    radius: t.radius,
-    cardStyle: (t.cardStyle as ThemeSpec["cardStyle"]) ?? "flat",
-    buttonStyle: (t.buttonStyle as ThemeSpec["buttonStyle"]) ?? "solid",
-    canvasStyle: (t.canvasStyle as ThemeSpec["canvasStyle"]) ?? "plain",
-    headerStyle: (t.headerStyle as ThemeSpec["headerStyle"]) ?? "default",
-  };
-}
-
-function slugify(name: string): string {
-  const base = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || `theme-${Date.now()}`;
 }
 
 export async function POST(request: Request) {
