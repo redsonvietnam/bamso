@@ -6,10 +6,10 @@ import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
+import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
-/** Strip customerName/phone unless the caller is an authenticated STAFF/ADMIN. */
 function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null }>(
     tickets: T[],
     role: string | null
@@ -26,23 +26,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
         }
 
-        const body = await request.json();
-        const { serviceId, customerName, phone } = body;
+        const parsed = await readJsonObject(request);
+        if (!parsed.ok) return parsed.response;
+        const { serviceId, customerName, phone } = parsed.value;
 
-        if (!serviceId) {
+        if (requiredStringFields(parsed.value, ['serviceId']).length > 0) {
             return NextResponse.json(
-                { error: 'serviceId là bắt buộc', code: 'MISSING_SERVICE_ID' },
+                { error: 'serviceId phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
 
         const ticket = await createTicket({
-            serviceId,
-            customerName,
-            phone,
+            serviceId: serviceId as string,
+            customerName: customerName as string | undefined,
+            phone: phone as string | undefined,
         });
 
-        // Trigger SSE broadcast to update all queue listeners without blocking ticket creation.
         void broadcastQueueUpdate(ticket.serviceId).catch((err) => {
             logger.error('Ticket queue broadcast failed:', err);
         });
@@ -70,25 +70,16 @@ export async function GET(request: Request) {
     try {
         const tickets = await prisma.ticket.findMany({
             where: {
-                createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
+                createdAt: { gte: startOfDay, lte: endOfDay },
                 ...(serviceId && { serviceId }),
                 ...(status && { status }),
             },
-            orderBy: {
-                position: 'asc',
-            },
-            include: {
-                service: true,
-            },
+            orderBy: { position: 'asc' },
+            include: { service: true },
         });
 
         const session = await authenticateOptional();
-        const safeTickets = redactTicketsForRole(tickets, session?.role ?? null);
-
-        return NextResponse.json(safeTickets);
+        return NextResponse.json(redactTicketsForRole(tickets, session?.role ?? null));
     } catch (error) {
         logger.error('Fetch tickets error:', error);
         return NextResponse.json({ error: 'Lỗi lấy danh sách vé', code: 'INTERNAL_ERROR' }, { status: 500 });

@@ -3,23 +3,25 @@ import { completeTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
 
 export async function PUT(request: Request) {
     try {
         const auth = await requireRole('STAFF', 'ADMIN');
         if ('error' in auth) return auth.error;
 
-        const body = await request.json();
-        const { ticketId } = body;
+        const parsed = await readJsonObject(request);
+        if (!parsed.ok) return parsed.response;
+        const { ticketId } = parsed.value;
 
-        if (!ticketId) {
+        if (requiredStringFields(parsed.value, ['ticketId']).length > 0) {
             return NextResponse.json(
-                { error: 'Thiếu thông tin ticketId', code: 'MISSING_TICKET_ID' },
+                { error: 'ticketId phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
 
-        const ticket = await completeTicket(ticketId);
+        const ticket = await completeTicket(ticketId as string);
         if (!ticket) {
             return NextResponse.json(
                 { error: 'Không tìm thấy vé', code: 'NOT_FOUND' },
@@ -28,7 +30,6 @@ export async function PUT(request: Request) {
         }
 
         await broadcastQueueUpdate(ticket.serviceId);
-
         return NextResponse.json(ticket);
     } catch (error) {
         logger.error('Complete ticket error:', error);
