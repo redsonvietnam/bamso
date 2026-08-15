@@ -7,37 +7,54 @@ interface RateLimitConfig {
 }
 
 /**
- * Rate limiter backed by Redis (INCR + EXPIRE).
+ * Atomically increment a fixed-window counter and set its TTL only on the
+ * first request. Resetting EXPIRE on every request would turn a fixed window
+ * into a rolling window that can be kept alive indefinitely by steady traffic.
+ */
+const RATE_LIMIT_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+local maxRequests = tonumber(ARGV[2])
+local remaining = math.max(0, maxRequests - count)
+if count <= maxRequests then
+    return {1, remaining}
+end
+return {0, remaining}
+`;
+
+/**
+ * Rate limiter backed by Redis.
  * Fail-open: if Redis is down, the request is allowed through with a log warning.
- * Skipped entirely if RATE_LIMIT_DISABLED=true.
+ * RATE_LIMIT_DISABLED is honored outside production only.
  */
 export async function checkRateLimit(
     key: string,
     config: RateLimitConfig
 ): Promise<{ allowed: boolean; remaining: number }> {
-    // Allow disabling rate limit via env var (useful for dev/testing)
-    if (process.env.RATE_LIMIT_DISABLED === 'true') {
+    // Never allow a production deployment to accidentally disable protection.
+    if (process.env.RATE_LIMIT_DISABLED === 'true' && process.env.NODE_ENV !== 'production') {
         return { allowed: true, remaining: config.maxRequests };
     }
 
     try {
         const { windowMs, maxRequests } = config;
-        const windowSeconds = Math.ceil(windowMs / 1000);
-        const redisKey = `ratelimit:${key}`;
-
-        const pipeline = redis.pipeline();
-        pipeline.incr(redisKey);
-        pipeline.expire(redisKey, windowSeconds);
-        const results = await pipeline.exec();
-
-        if (!results) {
-            return { allowed: true, remaining: maxRequests };
+        if (windowMs <= 0 || maxRequests <= 0) {
+            throw new Error('Invalid rate limit configuration');
         }
 
-        const count = results[0][1] as number;
-        const remaining = Math.max(0, maxRequests - count);
+        const redisKey = `ratelimit:${key}`;
+        const result = await redis.eval(
+            RATE_LIMIT_SCRIPT,
+            1,
+            redisKey,
+            String(windowMs),
+            String(maxRequests)
+        ) as [number, number];
 
-        return { allowed: count <= maxRequests, remaining };
+        const [allowed, remaining] = result;
+        return { allowed: allowed === 1, remaining };
     } catch (error) {
         // Fail-open: log error and allow request through
         logger.error('Rate limit check failed (fail-open):', error);
@@ -47,6 +64,7 @@ export async function checkRateLimit(
 
 /**
  * Get client IP from request headers.
+ * x-forwarded-for is expected to be supplied by the trusted reverse proxy.
  */
 export function getClientIp(request: Request): string {
     const forwarded = request.headers.get('x-forwarded-for');
