@@ -157,6 +157,25 @@ describe("Theme API runtime validation", () => {
     expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
   });
 
+  it("rejects an import batch when an ID already exists in the DB", async () => {
+    mockedGetCustomThemes.mockResolvedValue([
+      { ...validTheme, id: "existing-id" },
+    ]);
+
+    const response = await POST(
+      request({
+        themes: [
+          { ...validTheme, id: "existing-id" },
+          { ...validTheme, id: "new-id", name: "New Theme" },
+        ],
+      })
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "DUPLICATE_ID" });
+    expect(mockedSaveCustomThemes).not.toHaveBeenCalled();
+  });
+
   it("applies defaults for optional style fields", async () => {
     const payload = { ...validTheme };
     delete (payload as Partial<typeof payload>).cardStyle;
