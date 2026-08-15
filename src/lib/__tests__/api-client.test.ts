@@ -192,6 +192,24 @@ describe('APIClient retry policy', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not retry GET on HTTP 500', async () => {
+    const client = new APIClient();
+    mockFetchStatus(500);
+
+    await expect(client.get('/api/x')).rejects.toMatchObject({ status: 500 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('clamps negative retries to a single attempt', async () => {
+    const client = new APIClient();
+    fetchMock.mockRejectedValue(new Error('network down'));
+
+    await expect(client.get('/api/x', { retries: -3 })).rejects.toThrow('network down');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry POST after network error', async () => {
     const client = new APIClient();
     fetchMock.mockRejectedValue(new Error('network down'));

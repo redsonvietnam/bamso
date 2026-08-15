@@ -67,7 +67,7 @@ export class APIClient {
 
     const requestBody = body && method !== 'GET' ? JSON.stringify(body) : undefined;
 
-    const maxAttempts = method === 'GET' ? retries + 1 : 1;
+    const maxAttempts = method === 'GET' ? Math.max(1, retries + 1) : 1;
 
     let lastError: Error | null = null;
 
