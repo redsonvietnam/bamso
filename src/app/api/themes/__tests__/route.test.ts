@@ -21,6 +21,7 @@ const mockedSaveCustomThemes = vi.mocked(saveCustomThemes);
 
 const validTheme = {
   name: "Test Theme",
+  builtIn: false,
   colors: { primary: "222 68% 25%" },
   fontSans: "Inter",
   fontDisplay: "Inter",
