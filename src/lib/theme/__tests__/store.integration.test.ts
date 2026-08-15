@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import prisma from "@/lib/db";
 import { ThemeConflictError, getCustomThemes, saveCustomThemes } from "@/lib/theme/store";
 
-const describeIntegration = process.env.DATABASE_URL ? describe : describe.skip;
+const describeIntegration = process.env.THEME_DB_INTEGRATION === "1" ? describe : describe.skip;
 
 const theme = (name: string) => [
   {
