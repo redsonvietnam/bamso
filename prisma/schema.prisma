@@ -52,6 +52,7 @@ model Ticket {
   completedAt  DateTime?
 
   @@unique([serviceId, dayKey, ticketNumber])
+  @@unique([serviceId, dayKey, position])
   @@index([serviceId, dayKey, status])
 }
 
