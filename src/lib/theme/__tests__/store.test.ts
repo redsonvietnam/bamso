@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockFindUnique = vi.fn();
-const mockUpsert = vi.fn();
-const mockUpdateMany = vi.fn();
-const mockCreate = vi.fn();
+const { mockFindUnique, mockUpsert, mockUpdateMany, mockCreate } = vi.hoisted(() => ({
+  mockFindUnique: vi.fn(),
+  mockUpsert: vi.fn(),
+  mockUpdateMany: vi.fn(),
+  mockCreate: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   default: {
@@ -54,9 +56,9 @@ describe("saveCustomThemes optimistic locking", () => {
   it("throws ThemeConflictError when the expected snapshot is stale", async () => {
     mockUpdateMany.mockResolvedValue({ count: 0 });
 
-    await expect(saveCustomThemes([...themes], [
-      { ...themes[0], name: "Old" },
-    ])).rejects.toBeInstanceOf(ThemeConflictError);
+    await expect(
+      saveCustomThemes([...themes], [{ ...themes[0], name: "Old" }])
+    ).rejects.toBeInstanceOf(ThemeConflictError);
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
