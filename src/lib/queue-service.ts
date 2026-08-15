@@ -3,6 +3,31 @@ import { TicketStatus } from '@/lib/constants';
 
 const MAX_CALL_RETRIES = 5;
 
+// Serialize call-next operations per counter. This prevents a concurrent request
+// on the same counter from auto-completing the ticket just claimed by the first
+// request. Different counters remain independent and can proceed concurrently.
+const callNextLocks = new Map<string, Promise<void>>();
+
+async function withPosLock<T>(pos: string, fn: () => Promise<T>): Promise<T> {
+    const previous = callNextLocks.get(pos) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+
+    callNextLocks.set(pos, current);
+    await previous;
+
+    try {
+        return await fn();
+    } finally {
+        release();
+        if (callNextLocks.get(pos) === current) {
+            callNextLocks.delete(pos);
+        }
+    }
+}
+
 function getTodayBounds() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -19,78 +44,77 @@ function getDayKey(date: Date): string {
 
 /**
  * Calls the next pending ticket for a given service at a specific counter.
- * Uses conditional updateMany to prevent race conditions (two counters calling same ticket).
+ * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
  */
 export async function callNextTicket(serviceId: string, pos: string) {
-    const { startOfDay, endOfDay } = getTodayBounds();
-    const dayKey = getDayKey(new Date());
+    return withPosLock(pos, async () => {
+        const { startOfDay, endOfDay } = getTodayBounds();
+        const dayKey = getDayKey(new Date());
 
-    for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
-        const result = await prisma.$transaction(async (tx) => {
-            // 1. Auto-complete any active tickets at this counter today
-            await tx.ticket.updateMany({
-                where: {
-                    pos,
-                    status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
-                    dayKey,
-                    createdAt: { gte: startOfDay, lte: endOfDay },
-                },
-                data: {
-                    status: TicketStatus.COMPLETED,
-                    completedAt: new Date(),
-                },
-            });
+        for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
+            const result = await prisma.$transaction(async (tx) => {
+                // 1. Auto-complete any active tickets at this counter today
+                await tx.ticket.updateMany({
+                    where: {
+                        pos,
+                        status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                    },
+                    data: {
+                        status: TicketStatus.COMPLETED,
+                        completedAt: new Date(),
+                    },
+                });
 
-            // 2. Find next pending ticket
-            const nextTicket = await tx.ticket.findFirst({
-                where: {
-                    serviceId,
-                    status: TicketStatus.PENDING,
-                    dayKey,
-                    createdAt: { gte: startOfDay, lte: endOfDay },
-                },
-                orderBy: { position: 'asc' },
-            });
+                // 2. Find next pending ticket
+                const nextTicket = await tx.ticket.findFirst({
+                    where: {
+                        serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                    },
+                    orderBy: { position: 'asc' },
+                });
 
-            if (!nextTicket) {
-                throw new Error('Không còn số thứ tự nào đang chờ cho dịch vụ này.');
+                if (!nextTicket) {
+                    throw new Error('Không còn số thứ tự nào đang chờ cho dịch vụ này.');
+                }
+
+                // 3. Conditional claim: only update if still PENDING
+                const claimResult = await tx.ticket.updateMany({
+                    where: {
+                        id: nextTicket.id,
+                        status: TicketStatus.PENDING,
+                    },
+                    data: {
+                        status: TicketStatus.CALLED,
+                        calledAt: new Date(),
+                        pos,
+                    },
+                });
+
+                // If claim failed (count === 0), another writer grabbed it — retry
+                return claimResult.count === 0
+                    ? { claimed: false as const }
+                    : {
+                          claimed: true as const,
+                          ticket: await tx.ticket.findUnique({
+                              where: { id: nextTicket.id },
+                              include: { service: true },
+                          }),
+                      };
+            }, { timeout: 15000 });
+
+            if (result.claimed) {
+                return result.ticket;
             }
-
-            // 3. Conditional claim: only update if still PENDING (prevents race condition)
-            const claimResult = await tx.ticket.updateMany({
-                where: {
-                    id: nextTicket.id,
-                    status: TicketStatus.PENDING, // Atomic claim condition
-                },
-                data: {
-                    status: TicketStatus.CALLED,
-                    calledAt: new Date(),
-                    pos,
-                },
-            });
-
-            // If claim failed (count === 0), another counter grabbed it — retry
-            if (claimResult.count === 0) {
-                return { claimed: false };
-            }
-
-            // Return the claimed ticket
-            return {
-                claimed: true,
-                ticket: await tx.ticket.findUnique({
-                    where: { id: nextTicket.id },
-                    include: { service: true },
-                }),
-            };
-        }, { timeout: 15000 });
-
-        if (result.claimed) {
-            return result.ticket;
+            // Retry if claim failed.
         }
-        // Retry if claim failed
-    }
 
-    throw new Error('Không thể gọi vé — hệ thống đang quá tải, vui lòng thử lại.');
+        throw new Error('Không thể gọi vé — hệ thống đang quá tải, vui lòng thử lại.');
+    });
 }
 
 /**
