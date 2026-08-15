@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
-import { readJsonObject, requiredPositiveInteger, requiredStringFields } from '@/lib/api-validation';
+import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
 
 export async function POST(request: Request) {
     try {
@@ -16,15 +16,15 @@ export async function POST(request: Request) {
         if (!parsed.ok) return NextResponse.json(await parsed.response.json(), { status: parsed.response.status });
         const { serviceId, pos } = parsed.value;
 
-        const missing = requiredStringFields(parsed.value, ['serviceId']);
-        if (missing.length > 0 || !requiredPositiveInteger(pos)) {
+        const missing = requiredStringFields(parsed.value, ['serviceId', 'pos']);
+        if (missing.length > 0) {
             return NextResponse.json(
-                { error: 'serviceId phải là chuỗi không rỗng và pos phải là số nguyên dương', code: 'INVALID_FIELDS' },
+                { error: 'serviceId và pos phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
 
-        const ticket = await callNextTicket(serviceId as string, pos as number);
+        const ticket = await callNextTicket(serviceId as string, pos as string);
         if (!ticket) {
             return NextResponse.json(
                 { error: 'Không thể gọi vé', code: 'CALL_FAILED' },
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
         await Promise.all([
             broadcastQueueUpdate(ticket.serviceId),
-            broadcastDisplayCall(ticket.ticketNumber, pos as number, ticket.customerName, nextPending?.ticketNumber)
+            broadcastDisplayCall(ticket.ticketNumber, pos as string, ticket.customerName, nextPending?.ticketNumber)
         ]);
 
         return NextResponse.json(ticket);
