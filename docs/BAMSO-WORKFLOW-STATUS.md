@@ -12,14 +12,33 @@
 - **Status:** active WIP / review checkpoint branch
 - **Merge policy:** DO NOT MERGE this branch as part of the PAIRFLOW workflow
 
-## Product foundation already present
+## Current product architecture
 
-The current WIP branch contains the product work from the earlier feature branches, including:
+The current WIP branch is the rebuilt BAMSO queue-management application. The repository README identifies the current stack as:
+
+- Next.js 16 App Router + React 19 + TypeScript strict mode
+- Prisma ORM + PostgreSQL
+- Native Server-Sent Events (SSE) for real-time synchronization
+- JWT authentication using Jose and HttpOnly cookies
+- Zustand for client-side Auth/Queue state
+- Tailwind CSS, Shadcn/UI and related UI tooling
+
+The queue domain uses a `Ticket.position` field for deterministic service order, and the SSE broker broadcasts queue changes to staff, display and tracking clients.
+
+## Historical product foundations already present
+
+The current WIP branch contains product work from earlier feature branches, including:
 
 - `feature/sse-and-parser-fixes` — SSE synchronization and CCCD parser fixes (`bf0887d`)
 - `feature/theme-builder-and-api-timeout` — Theme Builder, display board, and API timeout work (`dbd99a0`)
 
 These are historical feature branches. Their presence in this list does not mean they are currently active workstreams.
+
+## Important documentation correction
+
+Older BAMSO audit/handoff material contains references to an earlier prototype architecture and concepts such as `sanPham`, `restore.json`, React/Zustand/Express/SQLite, etc. Those references are **not the current architecture/status of this WIP branch** and must not be used as the current product description or roadmap.
+
+The current repository evidence does not contain `sanPham` or `restore.json` in the WIP code search, while the current README describes Next.js 16 + Prisma + PostgreSQL. Therefore those prototype references are intentionally excluded from this canonical status document.
 
 ## Hardening / security status
 
