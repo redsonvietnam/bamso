@@ -1,8 +1,28 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateOptional } from '@/lib/api-auth';
+import { UserRole } from '@/lib/constants';
+
+const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
+
+function redactTicket<T extends { customerName?: string | null; phone?: string | null }>(
+    ticket: T,
+    role: string | null
+): T {
+    if (role && STAFF_ROLES.includes(role)) return ticket;
+    const { customerName: _customerName, phone: _phone, ...rest } = ticket;
+    return rest as T;
+}
 
 export async function GET(request: Request) {
+    const ip = getClientIp(request);
+    const { allowed } = await checkRateLimit(`track:${ip}`, RATE_LIMITS.track);
+    if (!allowed) {
+        return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
+    }
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('query');
 
@@ -42,7 +62,8 @@ export async function GET(request: Request) {
             );
         }
 
-        return NextResponse.json(ticket);
+        const session = await authenticateOptional();
+        return NextResponse.json(redactTicket(ticket, session?.role ?? null));
     } catch (error) {
         logger.error('Error tracking ticket:', error);
         return NextResponse.json(

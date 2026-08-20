@@ -60,6 +60,7 @@ export function getClientIp(request: Request): string {
 export const RATE_LIMITS = {
     tts: { windowMs: 60_000, maxRequests: 100 },
     tickets: { windowMs: 60_000, maxRequests: 200 },
+    track: { windowMs: 60_000, maxRequests: 100 },
     auth: { windowMs: 60_000, maxRequests: 50 },
     demoToken: { windowMs: 60_000, maxRequests: 10 },
 } as const;
