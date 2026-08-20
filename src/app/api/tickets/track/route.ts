@@ -7,13 +7,31 @@ import { UserRole } from '@/lib/constants';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
-function redactTicket<T extends { customerName?: string | null; phone?: string | null }>(
-    ticket: T,
-    role: string | null
-): T {
-    if (role && STAFF_ROLES.includes(role)) return ticket;
+type TicketResult = {
+    id: string;
+    ticketNumber: string;
+    dayKey: string;
+    serviceId: string;
+    customerName: string | null;
+    phone: string | null;
+    status: string;
+    position: number;
+    missCount: number;
+    pos: string | null;
+    createdAt: Date;
+    calledAt: Date | null;
+    completedAt: Date | null;
+    service: { id: string; name: string; code: string; color: string; prefix: string; description: string | null; order: number; isActive: boolean; allowedModes: string; createdAt: Date; updatedAt: Date };
+};
+
+type RedactedTicket = Omit<TicketResult, 'customerName' | 'phone'>;
+
+function redactTicket(ticket: TicketResult, role: string | null): RedactedTicket {
+    if (role && STAFF_ROLES.includes(role)) {
+        return ticket;
+    }
     const { customerName: _customerName, phone: _phone, ...rest } = ticket;
-    return rest as T;
+    return rest;
 }
 
 export async function GET(request: Request) {
