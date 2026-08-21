@@ -18,6 +18,7 @@ const PUBLIC_SETTINGS_KEYS = new Set([
     'surface_opacity',
     'font_sans',
     'font_display',
+    'system_theme',
 ]);
 
 export async function GET(request: Request) {

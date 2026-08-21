@@ -25,7 +25,7 @@ export default function ThemeSwitcher() {
     document.documentElement.classList.remove("dark");
   }, []);
 
-  if (pathname?.startsWith("/display")) return null;
+  if (pathname !== "/demo") return null;
 
   // Chờ hydration xong để tránh lệch aria-pressed giữa server/client (next-themes).
   if (!mounted) return null;
