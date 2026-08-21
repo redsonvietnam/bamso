@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { requireRole } from '@/lib/api-auth';
+import { requireRole, authenticate } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+
+const STAFF_READABLE_KEYS = new Set(['counters']);
 
 export async function GET(request: Request) {
     try {
-        const auth = await requireRole('ADMIN');
-        if ('error' in auth) return auth.error;
-
         const { searchParams } = new URL(request.url);
         const key = searchParams.get('key');
+
+        if (key && STAFF_READABLE_KEYS.has(key)) {
+            const auth = await authenticate();
+            if ('error' in auth) return auth.error;
+        } else {
+            const auth = await requireRole('ADMIN');
+            if ('error' in auth) return auth.error;
+        }
 
         if (key) {
             const setting = await prisma.settings.findUnique({
