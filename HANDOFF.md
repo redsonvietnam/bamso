@@ -129,7 +129,7 @@ RATE_LIMIT_DISABLED=false
 4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
 5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
 6.  ✅ ~~**Content-Security-Policy header**~~ trong `next.config.ts`. (P3) — Đã làm, verify header thực tế qua server production.
-7.  ~~**CI/CD**~~ — GitHub Actions `.github/workflows/ci.yml` được mô tả trong Phiên 6d nhưng **thư mục .github/workflows/ không tồn tại trên filesystem**. CI cần được tạo riêng (workstream khác).
+7.  ✅ ~~**CI/CD**~~ — GitHub Actions `.github/workflows/ci.yml` đã được tạo (CR-4). Job `verify`: ubuntu-latest, Node 22, SQLite, pipeline: checkout → setup → npm ci → prisma generate → lint → type-check → test → build.
 8.  ✅ ~~**Xác nhận DB provider**~~ cho production (SQLite vs PostgreSQL) + bật lại `.git`. — SQLite (user quyết định). `.git` đã hoạt động bình thường.
 
 
