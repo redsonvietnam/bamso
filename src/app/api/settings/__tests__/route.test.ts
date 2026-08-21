@@ -13,7 +13,6 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/api-auth', () => ({
     requireRole: vi.fn(),
-    authenticate: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -22,13 +21,12 @@ vi.mock('@/lib/logger', () => ({
 
 import { GET, PUT } from '@/app/api/settings/route';
 import prisma from '@/lib/db';
-import { requireRole, authenticate } from '@/lib/api-auth';
+import { requireRole } from '@/lib/api-auth';
 
 const mockedFindMany = prisma.settings.findMany as unknown as ReturnType<typeof vi.fn>;
 const mockedFindUnique = prisma.settings.findUnique as unknown as ReturnType<typeof vi.fn>;
 const mockedUpsert = prisma.settings.upsert as unknown as ReturnType<typeof vi.fn>;
 const mockedRequireRole = requireRole as unknown as ReturnType<typeof vi.fn>;
-const mockedAuthenticate = authenticate as unknown as ReturnType<typeof vi.fn>;
 
 const mockSettings = [
     { key: 'tts_speed', value: '0.9' },
@@ -39,28 +37,14 @@ function adminAuth() {
     mockedRequireRole.mockResolvedValue({ payload: { userId: 'admin-1', role: 'ADMIN' } });
 }
 
-function staffAuth() {
+function rejectAuth() {
     mockedRequireRole.mockResolvedValue({
         error: NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 }),
     });
 }
 
-function staffAuthenticate() {
-    mockedAuthenticate.mockResolvedValue({ userId: 'staff-1', role: 'STAFF' });
-}
-
-function adminAuthenticate() {
-    mockedAuthenticate.mockResolvedValue({ userId: 'admin-1', role: 'ADMIN' });
-}
-
 function noAuth() {
     mockedRequireRole.mockResolvedValue({
-        error: NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 }),
-    });
-}
-
-function noAuthForAuthenticate() {
-    mockedAuthenticate.mockResolvedValue({
         error: NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 }),
     });
 }
@@ -70,54 +54,101 @@ beforeEach(() => {
 });
 
 describe('GET /api/settings', () => {
-    describe('key=counters (staff-readable)', () => {
-        it('returns 200 for STAFF', async () => {
-            staffAuth();
-            staffAuthenticate();
-            mockedFindUnique.mockResolvedValue({ key: 'counters', value: 'Q1,Q2,Q3' });
-            const req = new Request('http://localhost/api/settings?key=counters');
-            const res = await GET(req) as NextResponse;
-            expect(res.status).toBe(200);
-            const data = await res.json();
-            expect(data).toEqual({ key: 'counters', value: 'Q1,Q2,Q3' });
-        });
+    describe('PUBLIC keys — anonymous access (no auth required)', () => {
+        const publicKeys = [
+            'counters',
+            'agency_name',
+            'thank_you_text',
+            'thank_you_voice_template',
+            'tts_enabled',
+            'tts_speed',
+            'tts_volume',
+            'tts_provider',
+            'tts_edge_voice',
+            'tts_announcement_template',
+            'tts_prepare_template',
+            'surface_opacity',
+            'font_sans',
+            'font_display',
+        ];
 
-        it('returns 200 for ADMIN', async () => {
-            adminAuth();
-            adminAuthenticate();
+        for (const key of publicKeys) {
+            it(`GET ?key=${key} → 200 for anonymous`, async () => {
+                mockedFindUnique.mockResolvedValue({ key, value: 'test-value' });
+                const req = new Request(`http://localhost/api/settings?key=${key}`);
+                const res = await GET(req) as NextResponse;
+                expect(res.status).toBe(200);
+                const data = await res.json();
+                expect(data.key).toBe(key);
+            });
+        }
+
+        it('returns 200 for STAFF (counters)', async () => {
             mockedFindUnique.mockResolvedValue({ key: 'counters', value: 'Q1,Q2' });
             const req = new Request('http://localhost/api/settings?key=counters');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(200);
         });
 
-        it('returns 401 for anonymous', async () => {
-            noAuthForAuthenticate();
-            const req = new Request('http://localhost/api/settings?key=counters');
-            const res = await GET(req) as NextResponse;
-            expect(res.status).toBe(401);
-        });
-    });
-
-    describe('key=other (admin-only)', () => {
-        it('returns 200 for ADMIN', async () => {
+        it('returns 200 for ADMIN (counters)', async () => {
             adminAuth();
-            mockedFindUnique.mockResolvedValue({ key: 'tts_speed', value: '0.9' });
-            const req = new Request('http://localhost/api/settings?key=tts_speed');
+            mockedFindUnique.mockResolvedValue({ key: 'counters', value: 'Q1,Q2' });
+            const req = new Request('http://localhost/api/settings?key=counters');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(200);
         });
 
-        it('returns 403 for STAFF', async () => {
-            staffAuth();
-            const req = new Request('http://localhost/api/settings?key=tts_speed');
+        it('returns null value for missing public key', async () => {
+            mockedFindUnique.mockResolvedValue(null);
+            const req = new Request('http://localhost/api/settings?key=counters');
+            const res = await GET(req) as NextResponse;
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data).toEqual({ key: 'counters', value: null });
+        });
+    });
+
+    describe('ADMIN-only keys', () => {
+        it('skip_rules → 200 for ADMIN', async () => {
+            adminAuth();
+            mockedFindUnique.mockResolvedValue({ key: 'skip_rules', value: '1,3,5,MISSED' });
+            const req = new Request('http://localhost/api/settings?key=skip_rules');
+            const res = await GET(req) as NextResponse;
+            expect(res.status).toBe(200);
+        });
+
+        it('skip_rules → 403 for STAFF', async () => {
+            rejectAuth();
+            const req = new Request('http://localhost/api/settings?key=skip_rules');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(403);
         });
 
-        it('returns 401 for anonymous', async () => {
+        it('skip_rules → 401 for anonymous', async () => {
             noAuth();
-            const req = new Request('http://localhost/api/settings?key=tts_speed');
+            const req = new Request('http://localhost/api/settings?key=skip_rules');
+            const res = await GET(req) as NextResponse;
+            expect(res.status).toBe(401);
+        });
+
+        it('custom_themes → 200 for ADMIN', async () => {
+            adminAuth();
+            mockedFindUnique.mockResolvedValue({ key: 'custom_themes', value: '[]' });
+            const req = new Request('http://localhost/api/settings?key=custom_themes');
+            const res = await GET(req) as NextResponse;
+            expect(res.status).toBe(200);
+        });
+
+        it('custom_themes → 403 for STAFF', async () => {
+            rejectAuth();
+            const req = new Request('http://localhost/api/settings?key=custom_themes');
+            const res = await GET(req) as NextResponse;
+            expect(res.status).toBe(403);
+        });
+
+        it('custom_themes → 401 for anonymous', async () => {
+            noAuth();
+            const req = new Request('http://localhost/api/settings?key=custom_themes');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(401);
         });
@@ -130,10 +161,12 @@ describe('GET /api/settings', () => {
             const req = new Request('http://localhost/api/settings');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data).toEqual(mockSettings);
         });
 
         it('returns 403 for STAFF', async () => {
-            staffAuth();
+            rejectAuth();
             const req = new Request('http://localhost/api/settings');
             const res = await GET(req) as NextResponse;
             expect(res.status).toBe(403);
@@ -177,6 +210,16 @@ describe('PUT /api/settings', () => {
         });
         const res = await PUT(req) as NextResponse;
         expect(res.status).toBe(401);
+    });
+
+    it('returns 403 for STAFF', async () => {
+        rejectAuth();
+        const req = new Request('http://localhost/api/settings', {
+            method: 'PUT',
+            body: JSON.stringify({ key: 'tts_speed', value: '1.0' }),
+        });
+        const res = await PUT(req) as NextResponse;
+        expect(res.status).toBe(403);
     });
 
     it('upserts setting for ADMIN', async () => {
