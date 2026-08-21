@@ -25,13 +25,12 @@ vi.mock('@/lib/logger', () => ({
     logger: { error: vi.fn(), warn: vi.fn(), log: vi.fn(), debug: vi.fn() },
 }));
 
-import { GET, POST, PUT, DELETE } from '@/app/api/staff/route';
+import { GET, POST, DELETE } from '@/app/api/staff/route';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 
 const mockedFindMany = prisma.user.findMany as unknown as ReturnType<typeof vi.fn>;
 const mockedCreate = prisma.user.create as unknown as ReturnType<typeof vi.fn>;
-const mockedUpdate = prisma.user.update as unknown as ReturnType<typeof vi.fn>;
 const mockedDelete = prisma.user.delete as unknown as ReturnType<typeof vi.fn>;
 const mockedFindUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const mockedRequireRole = requireRole as unknown as ReturnType<typeof vi.fn>;

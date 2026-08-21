@@ -30,7 +30,8 @@ function redactTicket(ticket: TicketResult, role: string | null): RedactedTicket
     if (role && STAFF_ROLES.includes(role)) {
         return ticket;
     }
-    const { customerName: _customerName, phone: _phone, ...rest } = ticket;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { customerName, phone, ...rest } = ticket;
     return rest;
 }
 
