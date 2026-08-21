@@ -10,12 +10,19 @@ import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
-function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null }>(
+const ACTIVE_STATUSES = new Set<string>([TicketStatus.CALLED, TicketStatus.IN_PROGRESS]);
+
+function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null; status?: string }>(
     tickets: T[],
     role: string | null
 ) {
     if (role && STAFF_ROLES.includes(role)) return tickets;
-    return tickets.map(({ customerName: _customerName, phone: _phone, ...rest }) => rest);
+    return tickets.map(({ customerName, phone: _phone, status, ...rest }) => {
+        if (status && ACTIVE_STATUSES.has(status)) {
+            return { ...rest, customerName, status };
+        }
+        return rest;
+    });
 }
 
 export async function POST(request: Request) {

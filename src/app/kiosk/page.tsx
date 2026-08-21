@@ -148,9 +148,8 @@ export default function KioskPage() {
                         <div className="min-w-0">
                             <p className="text-lg md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
                             <h1 className="text-2xl md:text-3xl font-black uppercase text-foreground">
-                                CÔNG AN XÃ NÂM NUNG
+                                {agencyName}
                             </h1>
-                            <p className="text-sm text-muted-foreground">{agencyName}</p>
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 text-muted-foreground shrink-0">
