@@ -49,7 +49,6 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     const [previousCalls, setPreviousCalls] = useState<Record<string, { serviceId: string; lostAt: number }>>({});
     const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [agencyName, setAgencyName] = useState('CÔNG AN XÃ NÂM NUNG');
     const [time, setTime] = useState(new Date());
     const reduceMotion = useReducedMotion();
 
@@ -65,10 +64,9 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [settingsData, tickets, agencyData] = await Promise.all([
+                const [settingsData, tickets] = await Promise.all([
                     apiClient.get<{ value: string }>('/api/settings?key=counters').catch(() => ({ value: '' })),
                     apiClient.get<Ticket[]>('/api/tickets').catch(() => [] as Ticket[]),
-                    apiClient.get<{ value: string }>('/api/settings?key=agency_name').catch(() => ({ value: '' })),
                 ]);
 
                 const counterList = settingsData.value
@@ -97,7 +95,6 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                 setCounters(allCounters.length > 0 ? allCounters : ['Quầy số 1', 'Quầy số 2', 'Quầy số 3', 'Quầy số 4']);
                 setCurrentCalls(calls);
                 setAllTickets(tickets);
-                if (agencyData.value) setAgencyName(agencyData.value);
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
             } finally {
@@ -268,11 +265,11 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                     </div>
                     <div className="min-w-0">
                         {compact ? (
-                            <h1 className="text-xs md:text-sm font-black uppercase tracking-wide text-foreground truncate">{agencyName}</h1>
+                            <h1 className="text-xs md:text-sm font-black uppercase tracking-wide text-foreground truncate">CÔNG AN XÃ NÂM NUNG</h1>
                         ) : (
                             <>
                                 <p className="text-lg sm:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">{agencyName}</h1>
+                                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">CÔNG AN XÃ NÂM NUNG</h1>
                             </>
                         )}
                     </div>
