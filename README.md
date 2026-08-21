@@ -43,10 +43,9 @@ Tệp [sse-broker.ts](file:///d:/Bamso/src/lib/sse-broker.ts) quản lý tập t
 ## 🛠️ Cài Đặt & Sử Dụng
 
 ### 1. Thiết lập Biến Môi Trường (`.env`)
-Tạo tệp `.env` tại thư mục gốc:
-```env
-DATABASE_URL="file:./dev.db"
-JWT_SECRET="YOUR_SUPER_SECRET_KEY_FOR_JWT_SIGNING_2026"
+Sao chép `.env.example` thành `.env` và điền giá trị:
+```bash
+cp .env.example .env
 ```
 
 ### 2. Cài đặt Thư viện & Khởi tạo Database

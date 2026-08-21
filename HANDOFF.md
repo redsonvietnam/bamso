@@ -115,7 +115,7 @@ RATE_LIMIT_DISABLED=false
 - Không còn. `npm run lint` sạch (0 error, 0 warning).
 
 **Quyết định cần đưa ra:**
-- Database production: **SQLite** (user đã chốt). `connection_limit=1` serialize toàn bộ写入 tại pool level; `socket_timeout=5` cho SQLite 5s chờ lock trước khi fail.
+- Database production: **SQLite** (user đã chốt). `connection_limit=1` reduces/mitigates SQLITE_BUSY risk for single-instance SQLite deployment by limiting the Prisma connection pool to one connection; `socket_timeout=5` allows SQLite lock waits up to 5 seconds before failing.
 - Redis có cài production không? (chưa chốt)
 - `DEMO_MODE_ENABLED` có bật trên production không? (chưa chốt)
 
