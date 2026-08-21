@@ -5,7 +5,7 @@ import { isSecureCookie } from '@/lib/cookie';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import type { UserRole } from '@/lib/constants';
 
-const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY'] as const;
+const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY', 'ADMIN'] as const;
 
 export async function GET(request: Request) {
     // Block entirely unless DEMO_MODE_ENABLED=true
@@ -26,7 +26,6 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const requestedRole = (searchParams.get('role') || 'STAFF').toUpperCase();
 
-        // NEVER allow ADMIN role through demo-token, even if DEMO_MODE_ENABLED
         const role = DEMO_ALLOWED_ROLES.includes(requestedRole as typeof DEMO_ALLOWED_ROLES[number])
             ? requestedRole
             : 'STAFF';
@@ -35,6 +34,7 @@ export async function GET(request: Request) {
             STAFF: { userId: 'demo-staff', role: 'STAFF' },
             KIOSK: { userId: 'demo-kiosk', role: 'KIOSK' },
             DISPLAY: { userId: 'demo-display', role: 'DISPLAY' },
+            ADMIN: { userId: 'demo-admin', role: 'ADMIN' },
         };
 
         const payload = demoPayloads[role];

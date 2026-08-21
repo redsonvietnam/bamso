@@ -16,7 +16,7 @@ export default function DemoPage() {
     useEffect(() => {
         const setupDemo = async () => {
             const tokens: Record<string, string> = {};
-            for (const role of ['STAFF', 'DISPLAY']) {
+            for (const role of ['STAFF', 'DISPLAY', 'ADMIN']) {
                 try {
                     const data = await apiClient.get<{token:string}>(`/api/demo-token?role=${role}`);
                     tokens[role] = data.token;
