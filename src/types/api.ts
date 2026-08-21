@@ -21,4 +21,6 @@ export type RequestOptions = {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  timeout?: number;
+  retries?: number;
 };

@@ -1,13 +1,13 @@
 # Hệ Thống Quản Lý Hàng Đợi Tự Động (Queue Management System — v1.0)
 
-Chào mừng bạn đến với phiên bản tái cấu trúc hoàn chỉnh (**Rebuild v1.0**) của Hệ thống Quản lý Hàng đợi Tự động. Dự án được phát triển dựa trên **Next.js 16 (App Router)**, **Prisma ORM**, và **PostgreSQL**, loại bỏ hoàn toàn các nợ kỹ thuật từ phiên bản thử nghiệm (prototype) để đem lại hiệu năng tối đa và độ tin cậy tuyệt đối.
+Chào mừng bạn đến với phiên bản tái cấu trúc hoàn chỉnh (**Rebuild v1.0**) của Hệ thống Quản lý Hàng đợi Tự động. Dự án được phát triển dựa trên **Next.js 16 (App Router)**, **Prisma ORM**, và **SQLite**, loại bỏ hoàn toàn các nợ kỹ thuật từ phiên bản thử nghiệm (prototype) để đem lại hiệu năng tối đa và độ tin cậy tuyệt đối.
 
 ---
 
 ## 🚀 Đặc Điểm Nổi Bật & Stack Công Nghệ
 
 *   **Core:** [Next.js 16](https://nextjs.org/) (App Router & React 19) + TypeScript strict mode.
-*   **Database:** PostgreSQL phục vụ lưu trữ giao dịch thực tế kết hợp [Prisma ORM](https://www.prisma.io/).
+*   **Database:** SQLite lưu trữ cục bộ kết hợp [Prisma ORM](https://www.prisma.io/).
 *   **Real-time:** Native Server-Sent Events (SSE) giúp đồng bộ hóa trạng thái hai chiều siêu nhẹ, tự động kết nối lại khi rớt mạng, thay thế cho WebSocket cồng kềnh hoặc Polling gây chậm tải.
 *   **Xác thực bảo mật:** Sử dụng thư viện [Jose](https://github.com/panva/jose) phát hành JWT lưu giữ an toàn trong **HttpOnly Cookie**, chặn hoàn toàn lỗ hổng XSS từ localStorage.
 *   **Quản lý State:** Sử dụng [Zustand](https://zustand-demo.pmnd.rs/) để quản lý trạng thái luồng dữ liệu (Auth & Queue) tập trung tại Client.
@@ -43,10 +43,9 @@ Tệp [sse-broker.ts](file:///d:/Bamso/src/lib/sse-broker.ts) quản lý tập t
 ## 🛠️ Cài Đặt & Sử Dụng
 
 ### 1. Thiết lập Biến Môi Trường (`.env`)
-Tạo tệp `.env` tại thư mục gốc với đường dẫn kết nối PostgreSQL thích hợp (Dự án cục bộ đang chạy trên cổng `5433`):
-```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/queue_system?schema=public"
-JWT_SECRET="YOUR_SUPER_SECRET_KEY_FOR_JWT_SIGNING_2026"
+Sao chép `.env.example` thành `.env` và điền giá trị:
+```bash
+cp .env.example .env
 ```
 
 ### 2. Cài đặt Thư viện & Khởi tạo Database
@@ -55,7 +54,7 @@ Chạy chuỗi lệnh sau để cài đặt và nạp dữ liệu mẫu ban đ�
 # Cài đặt thư viện
 npm install
 
-# Đồng bộ cấu trúc bảng vào PostgreSQL
+# Đồng bộ cấu trúc bảng vào SQLite
 npx prisma db push
 
 # Nạp dữ liệu mẫu (Admin, Staff1, Dịch vụ A, Dịch vụ B, Cấu hình mặc định)
@@ -64,9 +63,8 @@ npx prisma db seed
 
 ### 3. Khởi chạy 1-Click (Dành cho Windows)
 Để thuận tiện cho nhà phát triển, tệp script [run-local.bat](file:///d:/Bamso/run-local.bat) đã được thiết lập. Chỉ cần click đúp vào tệp này:
-1.  Script tự động kiểm tra và khởi động PostgreSQL cục bộ trên cổng `5433` (nếu chưa chạy).
-2.  Khởi chạy Next.js Development Server trên cổng `3000`.
-3.  Tự động mở trình duyệt mặc định truy cập thẳng vào trang **Demo Showcase** (`http://localhost:3000/demo`).
+1.  Khởi chạy Next.js Development Server trên cổng `3000`.
+2.  Tự động mở trình duyệt mặc định truy cập thẳng vào trang **Demo Showcase** (`http://localhost:3000/demo`).
 
 ---
 

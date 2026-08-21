@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AgencyHeader } from "@/components/ui/agency-header";
 
@@ -14,11 +14,15 @@ const HeaderRightContext = createContext<HeaderRightContextValue | null>(null);
 
 export function useHeaderRight(node: ReactNode) {
   const ctx = useContext(HeaderRightContext);
+  const nodeRef = useRef(node);
+  useEffect(() => {
+    nodeRef.current = node;
+  });
   useEffect(() => {
     if (!ctx) return;
-    ctx.setRight(node);
+    ctx.setRight(nodeRef.current);
     return () => ctx.setRight(null);
-  }, [ctx, node]);
+  }, [ctx]);
 }
 
 function HeaderShell({ children }: { children: ReactNode }) {

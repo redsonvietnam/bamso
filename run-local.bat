@@ -8,21 +8,14 @@ echo          KHOI CHAY HE THONG XEP HANG TU DONG (REBUILD v1.0)
 echo =======================================================================
 echo.
 
-:: 1. Kiem tra PostgreSQL tren cong 5433
-echo [1/3] Dang kiem tra PostgreSQL tren cong 5433...
-netstat -ano | findstr :5433 >nul
-if %errorlevel% equ 0 (
-    echo    -^> PostgreSQL dang chay san tren cong 5433. Tiep tuc...
+:: 1. Kiem tra SQLite database
+echo [1/3] Dang kiem tra SQLite database...
+if exist "prisma\dev.db" (
+    echo    -^> SQLite database tim thay. Tiep tuc...
 ) else (
-    echo    -^> PostgreSQL chua chay. Dang khoi dong database...
-    start /B "PostgreSQL Server" "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D d:\Bamso\pgdata > pg_start.log 2>&1
-    timeout /t 3 /nobreak >nul
-    netstat -ano | findstr :5433 >nul
-    if %errorlevel% equ 0 (
-        echo    -^> Khoi dong PostgreSQL thanh cong!
-    ) else (
-        echo    -^> [CANH BAO] Khong the tu dong chay Postgres. Vui long kiem tra pgdata.
-    )
+    echo    -^> Chua co SQLite database. Dang tao moi...
+    npx prisma db push
+    npx prisma db seed
 )
 echo.
 

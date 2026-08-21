@@ -152,7 +152,7 @@ export const PRESET_THEMES: ThemeSpec[] = [
     colors: {
       background: "45 100% 97%",
       foreground: "210 37% 19%",
-      card: "0 0% 100% / 0.92",
+      card: "0 0% 100%",
       "card-foreground": "210 37% 19%",
       primary: "358 79% 47%",
       "primary-foreground": "0 0% 100%",
@@ -184,7 +184,7 @@ export const PRESET_THEMES: ThemeSpec[] = [
     cardStyle: "bca",
     buttonStyle: "bca",
     canvasStyle: "paper-radial",
-    headerStyle: "bca-transparent",
+    headerStyle: "bca",
   },
 ];
 

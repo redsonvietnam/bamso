@@ -1,8 +1,47 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateOptional } from '@/lib/api-auth';
+import { UserRole } from '@/lib/constants';
+
+const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
+
+type TicketResult = {
+    id: string;
+    ticketNumber: string;
+    dayKey: string;
+    serviceId: string;
+    customerName: string | null;
+    phone: string | null;
+    status: string;
+    position: number;
+    missCount: number;
+    pos: string | null;
+    createdAt: Date;
+    calledAt: Date | null;
+    completedAt: Date | null;
+    service: { id: string; name: string; code: string; color: string; prefix: string; description: string | null; order: number; isActive: boolean; allowedModes: string; createdAt: Date; updatedAt: Date };
+};
+
+type RedactedTicket = Omit<TicketResult, 'customerName' | 'phone'>;
+
+function redactTicket(ticket: TicketResult, role: string | null): RedactedTicket {
+    if (role && STAFF_ROLES.includes(role)) {
+        return ticket;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { customerName, phone, ...rest } = ticket;
+    return rest;
+}
 
 export async function GET(request: Request) {
+    const ip = getClientIp(request);
+    const { allowed } = await checkRateLimit(`track:${ip}`, RATE_LIMITS.track);
+    if (!allowed) {
+        return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
+    }
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('query');
 
@@ -42,7 +81,8 @@ export async function GET(request: Request) {
             );
         }
 
-        return NextResponse.json(ticket);
+        const session = await authenticateOptional();
+        return NextResponse.json(redactTicket(ticket, session?.role ?? null));
     } catch (error) {
         logger.error('Error tracking ticket:', error);
         return NextResponse.json(

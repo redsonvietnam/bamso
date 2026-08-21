@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { logger } from '@/lib/logger';
+import { UserRole, type UserRole as UserRoleType } from '@/lib/constants';
 
 const getJwtSecret = () => {
     const secret = process.env.JWT_SECRET;
@@ -9,10 +10,14 @@ const getJwtSecret = () => {
     if (process.env.NODE_ENV === 'production' && secret.length < 32) {
         throw new Error('JWT_SECRET must be at least 32 characters in production');
     }
-    return new TextEncoder().encode(secret);
+    return Buffer.from(secret, 'utf8');
 };
 
-export async function signJWT(payload: { userId: string, role: string }): Promise<string> {
+export function isUserRole(value: unknown): value is UserRoleType {
+    return typeof value === 'string' && Object.values(UserRole).includes(value as UserRoleType);
+}
+
+export async function signJWT(payload: { userId: string, role: UserRoleType }): Promise<string> {
     const JWT_SECRET_BYTES = getJwtSecret();
     return new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
@@ -21,11 +26,14 @@ export async function signJWT(payload: { userId: string, role: string }): Promis
         .sign(JWT_SECRET_BYTES);
 }
 
-export async function verifyJWT(token: string): Promise<{ userId: string, role: string } | null> {
+export async function verifyJWT(token: string): Promise<{ userId: string, role: UserRoleType } | null> {
     const JWT_SECRET_BYTES = getJwtSecret();
     try {
         const { payload } = await jwtVerify(token, JWT_SECRET_BYTES, { algorithms: ['HS256'] });
-        return payload as { userId: string, role: string };
+        if (typeof payload.userId !== 'string' || payload.userId.length === 0 || !isUserRole(payload.role)) {
+            return null;
+        }
+        return { userId: payload.userId, role: payload.role };
     } catch (error) {
         logger.error('JWT verification failed:', error);
         return null;

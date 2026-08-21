@@ -2,19 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, fix]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
   verify:
-    name: Lint + Type-check + Test + Build
     runs-on: ubuntu-latest
 
     env:
-      # JWT_SECRET bắt buộc (app refuse to start without it)
-      JWT_SECRET: ci-only-secret-not-for-production-0123456789abcdef
-      DATABASE_URL: "file:./dev.db?connection_limit=1&socket_timeout=15"
+      DATABASE_URL: "file:./dev.db?socket_timeout=5&connection_limit=1"
+      JWT_SECRET: "ci-test-secret-key-not-for-production-use-xx"
       DEMO_MODE_ENABLED: "false"
       RATE_LIMIT_DISABLED: "false"
 
@@ -41,7 +39,7 @@ jobs:
         run: npm run type-check
 
       - name: Test
-        run: npm test
+        run: npm test -- --run
 
       - name: Build
         run: npm run build

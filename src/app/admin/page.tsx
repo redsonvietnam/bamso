@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/ui/button';
 import { LogOut, Settings, Users, ListChecks, BarChart3, Volume2, Palette } from 'lucide-react';
@@ -28,13 +28,11 @@ export default function AdminPage() {
         window.location.href = '/login';
     }, [logout]);
 
-    const rightHeaderContent = useMemo(() => (
+    useHeaderRight(
         <Button variant="outline" size="sm" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
         </Button>
-    ), [handleLogout]);
-
-    useHeaderRight(rightHeaderContent);
+    );
 
     const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
         { id: 'services', label: 'Dịch vụ', icon: <ListChecks className="w-4 h-4" /> },

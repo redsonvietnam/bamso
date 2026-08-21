@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TtsSliderControl } from '@/components/admin/TtsSliderControl';
 import { toast } from 'sonner';
 import { Check } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
+import { FONT_OPTIONS } from '@/lib/theme/fonts';
 
 export default function SettingsPanel() {
     const [settings, setSettings] = useState<Record<string, string>>({});
@@ -36,8 +40,23 @@ export default function SettingsPanel() {
         try {
             await apiClient.put('/api/settings', { key, value });
             toast.success('Đã lưu cài đặt.');
+            window.dispatchEvent(new Event('bamso:settings-updated'));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi lưu cài đặt.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveFonts = async () => {
+        setIsSaving(true);
+        try {
+            await apiClient.put('/api/settings', { key: 'font_sans', value: settings['font_sans'] || '' });
+            await apiClient.put('/api/settings', { key: 'font_display', value: settings['font_display'] || '' });
+            toast.success('Đã lưu cài đặt phông chữ.');
+            window.dispatchEvent(new Event('bamso:settings-updated'));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi lưu cài đặt phông chữ.');
         } finally {
             setIsSaving(false);
         }
@@ -48,6 +67,58 @@ export default function SettingsPanel() {
     return (
         <div className="space-y-6">
             <h2 className="text-xl font-semibold">Cài đặt hệ thống</h2>
+
+            <TtsSliderControl
+                cardTitle="Độ đục của thẻ / bề mặt"
+                cardDescription="Điều chỉnh độ trong suốt của thẻ (card), nền mờ (muted) và nền phụ (secondary). Càng thấp càng trong suốt, nền trang lọt qua nhiều hơn. Không áp dụng cho theme Glass (luôn giữ hiệu ứng kính mờ)."
+                value={settings['surface_opacity'] || '100'}
+                min="0" max="100" step="5"
+                displayValue={`${settings['surface_opacity'] || '100'}%`}
+                isLoading={isSaving}
+                onValueChange={(val) => setSettings({ ...settings, surface_opacity: val })}
+                onSave={() => handleSave('surface_opacity', settings['surface_opacity'] || '100')}
+            />
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Phông chữ toàn cục</CardTitle>
+                    <CardDescription>
+                        Đè phông chữ cho toàn bộ hệ thống (áp dụng với mọi giao diện, kể cả giao diện mặc định).
+                        Để trống để dùng phông chữ theo từng giao diện.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <Label>Font chữ thường (body)</Label>
+                            <Select value={settings['font_sans'] || 'default'} onValueChange={(v) => setSettings({ ...settings, font_sans: v === 'default' ? '' : v })}>
+                                <SelectTrigger className="mt-1"><SelectValue placeholder="Theo giao diện" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="default">Theo giao diện</SelectItem>
+                                    {FONT_OPTIONS.map((f) => (
+                                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Font chữ tiêu đề (display)</Label>
+                            <Select value={settings['font_display'] || 'default'} onValueChange={(v) => setSettings({ ...settings, font_display: v === 'default' ? '' : v })}>
+                                <SelectTrigger className="mt-1"><SelectValue placeholder="Theo giao diện" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="default">Theo giao diện</SelectItem>
+                                    {FONT_OPTIONS.map((f) => (
+                                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <Button className="mt-4" onClick={handleSaveFonts} disabled={isSaving}>
+                        <Check className="w-4 h-4 mr-1" /> Lưu phông chữ
+                    </Button>
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>

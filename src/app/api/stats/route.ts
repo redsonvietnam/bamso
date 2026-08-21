@@ -4,6 +4,12 @@ import { TicketStatus } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 
+function parseDateParam(value: string): Date | null {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    return d;
+}
+
 export async function GET(request: Request) {
     try {
         const auth = await requireRole('ADMIN');
@@ -11,81 +17,84 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url);
         const dateParam = searchParams.get('date');
+        const fromParam = searchParams.get('from');
+        const toParam = searchParams.get('to');
 
-        const targetDate = dateParam ? new Date(dateParam) : new Date();
-        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-        const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+        let startDate: Date;
+        let endDate: Date;
 
-        // Total tickets today
+        if (fromParam || toParam) {
+            const from = fromParam ? parseDateParam(fromParam) : null;
+            const to = toParam ? parseDateParam(toParam) : null;
+
+            if (fromParam && !from) {
+                return NextResponse.json({ error: 'Invalid from date', code: 'INVALID_DATE' }, { status: 400 });
+            }
+            if (toParam && !to) {
+                return NextResponse.json({ error: 'Invalid to date', code: 'INVALID_DATE' }, { status: 400 });
+            }
+
+            const today = new Date();
+            startDate = from ?? today;
+            endDate = to ?? from ?? today;
+
+            const startNormalized = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const endNormalized = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            if (startNormalized > endNormalized) {
+                return NextResponse.json({ error: 'from must not be after to', code: 'INVALID_RANGE' }, { status: 400 });
+            }
+        } else if (dateParam) {
+            const d = parseDateParam(dateParam);
+            if (!d) {
+                return NextResponse.json({ error: 'Invalid date', code: 'INVALID_DATE' }, { status: 400 });
+            }
+            startDate = d;
+            endDate = d;
+        } else {
+            startDate = new Date();
+            endDate = new Date();
+        }
+
+        const startOfDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const endOfDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
+
         const totalTickets = await prisma.ticket.count({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay } },
         });
 
-        // Completed tickets
         const completedTickets = await prisma.ticket.count({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                status: TicketStatus.COMPLETED,
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.COMPLETED },
         });
 
-        // Missed tickets
         const missedTickets = await prisma.ticket.count({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                status: TicketStatus.MISSED,
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.MISSED },
         });
 
-        // Currently pending
         const pendingTickets = await prisma.ticket.count({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                status: TicketStatus.PENDING,
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.PENDING },
         });
 
-        // Currently being served (CALLED or IN_PROGRESS)
         const activeTickets = await prisma.ticket.count({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] } },
         });
 
-        // Average wait time (from createdAt to completedAt for completed tickets)
         const completedWithTimes = await prisma.ticket.findMany({
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                status: TicketStatus.COMPLETED,
-                completedAt: { not: null },
-            },
-            select: {
-                createdAt: true,
-                completedAt: true,
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.COMPLETED, completedAt: { not: null } },
+            select: { createdAt: true, completedAt: true },
         });
 
         let avgWaitTimeSeconds = 0;
         if (completedWithTimes.length > 0) {
-            const totalWaitMs = completedWithTimes.reduce((sum, t) => {
-                return sum + (t.completedAt!.getTime() - t.createdAt.getTime());
-            }, 0);
+            const totalWaitMs = completedWithTimes.reduce((sum, t) => sum + (t.completedAt!.getTime() - t.createdAt.getTime()), 0);
             avgWaitTimeSeconds = Math.round(totalWaitMs / completedWithTimes.length / 1000);
         }
 
-        // Tickets per hour (for chart)
         const ticketsPerHour = await prisma.ticket.groupBy({
             by: ['createdAt'],
-            where: {
-                createdAt: { gte: startOfDay, lte: endOfDay },
-            },
+            where: { createdAt: { gte: startOfDay, lte: endOfDay } },
             _count: { id: true },
         });
 
-        // Group by hour manually
         const hourMap: Record<number, number> = {};
         for (let h = 0; h < 24; h++) {
             hourMap[h] = 0;
@@ -100,7 +109,6 @@ export async function GET(request: Request) {
             count,
         }));
 
-        // Per-service breakdown
         const services = await prisma.service.findMany({
             where: { isActive: true },
             orderBy: { order: 'asc' },
@@ -114,35 +122,17 @@ export async function GET(request: Request) {
                     prisma.ticket.count({ where: { serviceId: service.id, createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.PENDING } }),
                 ]);
 
-                return {
-                    id: service.id,
-                    name: service.name,
-                    code: service.code,
-                    color: service.color,
-                    total,
-                    completed,
-                    pending,
-                };
+                return { id: service.id, name: service.name, code: service.code, color: service.color, total, completed, pending };
             })
         );
 
         return NextResponse.json({
-            summary: {
-                total: totalTickets,
-                completed: completedTickets,
-                missed: missedTickets,
-                pending: pendingTickets,
-                active: activeTickets,
-                avgWaitTimeSeconds,
-            },
+            summary: { total: totalTickets, completed: completedTickets, missed: missedTickets, pending: pendingTickets, active: activeTickets, avgWaitTimeSeconds },
             hourly: hourlyData,
             services: serviceBreakdown,
         });
     } catch (error) {
         logger.error('Fetch stats error:', error);
-        return NextResponse.json(
-            { error: 'Lỗi lấy thống kê', code: 'INTERNAL_ERROR' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Lỗi lấy thống kê', code: 'INTERNAL_ERROR' }, { status: 500 });
     }
 }

@@ -101,6 +101,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
     const callNext = () => handleAction('/api/queue/call-next', 'POST', { serviceId, pos }, 'Đã gọi số tiếp theo');
     const complete = () => currentTicket && handleAction('/api/queue/complete', 'PUT', { ticketId: currentTicket.id }, 'Đã hoàn thành phục vụ');
     const skip = () => currentTicket && handleAction('/api/queue/skip', 'PUT', { ticketId: currentTicket.id }, 'Đã bỏ qua số thứ tự');
+    const recall = () => handleAction('/api/queue/recall', 'POST', { serviceId, pos }, 'Đã phát lại thông báo');
     const restore = (ticketId: string) => handleAction('/api/queue/restore', 'PUT', { ticketId }, 'Đã khôi phục vé vào hàng đợi');
 
     return (
@@ -149,6 +150,15 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                         disabled={isLoading}
                                     >
                                         <CheckCircle className="mr-2 w-5 h-5" /> Hoàn thành
+                                    </Button>
+                                    <Button
+                                        size="lg"
+                                        variant="outline"
+                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
+                                        onClick={recall}
+                                        disabled={isLoading}
+                                    >
+                                        <Volume2 className="mr-2 w-5 h-5" /> Gọi lại
                                     </Button>
                                     <Button
                                         size="lg"

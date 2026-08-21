@@ -12,6 +12,8 @@ Lý do: Prototype mix Prisma + Supabase client gây conflict và fail silently.
 Đã cân nhắc: Supabase full (Auth + Realtime) — bác vì vendor lock-in,
   Supabase Realtime phức tạp hơn SSE cho use case này
 Ngày: 2026-05-19
+Trạng thái: SUPERSEDED — Rebuild v1.0 chạy trên SQLite (prisma/schema.prisma provider = "sqlite").
+  PostgreSQL/Supabase là plan cũ chưa triển khai. Xem CR-3A reconciliation.
 
 [DECISION #003]
 Quyết định: SSE thay vì WebSocket

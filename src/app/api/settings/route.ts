@@ -3,10 +3,34 @@ import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 
+const PUBLIC_SETTINGS_KEYS = new Set([
+    'counters',
+    'agency_name',
+    'thank_you_text',
+    'thank_you_voice_template',
+    'tts_enabled',
+    'tts_speed',
+    'tts_volume',
+    'tts_provider',
+    'tts_edge_voice',
+    'tts_announcement_template',
+    'tts_prepare_template',
+    'surface_opacity',
+    'font_sans',
+    'font_display',
+]);
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const key = searchParams.get('key');
+
+        if (key && PUBLIC_SETTINGS_KEYS.has(key)) {
+            // Public key — no auth required
+        } else {
+            const auth = await requireRole('ADMIN');
+            if ('error' in auth) return auth.error;
+        }
 
         if (key) {
             const setting = await prisma.settings.findUnique({

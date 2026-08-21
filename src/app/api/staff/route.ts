@@ -5,7 +5,12 @@ import { UserRole } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
+    const auth = await requireRole('ADMIN');
+    if ('error' in auth) {
+        return auth.error as NextResponse;
+    }
+
     try {
         const staff = await prisma.user.findMany({
             where: {
@@ -32,10 +37,12 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
     try {
         const auth = await requireRole('ADMIN');
-        if ('error' in auth) return auth.error;
+        if ('error' in auth) {
+            return auth.error as NextResponse;
+        }
 
         const body = await request.json();
         const { username, password, name, role } = body;
@@ -90,10 +97,12 @@ export async function POST(request: Request) {
     }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: Request): Promise<NextResponse> {
     try {
         const auth = await requireRole('ADMIN');
-        if ('error' in auth) return auth.error;
+        if ('error' in auth) {
+            return auth.error as NextResponse;
+        }
 
         const body = await request.json();
         const { id, password, ...data } = body;
@@ -138,10 +147,12 @@ export async function PUT(request: Request) {
     }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: Request): Promise<NextResponse> {
     try {
         const auth = await requireRole('ADMIN');
-        if ('error' in auth) return auth.error;
+        if ('error' in auth) {
+            return auth.error as NextResponse;
+        }
 
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');

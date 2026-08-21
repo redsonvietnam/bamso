@@ -66,7 +66,7 @@ src/
 # Dev (Windows 1-click)
 run-local.bat
 
-# Dev (thủ công) — cần Postgres chạy trước
+# Dev (thủ công) — SQLite file-based, không cần start DB server
 npm run dev
 
 # DB
@@ -90,7 +90,7 @@ node scratch/e2e-test.mjs
 
 **Biến môi trường cần thiết** (xem `.env.example`):
 ```env
-DATABASE_URL="file:./dev.db?connection_limit=1&socket_timeout=15"  # hoặc postgresql://...
+DATABASE_URL="file:./dev.db?socket_timeout=5&connection_limit=1"  # SQLite busy_timeout=5s
 JWT_SECRET="<>=32 ký tự>"
 # Tùy chọn:
 REDIS_HOST=localhost
@@ -109,13 +109,13 @@ RATE_LIMIT_DISABLED=false
 - **Fix lỗi đồng bộ real-time (SSE):** Đã sửa lỗi mất đồng bộ trên các client khi hot-reload bằng cách quản lý `EventSource` qua biến `global`.
 - **Thống nhất auth `/api/settings`:** `proxy.ts` giờ chặn mọi method khác GET (vd PUT) với session ADMIN; GET vẫn public. Route handler giữ `requireRole` làm lớp phòng thủ kép. (commit `e59ef71`)
 - **Unit test cho `sse-broker.ts`:** 18 test (broadcast theo serviceId, redaction theo role, fail-open Redis, unsubscribe khi enqueue throw). Export class `SSEBroker` để test không phụ thuộc singleton. (commit `75f0d89`)
-- **SQLite `connection_limit=1&socket_timeout=15`:** Thêm vào `DATABASE_URL` trong `.env` local (đã verify kết nối OK). `.env.example` bị `.gitignore` chặn nên config chỉ ghi trong HANDOFF này.
+- **SQLite `busy_timeout` + `connection_limit`:** `DATABASE_URL` thêm `?socket_timeout=5&connection_limit=1` (thực thi trong CR-3B, `.env` hiện có config này). Prisma `socket_timeout` map tới SQLite `busy_timeout` (giây).
 
 **Vấn đề còn tồn tại:**
 - Không còn. `npm run lint` sạch (0 error, 0 warning).
 
 **Quyết định cần đưa ra:**
-- Database production: **SQLite** (user đã chốt). Chú ý: tránh chạy nhiều instance write song song — đã dùng `connection_limit=1&socket_timeout=15`.
+- Database production: **SQLite** (user đã chốt). `connection_limit=1` reduces/mitigates SQLITE_BUSY risk for single-instance SQLite deployment by limiting the Prisma connection pool to one connection; `socket_timeout=5` allows SQLite lock waits up to 5 seconds before failing.
 - Redis có cài production không? (chưa chốt)
 - `DEMO_MODE_ENABLED` có bật trên production không? (chưa chốt)
 
@@ -125,11 +125,11 @@ RATE_LIMIT_DISABLED=false
 
 1.  ✅ ~~**Thống nhất auth `/api/settings`**~~ — Đã làm (P1, commit `e59ef71`).
 2.  ✅ ~~**Viết test cho `sse-broker.ts`**~~ — Đã làm (P2, commit `75f0d89`, 18 test).
-3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?connection_limit=1&socket_timeout=15` vào URL (P2).
+3.  ✅ ~~**SQLite `busy_timeout`**~~ — Đã thêm `?socket_timeout=5&connection_limit=1` vào DATABASE_URL (CR-3B).
 4.  ✅ ~~**Cookie `secure` flag không nhất quán**~~ — Đã làm (P2): helper `isSecureCookie()` trong `src/lib/cookie.ts`.
 5.  ✅ ~~**Fix 5 lỗi lint pre-existing**~~ trong `src/app/(public)/get-ticket/page.tsx`. (P3) — Đã làm, `npm run lint` sạch 100%.
 6.  ✅ ~~**Content-Security-Policy header**~~ trong `next.config.ts`. (P3) — Đã làm, verify header thực tế qua server production.
-7.  ✅ ~~**CI/CD**~~ — GitHub Actions hoặc husky + lint-staged. (P3) — Đã làm: GitHub Actions `.github/workflows/ci.yml`.
+7.  ✅ ~~**CI/CD**~~ — GitHub Actions `.github/workflows/ci.yml` đã được tạo (CR-4). Job `verify`: ubuntu-latest, Node 22, SQLite, pipeline: checkout → setup → npm ci → prisma generate → lint → type-check → test → build.
 8.  ✅ ~~**Xác nhận DB provider**~~ cho production (SQLite vs PostgreSQL) + bật lại `.git`. — SQLite (user quyết định). `.git` đã hoạt động bình thường.
 
 

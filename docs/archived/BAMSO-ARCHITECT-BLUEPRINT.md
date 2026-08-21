@@ -89,7 +89,7 @@
 │  └─ Automatic reconnection handling         │
 │                                              │
 │  Database Layer                              │
-│  ├─ Prisma ORM (SQLite → PostgreSQL ready) │
+│  ├─ Prisma ORM (SQLite — PostgreSQL là plan cũ) │
 │  ├─ Migration scripts                       │
 │  ├─ Data validation schemas                 │
 │  └─ Query optimization                      │

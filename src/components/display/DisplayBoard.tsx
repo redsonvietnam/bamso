@@ -36,7 +36,12 @@ declare global {
     var displayBoard_queueEventSource: EventSource | undefined;
 }
 
-export default function DisplayBoard() {
+interface DisplayBoardProps {
+    variant?: 'full' | 'compact';
+}
+
+export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
+    const compact = variant === 'compact';
     const [currentCalls, setCurrentCalls] = useState<Record<string, CurrentCall>>({});
     const [counters, setCounters] = useState<string[]>([]);
     const [allTickets, setAllTickets] = useState<Ticket[]>([]);
@@ -44,6 +49,7 @@ export default function DisplayBoard() {
     const [previousCalls, setPreviousCalls] = useState<Record<string, { serviceId: string; lostAt: number }>>({});
     const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [agencyName, setAgencyName] = useState('CÔNG AN XÃ NÂM NUNG');
     const [time, setTime] = useState(new Date());
     const reduceMotion = useReducedMotion();
 
@@ -59,9 +65,10 @@ export default function DisplayBoard() {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [settingsData, tickets] = await Promise.all([
+                const [settingsData, tickets, agencyData] = await Promise.all([
                     apiClient.get<{ value: string }>('/api/settings?key=counters').catch(() => ({ value: '' })),
                     apiClient.get<Ticket[]>('/api/tickets').catch(() => [] as Ticket[]),
+                    apiClient.get<{ value: string }>('/api/settings?key=agency_name').catch(() => ({ value: '' })),
                 ]);
 
                 const counterList = settingsData.value
@@ -90,6 +97,7 @@ export default function DisplayBoard() {
                 setCounters(allCounters.length > 0 ? allCounters : ['Quầy số 1', 'Quầy số 2', 'Quầy số 3', 'Quầy số 4']);
                 setCurrentCalls(calls);
                 setAllTickets(tickets);
+                if (agencyData.value) setAgencyName(agencyData.value);
             } catch (error) {
                 logger.error('Error fetching initial data for display:', error);
             } finally {
@@ -247,32 +255,40 @@ export default function DisplayBoard() {
     const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <div className="relative flex flex-col h-screen w-screen bg-background text-foreground font-sans overflow-hidden selection:bg-[color:var(--display-accent-20)]">
+        <div className={`relative flex flex-col ${compact ? 'h-full w-full' : 'h-screen w-screen'} bg-background text-foreground font-sans overflow-hidden selection:bg-[color:var(--display-accent-20)]`}>
             {/* Brand accent line */}
             <div className="absolute top-0 left-0 w-full h-2 bg-[color:var(--display-red)]" />
             <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.15]" />
 
-            <header className="header-chrome relative z-10 flex items-center justify-between gap-6 px-8 md:px-12 py-4 bg-white/80 backdrop-blur-sm border-b border-border shadow-sm">
-                <div className="flex items-center gap-5 min-w-0">
-                    <div className="h-28 w-28 shrink-0 overflow-hidden rounded-full">
+            <header className={`header-chrome relative z-10 flex items-center justify-between gap-4 md:gap-6 ${compact ? 'px-3 md:px-5 py-2 md:py-3' : 'px-8 md:px-12 py-4'} bg-white/80 backdrop-blur-sm border-b border-border shadow-sm`}>
+                <div className="flex items-center gap-3 md:gap-5 min-w-0">
+                    <div className={`${compact ? 'h-10 w-10 md:h-12 md:w-12' : 'h-28 w-28'} shrink-0 overflow-hidden rounded-full`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-lg sm:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">CÔNG AN XÃ NÂM NUNG</h1>
+                        {compact ? (
+                            <h1 className="text-xs md:text-sm font-black uppercase tracking-wide text-foreground truncate">{agencyName}</h1>
+                        ) : (
+                            <>
+                                <p className="text-lg sm:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">{agencyName}</h1>
+                            </>
+                        )}
                     </div>
                 </div>
-                <div className="flex items-center gap-6 shrink-0">
-                    <div className={`flex items-center gap-2 sticker px-3 py-1 rounded-full border transition-colors ${isConnected ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)]' : 'bg-red-50 border-red-300'}`}>
-                        <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-[color:var(--display-accent)] animate-pulse' : 'bg-red-500'}`} />
-                        <span className={`text-xs font-bold uppercase tracking-widest ${isConnected ? 'text-foreground' : 'text-red-600'}`}>
+                <div className={`flex items-center gap-3 md:gap-6 shrink-0 ${compact ? 'min-w-0' : ''}`}>
+                    <div className={`flex items-center gap-2 sticker rounded-full border transition-colors ${compact ? 'px-2 py-0.5' : 'px-3 py-1'} ${isConnected ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)]' : 'bg-red-50 border-red-300'}`}>
+                        <span className={`inline-block rounded-full ${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} ${isConnected ? 'bg-[color:var(--display-accent)] animate-pulse' : 'bg-red-500'}`} />
+                        <span className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'} font-bold uppercase tracking-widest ${isConnected ? 'text-foreground' : 'text-red-600'}`}>
                             {isConnected ? 'Hệ thống trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
-                    <div className="text-right">
-                        <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Hệ thống lấy số dịch vụ công</p>
-                        <p className="text-2xl font-mono font-bold text-foreground">{timeStr}</p>
+                    <div className={`text-right ${compact ? 'min-w-0' : ''}`}>
+                        {!compact && (
+                            <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Hệ thống lấy số dịch vụ công</p>
+                        )}
+                        <p className={`${compact ? 'text-base md:text-lg' : 'text-2xl'} font-mono font-bold text-foreground`}>{timeStr}</p>
                     </div>
                 </div>
             </header>
@@ -284,28 +300,28 @@ export default function DisplayBoard() {
                 </div>
             )}
 
-            <main className="relative z-10 flex-1 p-8 overflow-y-auto">
+            <main className={`relative z-10 flex-1 ${compact ? 'p-3 md:p-4' : 'p-8'} overflow-y-auto`}>
                 {isLoading ? (
-                    <div className="flex h-full flex-col gap-8">
-                        <div className="rounded-[28px] bg-card border border-border p-12 animate-pulse">
+                    <div className={`flex h-full flex-col ${compact ? 'gap-3' : 'gap-8'}`}>
+                        <div className={`rounded-[28px] bg-card border border-border animate-pulse ${compact ? 'p-6' : 'p-12'}`}>
                             <div className="mx-auto h-6 w-40 rounded-full bg-muted-foreground/15" />
-                            <div className="mx-auto mt-8 h-40 w-72 rounded-3xl bg-muted-foreground/15" />
+                            <div className={`mx-auto mt-6 rounded-3xl bg-muted-foreground/15 ${compact ? 'h-20 w-44' : 'mt-8 h-40 w-72'}`} />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        <div className={`grid grid-cols-1 gap-3 ${compact ? '' : 'md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6'}`}>
                             {[0, 1, 2, 3].map(i => (
-                                <div key={i} className="overflow-hidden rounded-[24px] border-2 border-border bg-card animate-pulse">
+                                <div key={i} className={`overflow-hidden rounded-[24px] border-2 border-border bg-card animate-pulse ${compact ? 'py-3' : ''}`}>
                                     <div className="h-1.5 bg-muted-foreground/15" />
                                     <div className="flex items-center gap-3 px-6 pt-6 pb-5 border-b border-border">
-                                        <div className="w-10 h-10 rounded-xl bg-muted-foreground/15" />
-                                        <div className="h-4 w-28 rounded-full bg-muted-foreground/15" />
+                                        <div className={`rounded-xl bg-muted-foreground/15 ${compact ? 'w-7 h-7' : 'w-10 h-10'}`} />
+                                        <div className={`rounded-full bg-muted-foreground/15 ${compact ? 'h-3 w-20' : 'h-4 w-28'}`} />
                                     </div>
-                                    <div className="flex flex-col items-center justify-center px-6 py-8 min-h-[170px] space-y-4">
-                                        <div className="mx-auto h-16 w-36 rounded-2xl bg-muted-foreground/15" />
-                                        <div className="h-4 w-24 rounded-full bg-muted-foreground/15" />
+                                    <div className={`flex flex-col items-center justify-center px-6 space-y-4 ${compact ? 'py-5 min-h-[110px]' : 'py-8 min-h-[170px]'}`}>
+                                        <div className={`rounded-2xl bg-muted-foreground/15 ${compact ? 'h-10 w-24' : 'mx-auto h-16 w-36'}`} />
+                                        <div className={`rounded-full bg-muted-foreground/15 ${compact ? 'h-3 w-16' : 'h-4 w-24'}`} />
                                     </div>
                                     <div className="px-6 py-5 border-t border-border bg-muted/50 flex items-center justify-between">
-                                        <div className="h-4 w-20 rounded-full bg-muted-foreground/15" />
-                                        <div className="h-6 w-8 rounded-md bg-muted-foreground/15" />
+                                        <div className={`rounded-full bg-muted-foreground/15 ${compact ? 'h-3 w-14' : 'h-4 w-20'}`} />
+                                        <div className={`rounded-md bg-muted-foreground/15 ${compact ? 'h-5 w-7' : 'h-6 w-8'}`} />
                                     </div>
                                 </div>
                             ))}
@@ -321,27 +337,27 @@ export default function DisplayBoard() {
                                     initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 20 }}
                                     animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
                                     exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.1 }}
-                                    className="mb-12 relative"
+                                    className={compact ? 'mb-3' : 'mb-12 relative'}
                                 >
-                                    <div className="relative flex flex-col items-center justify-center p-12 rounded-[28px] bg-card border-4 border-[color:var(--display-accent)] shadow-[0_20px_50px_var(--display-accent-15)]">
-                                        <div className="flex items-center gap-3 mb-4">
+                                    <div className={`relative flex flex-col items-center justify-center bg-card border-4 border-[color:var(--display-accent)] shadow-[0_20px_50px_var(--display-accent-15)] ${compact ? 'p-4 md:p-5 rounded-2xl' : 'p-12 rounded-[28px]'}`}>
+                                        <div className="flex items-center gap-3 mb-2">
                                             <span className="relative flex items-center justify-center">
-                                                <Bell className="w-6 h-6 text-[color:var(--display-accent)] animate-ring" aria-hidden="true" />
+                                                <Bell className={`text-[color:var(--display-accent)] animate-ring ${compact ? 'w-4 h-4' : 'w-6 h-6'}`} aria-hidden="true" />
                                             </span>
-                                            <span className="text-foreground uppercase tracking-[0.3em] font-black text-sm">Đang gọi số</span>
+                                            <span className={`text-foreground uppercase tracking-[0.3em] font-black ${compact ? 'text-[10px] md:text-xs' : 'text-sm'}`}>Đang gọi số</span>
                                         </div>
-                                        <p className="font-display text-[12rem] font-semibold tracking-tight leading-none text-foreground">
+                                        <p className={`font-display font-semibold tracking-tight leading-none text-foreground ${compact ? 'text-5xl md:text-7xl' : 'text-[12rem]'}`}>
                                             {lastCalledTicket.ticketNumber}
                                         </p>
-                                        <div className="flex items-center gap-12 mt-6">
+                                        <div className={`flex items-center ${compact ? 'gap-4 md:gap-6 mt-2' : 'gap-12 mt-6'}`}>
                                             <div className="text-center">
-                                                <p className="text-muted-foreground uppercase text-xs font-bold tracking-widest mb-1">Vị trí</p>
-                                                <p className="text-5xl font-bold text-foreground">{lastCalledTicket.pos}</p>
+                                                <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Vị trí</p>
+                                                <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.pos}</p>
                                             </div>
-                                            <div className="w-px h-12 bg-border" />
+                                            <div className={`w-px bg-border ${compact ? 'h-8' : 'h-12'}`} />
                                             <div className="text-center">
-                                                <p className="text-muted-foreground uppercase text-xs font-bold tracking-widest mb-1">Khách hàng</p>
-                                                <p className="text-5xl font-bold text-foreground">{lastCalledTicket.customerName || 'Quý khách'}</p>
+                                                <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Khách hàng</p>
+                                                <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.customerName || 'Quý khách'}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -349,7 +365,7 @@ export default function DisplayBoard() {
                             )}
                         </AnimatePresence>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        <div className={`grid gap-6 ${compact ? 'grid-cols-1 gap-3' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'}`}>
                             {counterDisplayList.map(({ pos, call, serviceId, isActive, isHighlighted, isBetweenCalls, waitingCount, nextWaiting }, index) => (
                                 <motion.div
                                     key={pos}
@@ -370,13 +386,12 @@ export default function DisplayBoard() {
                                     `}>
                                         <div className={`absolute top-0 left-0 right-0 h-1.5 ${isActive ? 'bg-[color:var(--display-accent)]' : isBetweenCalls ? 'bg-amber-400' : 'bg-muted'}`} />
 
-                                        <div className="flex items-center justify-between px-6 pt-6 pb-5 border-b border-border">
+                                        <div className={`flex items-center justify-between border-b border-border ${compact ? 'px-4 pt-4 pb-3' : 'px-6 pt-6 pb-5'}`}>
                                             <div className="flex items-center gap-3">
-                                                <span className={`flex items-center justify-center w-10 h-10 rounded-xl text-lg font-black
-                                                    ${isActive ? 'bg-[color:var(--display-accent-15)] text-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                                <span className={`flex items-center justify-center rounded-xl font-black ${compact ? 'w-7 h-7 text-xs' : 'w-10 h-10 text-lg'} ${isActive ? 'bg-[color:var(--display-accent-15)] text-foreground' : 'bg-muted text-muted-foreground'}`}>
                                                     {index + 1}
                                                 </span>
-                                                <span className="text-base font-black uppercase tracking-widest text-foreground">
+                                                <span className={`font-black uppercase tracking-widest text-foreground ${compact ? 'text-sm' : 'text-base'}`}>
                                                     {pos}
                                                 </span>
                                             </div>
@@ -385,57 +400,57 @@ export default function DisplayBoard() {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-col items-center justify-center px-6 py-8 min-h-[170px] flex-1">
+                                        <div className={`flex flex-col items-center justify-center flex-1 ${compact ? 'px-4 py-5 min-h-[110px]' : 'px-6 py-8 min-h-[170px]'}`}>
                                             {isActive && call ? (
                                                 <>
-                                                    <p className="font-display text-7xl font-semibold tracking-tight leading-none text-foreground mb-2">
+                                                    <p className={`font-display font-semibold tracking-tight leading-none text-foreground mb-2 ${compact ? 'text-4xl md:text-5xl' : 'text-7xl'}`}>
                                                         {call.ticketNumber}
                                                     </p>
-                                                    <p className="text-sm font-bold uppercase tracking-wider text-foreground">
+                                                    <p className={`font-bold uppercase tracking-wider text-foreground ${compact ? 'text-[10px] md:text-xs' : 'text-sm'}`}>
                                                         Đang phục vụ
                                                     </p>
                                                 </>
                                             ) : isBetweenCalls ? (
                                                 <div className="flex flex-col items-center gap-3">
-                                                    <span className="inline-flex items-center gap-1.5 sticker rounded-full bg-amber-50 border border-amber-300 px-4 py-1.5">
-                                                        <Clock className="w-4 h-4 text-amber-600" aria-hidden="true" />
-                                                        <span className="text-sm font-bold text-amber-700">Sắp gọi tiếp</span>
+                                                    <span className={`inline-flex items-center gap-1.5 sticker rounded-full bg-amber-50 border border-amber-300 ${compact ? 'px-2.5 py-1' : 'px-4 py-1.5'}`}>
+                                                        <Clock className={`text-amber-600 ${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} aria-hidden="true" />
+                                                        <span className={`font-bold text-amber-700 ${compact ? 'text-[10px] md:text-xs' : 'text-sm'}`}>Sắp gọi tiếp</span>
                                                     </span>
-                                                    <p className="text-base text-muted-foreground font-medium">Đang chuẩn bị...</p>
+                                                    <p className={`text-muted-foreground font-medium ${compact ? 'text-xs' : 'text-base'}`}>Đang chuẩn bị...</p>
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center gap-2">
-                                                    <span className="flex h-3 w-3 rounded-full bg-muted-foreground/20" />
-                                                    <p className="text-lg text-muted-foreground font-medium">Hiện đang rảnh</p>
+                                                    <span className={`rounded-full bg-muted-foreground/20 ${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />
+                                                    <p className={`text-muted-foreground font-medium ${compact ? 'text-sm' : 'text-lg'}`}>Hiện đang rảnh</p>
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="px-6 py-5 border-t border-border bg-muted/50">
+                                        <div className={`border-t border-border bg-muted/50 ${compact ? 'px-4 py-3' : 'px-6 py-5'}`}>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                                    <Users className="w-4 h-4" aria-hidden="true" />
-                                                    <span className="text-xs font-bold uppercase tracking-tighter">Đang chờ</span>
+                                                    <Users className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} aria-hidden="true" />
+                                                    <span className={`font-bold uppercase tracking-tighter ${compact ? 'text-[10px]' : 'text-xs'}`}>Đang chờ</span>
                                                 </div>
-                                                <span className="text-xl font-mono font-bold text-foreground">
+                                                <span className={`font-mono font-bold text-foreground ${compact ? 'text-lg' : 'text-xl'}`}>
                                                     {waitingCount}
                                                 </span>
                                             </div>
                                             {serviceId && nextWaiting.length > 0 && (
-                                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <div className={`flex flex-wrap items-center gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
                                                     <span className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground">
                                                         Sắp gọi
                                                     </span>
                                                     {nextWaiting.map(t => (
                                                         <span
                                                             key={t.id}
-                                                            className="inline-flex items-center rounded-lg border border-border bg-muted px-2.5 py-1 font-mono text-sm font-bold text-foreground"
+                                                            className={`inline-flex items-center rounded-lg border border-border bg-muted font-mono font-bold text-foreground ${compact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'}`}
                                                         >
                                                             {t.ticketNumber}
                                                         </span>
                                                     ))}
                                                     {waitingCount > nextWaiting.length && (
-                                                        <span className="text-xs font-semibold text-muted-foreground">
+                                                        <span className={`font-semibold text-muted-foreground ${compact ? 'text-[10px]' : 'text-xs'}`}>
                                                             +{waitingCount - nextWaiting.length}
                                                         </span>
                                                     )}

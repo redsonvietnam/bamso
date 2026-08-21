@@ -13,7 +13,7 @@ The system currently possesses architectural vulnerabilities related to real-tim
 ### R2: Database Query Optimization
 - Queue status updates must be fetched efficiently from the database.
 - **Current Fail:** `broadcastQueueUpdateLocal` fetches all tickets for the day and filters them using `.filter()` in JavaScript (O(N)).
-- **Requirement:** Filter by `serviceId` directly in the PostgreSQL query.
+- **Requirement:** Filter by `serviceId` directly in the database query.
 
 ### R3: API Idempotency & Safe Retries
 - The API client must not cause duplicate data creation during network retries.
