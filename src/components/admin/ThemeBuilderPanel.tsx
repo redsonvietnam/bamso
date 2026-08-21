@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, Eye, Pencil, Download, Upload, Check } from "lucide-react";
+import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, Download, Upload, Check } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useThemes } from "@/lib/theme/use-themes";
 import type { CustomTheme, ThemeSpec } from "@/lib/theme/types";
@@ -54,32 +54,69 @@ export default function ThemeBuilderPanel() {
   const [editing, setEditing] = useState<CustomTheme | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [previewActive, setPreviewActive] = useState(false);
+  const previousThemeRef = useRef<ThemeSpec | null>(null);
 
   const all = useMemo(() => [...presets, ...customs], [presets, customs]);
 
   const startNew = () => {
     setEditing(emptyTheme());
     setIsNew(true);
+    setPreviewActive(false);
   };
 
   const startClone = (base: ThemeSpec) => {
     setEditing(cloneFrom(base, `${base.name} bản sao`));
     setIsNew(true);
+    setPreviewActive(false);
   };
 
   const startEdit = (theme: CustomTheme) => {
     setEditing({ ...theme, colors: { ...theme.colors } });
     setIsNew(false);
+    setPreviewActive(false);
   };
 
   const stopEdit = () => {
     setEditing(null);
+    setPreviewActive(false);
     clearTheme();
   };
 
-  const preview = () => {
-    if (editing) applyTheme(editing);
-  };
+  const startPreview = useCallback(() => {
+    if (!editing) return;
+    const root = document.documentElement;
+    const currentStyles: Record<string, string> = {};
+    for (const key of Object.keys(root.style)) {
+      currentStyles[key] = root.style.getPropertyValue(key);
+    }
+    previousThemeRef.current = {
+      id: "previous",
+      name: "Previous",
+      builtIn: false,
+      colors: {},
+      fontSans: "inter",
+      fontDisplay: "inter",
+      radius: "0.625rem",
+      cardStyle: "flat",
+      buttonStyle: "solid",
+      canvasStyle: "plain",
+      headerStyle: "default",
+    };
+    applyTheme(editing);
+    setPreviewActive(true);
+    toast.info("Đang xem trước. Thoát để quay lại giao diện đã lưu.");
+  }, [editing]);
+
+  const stopPreview = useCallback(() => {
+    if (previousThemeRef.current) {
+      applyTheme(previousThemeRef.current);
+    } else {
+      clearTheme();
+    }
+    setPreviewActive(false);
+    previousThemeRef.current = null;
+  }, []);
 
   const handleSave = async () => {
     if (!editing || !editing.name.trim()) {
@@ -182,8 +219,10 @@ export default function ThemeBuilderPanel() {
           theme={editing}
           isNew={isNew}
           saving={saving}
+          previewActive={previewActive}
           onChange={setEditing}
-          onPreview={preview}
+          onPreview={startPreview}
+          onStopPreview={stopPreview}
           onSave={handleSave}
           onCancel={stopEdit}
         />
@@ -254,16 +293,20 @@ function ThemeEditor({
   theme,
   isNew,
   saving,
+  previewActive,
   onChange,
   onPreview,
+  onStopPreview,
   onSave,
   onCancel,
 }: {
   theme: CustomTheme;
   isNew: boolean;
   saving: boolean;
+  previewActive: boolean;
   onChange: (t: CustomTheme) => void;
   onPreview: () => void;
+  onStopPreview: () => void;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -275,7 +318,7 @@ function ThemeEditor({
         <CardHeader>
           <CardTitle>{isNew ? "Giao diện mới" : `Chỉnh sửa: ${theme.name}`}</CardTitle>
           <CardDescription>
-            Chỉnh màu, font, bo góc và phong cách thành phần. Bấm <b>Xem trước</b> để áp dụng ngay lên trang.
+            Chỉnh màu, font, bo góc và phong cách thành phần. Bấm <b>Xem trước</b> để áp dụng ngay lên trang mà không lưu.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -402,9 +445,15 @@ function ThemeEditor({
             <CardTitle>Thao tác</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button className="w-full" onClick={onPreview}>
-              <Eye className="w-4 h-4 mr-1" /> Xem trước
-            </Button>
+            {previewActive ? (
+              <Button className="w-full" variant="outline" onClick={onStopPreview}>
+                <EyeOff className="w-4 h-4 mr-1" /> Thoát xem trước
+              </Button>
+            ) : (
+              <Button className="w-full" onClick={onPreview}>
+                <Eye className="w-4 h-4 mr-1" /> Xem trước
+              </Button>
+            )}
             <Button className="w-full" variant="default" onClick={onSave} disabled={saving}>
               <Check className="w-4 h-4 mr-1" /> {isNew ? "Tạo giao diện" : "Lưu thay đổi"}
             </Button>
@@ -413,9 +462,15 @@ function ThemeEditor({
             </Button>
           </CardContent>
         </Card>
-        <p className="text-sm text-muted-foreground px-2">
-          Giao diện được lưu trong cài đặt hệ thống và áp dụng cho toàn bộ máy. Có thể xem trước trước khi lưu.
-        </p>
+        {previewActive ? (
+          <p className="text-sm text-primary font-medium px-2">
+            Đang xem trước giao diện. Bấm &quot;Thoát xem trước&quot; để quay lại.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground px-2">
+            Giao diện được lưu trong cài đặt hệ thống và áp dụng cho toàn bộ máy. Có thể xem trước trước khi lưu.
+          </p>
+        )}
       </div>
     </div>
   );
