@@ -20,16 +20,21 @@ type StatsData = {
     services: { id: string; name: string; code: string; color: string; total: number; completed: number; pending: number }[];
 };
 
+function todayStr() {
+    return new Date().toISOString().split('T')[0];
+}
+
 export default function StatsPanel() {
     const [stats, setStats] = useState<StatsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [fromDate, setFromDate] = useState(todayStr());
+    const [toDate, setToDate] = useState(todayStr());
 
     useEffect(() => {
         const fetchStats = async () => {
             setIsLoading(true);
             try {
-                const data = await apiClient.get<StatsData>(`/api/stats?date=${selectedDate}`);
+                const data = await apiClient.get<StatsData>(`/api/stats?from=${fromDate}&to=${toDate}`);
                 setStats(data);
             } catch (error) {
                 logger.error('Error fetching stats:', error);
@@ -39,7 +44,7 @@ export default function StatsPanel() {
         };
 
         fetchStats();
-    }, [selectedDate]);
+    }, [fromDate, toDate]);
 
     const formatWaitTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -54,20 +59,36 @@ export default function StatsPanel() {
         { name: 'Nhỡ lượt', value: stats.summary.missed, color: '#ef4444' },
     ].filter(d => d.value > 0) : [];
 
+    const dateRangeLabel = fromDate === toDate
+        ? fromDate
+        : `${fromDate} → ${toDate}`;
+
     if (isLoading) return <p className="text-muted-foreground">Đang tải thống kê...</p>;
     if (!stats) return <p className="text-muted-foreground">Không có dữ liệu.</p>;
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <h2 className="text-xl font-semibold">Thống kê</h2>
-                <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
+                <div className="flex items-center gap-2">
+                    <label className="text-sm text-muted-foreground">Từ</label>
+                    <input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <label className="text-sm text-muted-foreground">đến</label>
+                    <input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                </div>
             </div>
+
+            <p className="text-sm text-muted-foreground">Kỳ: {dateRangeLabel}</p>
 
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -104,7 +125,7 @@ export default function StatsPanel() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-base">Tỷ lệ trạng thái vé</CardTitle>
-                        <CardDescription>Phân bổ vé theo trạng thái hôm nay</CardDescription>
+                        <CardDescription>Phân bổ vé theo trạng thái</CardDescription>
                     </CardHeader>
                     <CardContent className="flex items-center justify-center">
                         {pieData.length > 0 ? (
@@ -128,7 +149,7 @@ export default function StatsPanel() {
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                            <p className="text-muted-foreground py-12 text-center">Chưa có dữ liệu vé hôm nay.</p>
+                            <p className="text-muted-foreground py-12 text-center">Chưa có dữ liệu vé.</p>
                         )}
                     </CardContent>
                 </Card>
