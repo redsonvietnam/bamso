@@ -80,21 +80,3 @@ export async function POST(request: Request) {
         );
     }
 }
-
-export async function DELETE(request: Request) {
-    const response = NextResponse.json({
-        success: true,
-        message: 'Đăng xuất thành công'
-    });
-
-    // Clear httpOnly cookie natively
-    response.cookies.set(COOKIE_NAME, '', {
-        httpOnly: true,
-        secure: isSecureCookie(request),
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 0, // Expires immediately
-    });
-
-    return response;
-}

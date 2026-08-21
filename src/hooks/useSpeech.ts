@@ -37,19 +37,6 @@ const DEFAULT_TTS_SETTINGS: TtsSettings = {
     tts_prepare_template: 'Số {ticketNumber} chuẩn bị',
 };
 
-// Voices list for Edge TTS
-export const EDGE_VI_VOICES = [
-    { id: 'vi-VN-HoaiMyNeural', name: 'Hoài My (Nữ)' },
-    { id: 'vi-VN-NamMinhNeural', name: 'Nam Minh (Nam)' },
-    { id: 'vi-VN-LanAnhNeural', name: 'Lan Anh (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-NguyenBaoNeural', name: 'Nguyên Bảo (Nam, Tự nhiên)' },
-    { id: 'vi-VN-MyDuyenNeural', name: 'My Duyên (Nữ)' },
-    { id: 'vi-VN-MyLinhNeural', name: 'My Linh (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-QuynhChiNeural', name: 'Quỳnh Chi (Nữ)' },
-    { id: 'vi-VN-BichNgocNeural', name: 'Bích Ngọc (Nữ, Tự nhiên)' },
-    { id: 'vi-VN-ThiLeNeural', name: 'Thi Lệ (Nữ, Tự nhiên)' },
-];
-
 let cachedSettings: TtsSettings | null = null;
 let settingsFetchPromise: Promise<TtsSettings> | null = null;
 
