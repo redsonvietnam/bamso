@@ -5,6 +5,9 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
     try {
+        const auth = await requireRole('ADMIN');
+        if ('error' in auth) return auth.error;
+
         const { searchParams } = new URL(request.url);
         const key = searchParams.get('key');
 

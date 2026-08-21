@@ -17,8 +17,7 @@ Hãy làm đúng thứ tự các bước dưới đây. Đừng bắt đầu s�
   được nếu không có Redis** (đã thiết kế fail-open/degrade), nhưng để test
   đúng hành vi thật (nhiều màn hình cập nhật đồng thời) thì nên có Redis
   chạy. Nếu chưa có, cách nhanh nhất: `docker run -d -p 6379:6379 redis`.
-- Một database: SQLite (mặc định, không cần cài gì thêm) hoặc PostgreSQL
-  (xem Bước 2 — có một quyết định CẦN CHỐT ở đây trước khi đi tiếp).
+- Một database: SQLite (canonical — không cần cài gì thêm). PostgreSQL là plan cũ đã superseded (xem `decisions.md` #002).
 
 ## Bước 1 — Cài dependencies
 
@@ -39,46 +38,23 @@ trỏ thẳng vào `registry.npmmirror.com`, đây chính là lỗi tôi gặp p
 thử cài trong sandbox của mình. `package-lock.json` mới sẽ được tạo lại khi
 bạn chạy `npm install` lần đầu ở máy bạn.)
 
-## Bước 2 — ⚠️ QUYẾT ĐỊNH: SQLite hay PostgreSQL?
+## Bước 2 — Database: SQLite (canonical)
 
-`prisma/schema.prisma` trong bản này khai báo `provider = "sqlite"`. Nhưng
-file `CLAUDE.md` và `run-local.bat` có sẵn trong repo lại mô tả quy trình
-chạy local là khởi động **PostgreSQL thật** (`postgres.exe`, cổng 5433).
-Đây là mâu thuẫn tôi phát hiện nhưng **không tự quyết định thay bạn được**
-vì không biết bạn đang thực sự dùng cái nào ở máy thật.
+`prisma/schema.prisma` dùng `provider = "sqlite"`. Đây là kiến trúc runtime
+hiện tại, đã được xác nhận trong CR-3 (decisions.md #002 — PostgreSQL/Supabase
+đánh dấu SUPERSEDED).
 
-**Agent: hãy tự kiểm tra để xác định, theo thứ tự:**
-
-1. Có file `.env` thật nào ở máy này không (không phải `.env.example`)? Nếu
-   có, xem giá trị `DATABASE_URL` — nếu bắt đầu bằng `postgresql://` thì
-   đang dùng Postgres thật.
-2. Chạy `run-local.bat` có thật sự khởi động được PostgreSQL không, hay nó
-   fail vì không tìm thấy `C:\Program Files\PostgreSQL\18\bin\postgres.exe`
-   (nghĩa là chỉ là di sản chưa dọn, thực tế không dùng)?
-3. Hỏi thẳng người dùng nếu vẫn không chắc — đừng đoán, vì chọn sai ở đây
-   dẫn tới toàn bộ dữ liệu dev hiện có (nếu có) bị bỏ qua.
-
-**Nếu chọn SQLite** (mặc định, đơn giản nhất để bắt đầu):
 ```bash
 # .env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="file:./dev.db?socket_timeout=5&connection_limit=1"
 ```
+
 Không cần sửa gì thêm trong `schema.prisma`.
 
-**Nếu chọn PostgreSQL:**
-```bash
-# .env
-DATABASE_URL="postgresql://user:password@localhost:5433/bamso"
-```
-Và PHẢI sửa `prisma/schema.prisma`:
-```prisma
-datasource db {
-  provider = "postgresql"   // đổi từ "sqlite"
-  url      = env("DATABASE_URL")
-}
-```
-Sau đó cập nhật luôn `.env.example` cho khớp, để agent/dev sau không bị
-nhầm lại lần nữa.
+> **Lịch sử:** Tài liệu này trước đây trình bày PostgreSQL như một lựa chọn
+> актив. Điều đó không còn đúng — SQLite là canonical. PostgreSQL material
+> dưới đây được giữ lại làm tài liệu lịch sử cho ai cần reference kiến trúc
+> cũ.
 
 ## Bước 3 — Tạo file `.env`
 
@@ -96,7 +72,7 @@ Rồi điền các giá trị **bắt buộc**:
 #   [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 })) )
 JWT_SECRET="<dán chuỗi random ở đây, tối thiểu 32 ký tự>"
 
-DATABASE_URL="file:./dev.db"   # hoặc chuỗi postgresql://... nếu chọn Postgres ở Bước 2
+DATABASE_URL="file:./dev.db?socket_timeout=5&connection_limit=1"
 
 REDIS_HOST="localhost"
 REDIS_PORT="6379"

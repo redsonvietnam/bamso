@@ -38,7 +38,7 @@ These are historical feature branches. Their presence in this list does not mean
 
 Older BAMSO audit/handoff material contains references to an earlier prototype architecture and concepts such as `sanPham`, `restore.json`, React/Zustand/Express/SQLite, etc. Those references are **not the current architecture/status of this WIP branch** and must not be used as the current product description or roadmap.
 
-The current repository evidence does not contain `sanPham` or `restore.json` in the WIP code search, while the current README describes Next.js 16 + Prisma + PostgreSQL. Therefore those prototype references are intentionally excluded from this canonical status document.
+The current repository evidence does not contain `sanPham` or `restore.json` in the WIP code search, while the current README describes Next.js 16 + Prisma + SQLite. Therefore those prototype references are intentionally excluded from this canonical status document.
 
 ## Hardening / security status
 
