@@ -64,8 +64,10 @@ next-env.d.ts
 *.log
 
 # local archives
+*.tar.gz
 *.zip
+*.patch
 
-bug-context-*.tar.gz
+# misc generated
 cf-out.txt
 
