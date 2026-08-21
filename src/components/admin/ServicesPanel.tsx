@@ -138,6 +138,7 @@ export default function ServicesPanel() {
                             <th className="text-left p-3 font-medium">Prefix</th>
                             <th className="text-left p-3 font-medium">Màu</th>
                             <th className="text-left p-3 font-medium">Thứ tự</th>
+                            <th className="text-left p-3 font-medium">Chế độ</th>
                             <th className="text-left p-3 font-medium">Trạng thái</th>
                             <th className="text-right p-3 font-medium">Thao tác</th>
                         </tr>
@@ -152,6 +153,9 @@ export default function ServicesPanel() {
                                     <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: s.color }} />
                                 </td>
                                 <td className="p-3">{s.order}</td>
+                                <td className="p-3">
+                                    <ModeBadges modes={s.allowedModes} />
+                                </td>
                                 <td className="p-3">
                                     <span className={`px-2 py-0.5 rounded-full text-xs ${s.isActive ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
                                         {s.isActive ? 'Hoạt động' : 'Ngừng'}
@@ -198,6 +202,31 @@ const MODE_LABELS: Record<string, { label: string; desc: string }> = {
     manual: { label: 'Nhập tay', desc: 'Nhập họ tên + giọng nói' },
     qr: { label: 'Quét CCCD / VNeID', desc: 'Quét mã QR trên CCCD hoặc VNeID' },
 };
+
+const MODE_SHORT_LABELS: Record<string, string> = {
+    quick: 'Nhanh',
+    manual: 'Thủ công',
+    qr: 'QR',
+};
+
+function ModeBadges({ modes }: { modes: string | string[] | null | undefined }) {
+    const parsed: string[] = typeof modes === 'string' ? JSON.parse(modes) : Array.isArray(modes) ? modes : [];
+    if (parsed.length === 0) {
+        return <span className="text-muted-foreground text-xs">-</span>;
+    }
+    return (
+        <div className="flex flex-wrap gap-1">
+            {parsed.map((mode) => (
+                <span
+                    key={mode}
+                    className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary"
+                >
+                    {MODE_SHORT_LABELS[mode] || mode}
+                </span>
+            ))}
+        </div>
+    );
+}
 
 function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
     formData: { code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[] };
