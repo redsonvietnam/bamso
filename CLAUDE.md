@@ -7,13 +7,12 @@ Tệp tin này đóng vai trò hướng dẫn nhanh về các lệnh vận hành
 ## 🛠️ Lệnh Vận Hành Cơ Bản
 
 ### 1. Khởi chạy & Phát triển
-*   **Chạy môi trường cục bộ (Windows 1-Click):** Click chạy tệp `run-local.bat` ở thư mục gốc để tự động kích hoạt PostgreSQL (cổng 5433) và Next.js Dev Server (cổng 3000).
+*   **Chạy môi trường cục bộ (Windows 1-Click):** Click chạy tệp `run-local.bat` ở thư mục gốc để khởi động Next.js Dev Server (cổng 3000).
 *   **Chạy thủ công:**
-    *   **Postgres DB:** `& "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D d:\Bamso\pgdata`
     *   **Web Server:** `npm run dev`
 *   **Biên dịch kiểm tra (Production Build):** `npm run build`
 
-### 2. Thao tác Cơ sở dữ liệu (Prisma & Postgres)
+### 2. Thao tác Cơ sở dữ liệu (Prisma & SQLite)
 *   **Đồng bộ cấu trúc bảng:** `npx prisma db push`
 *   **Gieo dữ liệu hạt giống (Seed):** `npx prisma db seed`
 *   **Xem dữ liệu trực quan qua Web:** `npx prisma studio`

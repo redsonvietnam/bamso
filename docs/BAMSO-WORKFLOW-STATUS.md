@@ -17,7 +17,7 @@
 The current WIP branch is the rebuilt BAMSO queue-management application. The repository README identifies the current stack as:
 
 - Next.js 16 App Router + React 19 + TypeScript strict mode
-- Prisma ORM + PostgreSQL
+- Prisma ORM + SQLite
 - Native Server-Sent Events (SSE) for real-time synchronization
 - JWT authentication using Jose and HttpOnly cookies
 - Zustand for client-side Auth/Queue state

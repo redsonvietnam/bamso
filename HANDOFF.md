@@ -66,7 +66,7 @@ src/
 # Dev (Windows 1-click)
 run-local.bat
 
-# Dev (thủ công) — cần Postgres chạy trước
+# Dev (thủ công) — SQLite file-based, không cần start DB server
 npm run dev
 
 # DB

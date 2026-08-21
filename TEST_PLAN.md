@@ -243,7 +243,7 @@
 | Bug | Mô tả | Trạng thái |
 |-----|-------|-----------|
 | Duplicate ticketNumber | `ticketNumber` có `@unique` constraint → lỗi khi lấy số ngày mới. Fix: bỏ `@unique` trong schema + `prisma db push`. | ✅ Đã fix |
-| DB provider SQLite | `prisma/schema.prisma` dùng `provider = "sqlite"`, phù hợp cho dev/test. Postgres dùng cho production. | ✅ Nhất quán |
+| DB provider SQLite | `prisma/schema.prisma` dùng `provider = "sqlite"` — đây là database hiện tại. PostgreSQL/Supabase là plan cũ chưa triển khai. | ✅ Nhất quán |
 | Thiếu proxy/middleware | Các API không có kiểm tra JWT/cookie. Đã implement `requireRole()` + `proxy.ts` với role-based route protection. | ✅ Đã fix |
 | Cập nhật proxy.ts | Nâng cấp từ middleware cũ sang Next.js 16 proxy convention. Thêm role-based redirect cho KIOSK/DISPLAY. | ✅ Đã fix |
 | Thêm QR code | Thêm `QRCodeSVG` vào `WaitingTracker` — khách scan để theo dõi vé trên điện thoại. | ✅ Đã fix |

@@ -22,7 +22,7 @@ cán bộ quầy gọi/hỗ trợ từng vé. Hệ thống có 4 nhóm người 
 3. **DISPLAY (Màn hình TV phòng chờ)** — hiển thị số đang gọi, phát âm thanh tiếng Việt.
 4. **ADMIN (Quản trị)** — cấu hình dịch vụ, quầy, nhân viên, thông báo, giọng nói, thống kê.
 
-Công nghệ thật: Next.js 16 + Prisma + PostgreSQL, realtime qua SSE, JWT HttpOnly cookie.
+Công nghệ thật: Next.js 16 + Prisma + SQLite, realtime qua SSE, JWT HttpOnly cookie.
 
 ## Design System (BẮT BUỘC tuân theo)
 
