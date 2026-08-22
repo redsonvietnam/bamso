@@ -18,6 +18,7 @@ type StatsData = {
     };
     hourly: { hour: string; count: number }[];
     services: { id: string; name: string; code: string; color: string; total: number; completed: number; pending: number }[];
+    peakHours: { hour: string; count: number }[];
 };
 
 function todayStr() {
@@ -29,12 +30,16 @@ export default function StatsPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [fromDate, setFromDate] = useState(todayStr());
     const [toDate, setToDate] = useState(todayStr());
+    const [selectedService, setSelectedService] = useState<string>('');
 
     useEffect(() => {
         const fetchStats = async () => {
             setIsLoading(true);
             try {
-                const data = await apiClient.get<StatsData>(`/api/stats?from=${fromDate}&to=${toDate}`);
+                const url = selectedService
+                    ? `/api/stats?from=${fromDate}&to=${toDate}&serviceId=${selectedService}`
+                    : `/api/stats?from=${fromDate}&to=${toDate}`;
+                const data = await apiClient.get<StatsData>(url);
                 setStats(data);
             } catch (error) {
                 logger.error('Error fetching stats:', error);
@@ -44,7 +49,7 @@ export default function StatsPanel() {
         };
 
         fetchStats();
-    }, [fromDate, toDate]);
+    }, [fromDate, toDate, selectedService]);
 
     const formatWaitTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -85,6 +90,19 @@ export default function StatsPanel() {
                         onChange={(e) => setToDate(e.target.value)}
                         className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
+                    <select
+                        value={selectedService}
+                        onChange={(e) => setSelectedService(e.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="">Tất cả dịch vụ</option>
+                        {stats.services?.map((s) => (
+                            <option key={s.id} value={s.id}>
+                                {s.name}
+                            </option>
+                        ))}
+                        {stats.services?.length === 0 && <option value="">Không có dịch vụ</option>}
+                    </select>
                 </div>
             </div>
 
@@ -154,6 +172,25 @@ export default function StatsPanel() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Peak Hours Chart */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Giờ cao điểm</CardTitle>
+                    <CardDescription>Lượng vé cao nhất trong ngày</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={stats.peakHours}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
 
             {/* Service Breakdown */}
             <Card>
