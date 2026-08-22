@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Ticket, CheckCircle, XCircle, Clock, Users, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
+import { buildStatsCsv } from '@/lib/stats-csv';
 import { logger } from '@/lib/logger';
 
 type StatsData = {
@@ -55,40 +56,7 @@ export default function StatsPanel() {
 
     const handleExportCsv = () => {
         if (!stats) return;
-
-        const csvRows: string[] = [];
-        csvRows.push('Thống kê vé');
-        csvRows.push(`Kỳ: ${dateRangeLabel}`);
-        csvRows.push('');
-
-        // Summary
-        csvRows.push('Tóm tắt:');
-        csvRows.push('Tổng số,Hoàn thành,Đang chờ,Đang phục vụ,Nhỡ lượt,Chờ TB (giây)');
-        csvRows.push(`${stats.summary.total},${stats.summary.completed},${stats.summary.pending},${stats.summary.active},${stats.summary.missed},${stats.summary.avgWaitTimeSeconds}`);
-        csvRows.push('');
-
-        // Hourly
-        csvRows.push('Vé theo giờ:');
-        csvRows.push('Giờ,Số lượng');
-        stats.hourly.forEach(h => csvRows.push(`${h.hour},${h.count}`));
-        csvRows.push('');
-
-        // Peak Hours
-        csvRows.push('Giờ cao điểm:');
-        csvRows.push('Giờ,Số lượng');
-        stats.peakHours.forEach(p => csvRows.push(`${p.hour},${p.count}`));
-        csvRows.push('');
-
-        // Services
-        csvRows.push('Chi tiết theo dịch vụ:');
-        csvRows.push('Dịch vụ,Mã,Tổng,Hoàn thành,Đang chờ,Tỷ lệ hoàn thành');
-        stats.services.forEach(s => {
-            const completionRate = s.total > 0 ? Math.round((s.completed / s.total) * 100) : 0;
-            csvRows.push(`${s.name},${s.code},${s.total},${s.completed},${s.pending},${completionRate}%`);
-        });
-
-        const csvString = csvRows.join('\n');
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([buildStatsCsv(stats, dateRangeLabel)], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
