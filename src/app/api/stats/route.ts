@@ -109,6 +109,8 @@ export async function GET(request: Request) {
             count,
         }));
 
+        const peakHours = [...hourlyData].sort((a, b) => b.count - a.count).slice(0, 5);
+
         const serviceBreakdown = await Promise.all(
             serviceList.map(async (service) => {
                 const svcWhere = { ...where, serviceId: service.id };
@@ -125,6 +127,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             summary: { total: totalTickets, completed: completedTickets, missed: missedTickets, pending: pendingTickets, active: activeTickets, avgWaitTimeSeconds },
             hourly: hourlyData,
+            peakHours,
             services: serviceBreakdown,
         });
     } catch (error) {
