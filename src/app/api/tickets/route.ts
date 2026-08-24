@@ -8,14 +8,26 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
 import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
 
+type TicketsRequest = {
+    serviceId: string;
+    customerName?: string;
+    phone?: string;
+};
+
+type TicketsResponse = {
+    ticket: any;
+};
+
+type RoleType = string | null;
+
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
 const ACTIVE_STATUSES = new Set<string>([TicketStatus.CALLED, TicketStatus.IN_PROGRESS]);
 
-function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null; status?: string }>(
-    tickets: T[],
-    role: string | null
-) {
+function redactTicketsForRole(
+    tickets: any[],
+    role: RoleType
+): any[] {
     if (role && STAFF_ROLES.includes(role)) return tickets;
     return tickets.map(({ customerName, phone: _phone, status, ...rest }) => {
         if (status && ACTIVE_STATUSES.has(status)) {
@@ -35,17 +47,31 @@ export async function POST(request: Request) {
 
         const parsed = await readJsonObject(request);
         if (!parsed.ok) return parsed.response;
-        const { serviceId, customerName, phone } = parsed.value;
+        const { serviceId, customerName, phone } = parsed.value as TicketsRequest;
 
-        if (requiredStringFields(parsed.value, ['serviceId']).length > 0) {
+        if (requiredStringFields(parsed.value, ['serviceId', 'customerName', 'phone']).length > 0) {
             return NextResponse.json(
-                { error: 'serviceId phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
+                { error: 'serviceId, customerName và phone là bắt buộc', code: 'INVALID_FIELDS' },
+                { status: 400 }
+            );
+        }
+
+        if (customerName && customerName.trim().length > 100) {
+            return NextResponse.json(
+                { error: 'customerName không được vượt quá 100 ký tự', code: 'FIELD_TOO_LONG' },
+                { status: 400 }
+            );
+        }
+
+        if (phone && phone.trim().length > 20) {
+            return NextResponse.json(
+                { error: 'phone không được vượt quá 20 ký tự', code: 'FIELD_TOO_LONG' },
                 { status: 400 }
             );
         }
 
         const ticket = await createTicket({
-            serviceId: serviceId as string,
+            serviceId,
             customerName: customerName as string | undefined,
             phone: phone as string | undefined,
         });
