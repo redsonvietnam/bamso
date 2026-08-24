@@ -6,28 +6,16 @@ import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
-import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
-
-type TicketsRequest = {
-    serviceId: string;
-    customerName?: string;
-    phone?: string;
-};
-
-type TicketsResponse = {
-    ticket: any;
-};
-
-type RoleType = string | null;
+import { readJsonObject } from '@/lib/api-validation';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
 const ACTIVE_STATUSES = new Set<string>([TicketStatus.CALLED, TicketStatus.IN_PROGRESS]);
 
-function redactTicketsForRole(
-    tickets: any[],
-    role: RoleType
-): any[] {
+function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null; status?: string }>(
+    tickets: T[],
+    role: string | null
+) {
     if (role && STAFF_ROLES.includes(role)) return tickets;
     return tickets.map(({ customerName, phone: _phone, status, ...rest }) => {
         if (status && ACTIVE_STATUSES.has(status)) {
@@ -47,23 +35,37 @@ export async function POST(request: Request) {
 
         const parsed = await readJsonObject(request);
         if (!parsed.ok) return parsed.response;
-        const { serviceId, customerName, phone } = parsed.value as TicketsRequest;
+        const { serviceId, customerName, phone } = parsed.value;
 
-        if (requiredStringFields(parsed.value, ['serviceId', 'customerName', 'phone']).length > 0) {
+        if (!serviceId || typeof serviceId !== 'string' || serviceId.trim() === '') {
             return NextResponse.json(
-                { error: 'serviceId, customerName và phone là bắt buộc', code: 'INVALID_FIELDS' },
+                { error: 'serviceId là bắt buộc và phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
 
-        if (customerName && customerName.trim().length > 100) {
+        if (customerName !== undefined && customerName !== null && (typeof customerName !== 'string' || customerName.trim().length === 0)) {
+            return NextResponse.json(
+                { error: 'customerName phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
+                { status: 400 }
+            );
+        }
+
+        if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.trim().length === 0)) {
+            return NextResponse.json(
+                { error: 'phone phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
+                { status: 400 }
+            );
+        }
+
+        if (customerName !== undefined && customerName !== null && customerName.trim().length > 100) {
             return NextResponse.json(
                 { error: 'customerName không được vượt quá 100 ký tự', code: 'FIELD_TOO_LONG' },
                 { status: 400 }
             );
         }
 
-        if (phone && phone.trim().length > 20) {
+        if (phone !== undefined && phone !== null && phone.trim().length > 20) {
             return NextResponse.json(
                 { error: 'phone không được vượt quá 20 ký tự', code: 'FIELD_TOO_LONG' },
                 { status: 400 }
