@@ -12,5 +12,5 @@ export function escapeHtml(text: string): string {
     .replace(/</g, "&#60;")
     .replace(/>/g, "&#62;")
     .replace(/"/g, "&#34;")
-    .replace(/'/g, "'")
+    .replace(/'/g, "&#39;")
 }
