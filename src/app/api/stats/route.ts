@@ -5,6 +5,10 @@ import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 
 function parseDateParam(value: string): Date | null {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
     const d = new Date(value);
     if (isNaN(d.getTime())) return null;
     return d;
