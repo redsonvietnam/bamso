@@ -24,6 +24,38 @@ describe('escapeCsvField', () => {
     it('quotes field containing newline', () => {
         expect(escapeCsvField('line1\nline2')).toBe('"line1\nline2"');
     });
+
+    it('neutralizes formula prefix = with leading apostrophe', () => {
+        expect(escapeCsvField('=SUM(A1:A2)')).toBe("'=SUM(A1:A2)");
+    });
+
+    it('neutralizes formula prefix + with leading apostrophe', () => {
+        expect(escapeCsvField('+cmd')).toBe("'+cmd");
+    });
+
+    it('neutralizes formula prefix - with leading apostrophe', () => {
+        expect(escapeCsvField('-cmd')).toBe("'-cmd");
+    });
+
+    it('neutralizes formula prefix @ with leading apostrophe', () => {
+        expect(escapeCsvField('@SUM(A1:A2)')).toBe("'@SUM(A1:A2)");
+    });
+
+    it('does not alter normal values', () => {
+        expect(escapeCsvField('abc')).toBe('abc');
+    });
+
+    it('quotes field with comma and neutralizes formula prefix', () => {
+        expect(escapeCsvField('=A,B')).toBe('"\'=A,B"');
+    });
+
+    it('handles Vietnamese Unicode normally', () => {
+        expect(escapeCsvField('Tiếng Việt Đà Nẵng')).toBe('Tiếng Việt Đà Nẵng');
+    });
+
+    it('escapes double quotes and neutralizes formula prefix', () => {
+        expect(escapeCsvField('="hi"')).toBe('"\'=""hi"""');
+    });
 });
 
 describe('buildStatsCsv', () => {
@@ -47,5 +79,17 @@ describe('buildStatsCsv', () => {
         expect(csv).toContain('Giờ cao điểm:');
         expect(csv).toContain('Chi tiết theo dịch vụ:');
         expect(csv).toContain('Dịch vụ A,A,10,7,2,70%');
+    });
+
+    it('neutralizes formula-injected service name and code in CSV output', () => {
+        const csv = buildStatsCsv(
+            {
+                ...baseData,
+                services: [{ name: '=SUM(A1:A2)', code: '+cmd', total: 1, completed: 0, pending: 1 }],
+            },
+            'kỳ'
+        );
+        expect(csv).toContain("'=SUM(A1:A2),'+cmd,1,0,1,0%");
+        expect(csv).not.toContain('=SUM(A1:A2),+cmd');
     });
 });
