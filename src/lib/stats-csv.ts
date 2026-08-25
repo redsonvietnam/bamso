@@ -12,11 +12,19 @@ export type StatsCsvData = {
     services: { name: string; code: string; total: number; completed: number; pending: number }[];
 };
 
-export function escapeCsvField(value: string): string {
-    if (/[",\n\r]/.test(value)) {
-        return `"${value.replace(/"/g, '""')}"`;
+export function neutralizeFormulaPrefix(value: string): string {
+    if (/^[=+\-@]/.test(value)) {
+        return `'${value}`;
     }
     return value;
+}
+
+export function escapeCsvField(value: string): string {
+    const safe = neutralizeFormulaPrefix(value);
+    if (/[",\n\r]/.test(safe)) {
+        return `"${safe.replace(/"/g, '""')}"`;
+    }
+    return safe;
 }
 
 export function buildStatsCsv(stats: StatsCsvData, periodLabel: string): string {
