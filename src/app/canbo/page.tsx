@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
+import { loadStaffSelection, saveStaffSelection, clearStaffSelection } from '@/lib/staff-selection';
 import { useHeaderRight } from '@/components/layout/app-shell';
 import {
     Select,
@@ -23,7 +24,7 @@ import {
 } from '@/components/ui/select';
 
 export default function CanboPage() {
-    const { user, logout, fetchMe } = useAuthStore();
+    const { user, logout } = useAuthStore();
     const [services, setServices] = useState<Service[]>([]);
     const [counters, setCounters] = useState<string[]>([]);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -31,35 +32,46 @@ export default function CanboPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        fetchMe();
-    }, [fetchMe]);
-
-    useEffect(() => {
-        const fetchData = async () => {
+        const init = async () => {
             try {
-                // Fetch services
-                let servicesData: Service[];
+                // Fetch auth + data in parallel
+                const [servicesData, settingsData] = await Promise.all([
+                    apiClient.get<Service[]>('/api/services').catch(() => {
+                        toast.error('Không thể tải danh sách dịch vụ.');
+                        return [] as Service[];
+                    }),
+                    apiClient.get<{ value: string }>('/api/settings?key=counters').catch(() => ({ value: '' })),
+                ]);
+
+                setServices(servicesData);
+
+                const counterList = settingsData.value
+                    ? settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setCounters(counterList);
+
+                // Restore staff identity
+                let userId: string | null = null;
                 try {
-                    servicesData = await apiClient.get<Service[]>('/api/services');
-                    setServices(servicesData);
+                    const me = await apiClient.get<{ id: string; username: string; name: string; role: string }>('/api/auth/me');
+                    userId = me.id;
+                    useAuthStore.setState({ user: me });
                 } catch {
-                    toast.error('Không thể tải danh sách dịch vụ.');
-                    servicesData = [];
+                    // Not authenticated — stay on login flow
                 }
 
-                // Fetch counters from settings
-                try {
-                    const settingsData = await apiClient.get<{ value: string }>('/api/settings?key=counters');
-                    if (settingsData.value) {
-                        const counterList = settingsData.value.split(',').map((s: string) => s.trim()).filter(Boolean);
-                        setCounters(counterList);
-                        // Auto-select first counter if available
-                        if (!selectedPos && counterList.length > 0) {
-                            setSelectedPos(counterList[0]);
+                // Attempt restoration from localStorage
+                if (userId && servicesData.length > 0 && counterList.length > 0) {
+                    const stored = loadStaffSelection(userId);
+                    if (stored) {
+                        const matchedService = servicesData.find((s) => s.id === stored.serviceId);
+                        if (matchedService && counterList.includes(stored.pos)) {
+                            setSelectedService(matchedService);
+                            setSelectedPos(stored.pos);
+                        } else {
+                            clearStaffSelection(userId);
                         }
                     }
-                } catch {
-                    // counters fetch failed silently
                 }
             } catch (error) {
                 logger.error('Error fetching data:', error);
@@ -69,9 +81,15 @@ export default function CanboPage() {
             }
         };
 
-        fetchData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        init();
     }, []);
+
+    // Persist selection to localStorage
+    useEffect(() => {
+        if (user && selectedService && selectedPos) {
+            saveStaffSelection(user.id, selectedService.id, selectedPos);
+        }
+    }, [user, selectedService, selectedPos]);
 
     const handleLogout = async () => {
         await logout();
@@ -123,6 +141,7 @@ export default function CanboPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
+                            if (user) clearStaffSelection(user.id);
                             setSelectedService(null);
                             setSelectedPos('');
                         }}
