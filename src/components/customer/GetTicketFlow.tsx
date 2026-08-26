@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Service } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ interface SpeechRecognitionWindow extends Window {
 
 export function GetTicketFlow() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [services, setServices] = useState<Service[]>([]);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [mode, setMode] = useState<'quick' | 'form' | 'scan' | 'qr-confirm' | null>(null);
@@ -61,6 +62,12 @@ export function GetTicketFlow() {
             try {
                 const svc = await apiClient.get<Service[]>('/api/services');
                 setServices(svc);
+
+                const serviceId = searchParams.get('service');
+                if (serviceId) {
+                    const match = svc.find((s) => s.id === serviceId);
+                    if (match) setSelectedService(match);
+                }
             } catch {
                 toast.error('Không thể tải dữ liệu.');
             } finally {
@@ -69,7 +76,7 @@ export function GetTicketFlow() {
         };
 
         fetchData();
-    }, []);
+    }, [searchParams]);
 
     const validatePhone = (value: string) => {
         const regex = /^0\d{9}$/;

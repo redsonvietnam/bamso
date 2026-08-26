@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import { Service } from "@prisma/client";
 import { Search } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 
 const SIX_DIEU = [
   "Đối với tự mình, phải cần, kiệm, liêm, chính",
@@ -14,13 +16,36 @@ const SIX_DIEU = [
 ];
 
 export function BcaSearchBlock() {
-  const router = useRouter();
   const [keyword, setKeyword] = useState("");
+  const [services, setServices] = useState<Service[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    router.push(`/track?q=${encodeURIComponent(keyword.trim())}`);
-  };
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const data = await apiClient.get<Service[]>("/api/services");
+        setServices(data);
+      } catch {
+        // Services unavailable
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchServices();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!keyword.trim()) return [];
+    const q = keyword.trim().toLowerCase();
+    return services.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        (s.description && s.description.toLowerCase().includes(q))
+    );
+  }, [keyword, services]);
+
+  const showResults = keyword.trim().length > 0;
 
   return (
     <section
@@ -45,12 +70,15 @@ export function BcaSearchBlock() {
 
         {/* Search box — BCA red button */}
         <div>
-          <form onSubmit={submit} className="flex items-stretch overflow-hidden rounded shadow-lg">
+          <form
+            onSubmit={(e) => e.preventDefault()}
+            className="flex items-stretch overflow-hidden rounded shadow-lg"
+          >
             <input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Nhập từ khóa tìm kiếm thủ tục..."
-              aria-label="Tìm kiếm thủ tục"
+              placeholder="Nhập tên dịch vụ cần tìm..."
+              aria-label="Tìm kiếm dịch vụ"
               className="h-12 flex-1 bg-white px-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
             <button
@@ -61,9 +89,49 @@ export function BcaSearchBlock() {
               <Search className="h-5 w-5" />
             </button>
           </form>
-          <p className="mt-3 text-right text-xs font-medium text-foreground/80">
-            Tìm kiếm nâng cao →
-          </p>
+
+          {/* Search results */}
+          {showResults && (
+            <div className="mt-3 rounded-lg border border-border bg-white shadow-md">
+              {isLoading ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  Đang tải...
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  Không tìm thấy dịch vụ phù hợp.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filtered.map((service) => (
+                    <li key={service.id}>
+                      <Link
+                        href={`/?service=${service.id}`}
+                        className="flex items-center gap-3 px-4 py-3 transition hover:bg-bca-red/5"
+                      >
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white font-bold text-sm"
+                          style={{ backgroundColor: service.color }}
+                        >
+                          {service.prefix}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {service.name}
+                          </p>
+                          {service.description && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {service.description}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
