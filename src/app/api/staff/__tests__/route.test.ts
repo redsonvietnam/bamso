@@ -153,6 +153,7 @@ describe('DELETE /api/staff', () => {
 
     it('deletes staff for ADMIN', async () => {
         adminAuth();
+        mockedFindUnique.mockResolvedValue({ role: 'STAFF' });
         mockedDelete.mockResolvedValue({});
         const req = new Request('http://localhost/api/staff?id=1');
         const res = await DELETE(req);

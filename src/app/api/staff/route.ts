@@ -189,6 +189,24 @@ export async function DELETE(request: Request): Promise<NextResponse> {
             );
         }
 
+        const user = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+        if (!user) {
+            return NextResponse.json(
+                { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
+                { status: 404 }
+            );
+        }
+
+        if (user.role === UserRole.ADMIN) {
+            const adminCount = await prisma.user.count({ where: { role: UserRole.ADMIN } });
+            if (adminCount <= 1) {
+                return NextResponse.json(
+                    { error: 'Không thể xóa admin cuối cùng', code: 'LAST_ADMIN' },
+                    { status: 400 }
+                );
+            }
+        }
+
         await prisma.user.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (error) {
