@@ -156,6 +156,7 @@ const handleScanSuccess = (decodedText: string) => {
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
+        } finally {
             setIsCreating(false);
         }
     };
