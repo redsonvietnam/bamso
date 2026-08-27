@@ -6,7 +6,7 @@ import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional, requireRole } from '@/lib/api-auth';
-import { readJsonObject } from '@/lib/api-validation';
+import { readJsonObject, sanitizeApiError } from '@/lib/api-validation';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
@@ -85,10 +85,10 @@ export async function POST(request: Request) {
         return NextResponse.json(ticket, { status: 201 });
     } catch (error) {
         logger.error('Ticket creation error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống khi tạo vé';
+        const { message, isClientError } = sanitizeApiError(error);
         return NextResponse.json(
-            { error: errorMessage, code: 'INTERNAL_ERROR' },
-            { status: errorMessage.includes('không tồn tại') ? 400 : 500 }
+            { error: message, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
+            { status: isClientError ? 400 : 500 }
         );
     }
 }

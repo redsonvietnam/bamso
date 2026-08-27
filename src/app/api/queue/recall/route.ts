@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
-import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
+import { readJsonObject, requiredStringFields, sanitizeApiError } from '@/lib/api-validation';
 
 export async function POST(request: Request) {
     try {
@@ -68,10 +68,10 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         logger.error('Recall ticket error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
+        const { message, isClientError } = sanitizeApiError(error);
         return NextResponse.json(
-            { error: errorMessage, code: 'INTERNAL_ERROR' },
-            { status: 500 }
+            { error: message, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
+            { status: isClientError ? 400 : 500 }
         );
     }
 }
