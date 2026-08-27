@@ -40,21 +40,38 @@ const DEFAULT_TTS_SETTINGS: TtsSettings = {
 let cachedSettings: TtsSettings | null = null;
 let settingsFetchPromise: Promise<TtsSettings> | null = null;
 
+const TTS_SETTING_KEYS = [
+    'tts_enabled',
+    'tts_speed',
+    'tts_volume',
+    'tts_provider',
+    'tts_edge_voice',
+    'tts_announcement_template',
+    'tts_prepare_template',
+] as const;
+
 async function fetchTtsSettings(): Promise<TtsSettings> {
     if (cachedSettings) return cachedSettings;
     if (settingsFetchPromise) return settingsFetchPromise;
 
     settingsFetchPromise = (async () => {
         try {
-            const data = await apiClient.get<{ key: string; value: string }[]>('/api/settings');
-            const map: Record<string, string> = {};
-            data.forEach((s: { key: string; value: string }) => {
-                map[s.key] = s.value;
-            });
             const settings: TtsSettings = { ...DEFAULT_TTS_SETTINGS };
-            (Object.keys(DEFAULT_TTS_SETTINGS) as (keyof TtsSettings)[]).forEach((key) => {
-                if (map[key] !== undefined) {
-                    (settings as unknown as Record<string, string>)[key] = map[key];
+            const results = await Promise.all(
+                TTS_SETTING_KEYS.map(async (key) => {
+                    try {
+                        const data = await apiClient.get<{ key: string; value: string }>(
+                            `/api/settings?key=${key}`
+                        );
+                        return { key, value: data.value };
+                    } catch {
+                        return { key, value: undefined };
+                    }
+                })
+            );
+            results.forEach(({ key, value }) => {
+                if (value !== undefined) {
+                    (settings as unknown as Record<string, string>)[key] = value;
                 }
             });
             cachedSettings = settings;
