@@ -3,7 +3,7 @@ import { restoreTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
-import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
+import { readJsonObject, requiredStringFields, sanitizeQueueError } from '@/lib/api-validation';
 
 export async function PUT(request: Request) {
     try {
@@ -33,10 +33,9 @@ export async function PUT(request: Request) {
         return NextResponse.json(ticket);
     } catch (error) {
         logger.error('Restore ticket error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
-        const isClientError = errorMessage.includes('Không tìm thấy') || errorMessage.includes('Chỉ có thể khôi phục');
+        const { message, isClientError } = sanitizeQueueError(error);
         return NextResponse.json(
-            { error: errorMessage, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
+            { error: message, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
             { status: isClientError ? 400 : 500 }
         );
     }

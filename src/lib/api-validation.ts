@@ -36,3 +36,25 @@ export function requiredStringFields(
 export function requiredPositiveInteger(value: unknown): boolean {
     return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
+
+const QUEUE_ERROR_MESSAGES: Record<string, string> = {
+    'Không còn số thứ tự': 'Không còn số thứ tự nào đang chờ.',
+    'Không thể gọi vé': 'Không thể gọi vé — vui lòng thử lại.',
+    'Không tìm thấy phiếu yêu cầu': 'Không tìm thấy phiếu yêu cầu.',
+    'không ở trạng thái đang phục vụ để hoàn thành': 'Vé không ở trạng thái có thể hoàn thành.',
+    'không ở trạng thái đang phục vụ để bỏ qua': 'Vé không ở trạng thái có thể bỏ qua.',
+    'Trạng thái vé đã thay đổi': 'Trạng thái vé đã thay đổi, vui lòng thử lại.',
+    'Chỉ có thể khôi phục': 'Chỉ có thể khôi phục vé ở trạng thái nhỡ lượt.',
+};
+
+export function sanitizeQueueError(error: unknown): { message: string; isClientError: boolean } {
+    const rawMessage = error instanceof Error ? error.message : '';
+
+    for (const [pattern, sanitized] of Object.entries(QUEUE_ERROR_MESSAGES)) {
+        if (rawMessage.includes(pattern)) {
+            return { message: sanitized, isClientError: true };
+        }
+    }
+
+    return { message: 'Đã xảy ra lỗi hệ thống.', isClientError: false };
+}
