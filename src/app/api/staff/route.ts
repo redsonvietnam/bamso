@@ -105,7 +105,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
         }
 
         const body = await request.json();
-        const { id, password, ...data } = body;
+        const { id, name, role, password } = body;
 
         if (!id) {
             return NextResponse.json(
@@ -114,7 +114,17 @@ export async function PUT(request: Request): Promise<NextResponse> {
             );
         }
 
-        const updateData: Record<string, unknown> = { ...data };
+        const updateData: Record<string, unknown> = {};
+        if (name !== undefined) updateData.name = name;
+        if (role !== undefined) {
+            if (!['STAFF', 'KIOSK', 'DISPLAY'].includes(role)) {
+                return NextResponse.json(
+                    { error: 'role phải là STAFF, KIOSK hoặc DISPLAY', code: 'INVALID_ROLE' },
+                    { status: 400 }
+                );
+            }
+            updateData.role = role;
+        }
         if (password) {
             updateData.passwordHash = hashPassword(password);
         }
