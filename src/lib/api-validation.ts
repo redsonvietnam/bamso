@@ -63,3 +63,29 @@ export function sanitizeApiError(error: unknown): { message: string; isClientErr
 export function sanitizeQueueError(error: unknown): { message: string; isClientError: boolean } {
     return sanitizeApiError(error);
 }
+
+const VALID_MODES = new Set(['quick', 'manual', 'qr']);
+
+export function validateAllowedModes(value: unknown): { valid: boolean; normalized?: string; error?: string } {
+    if (typeof value !== 'string') {
+        return { valid: false, error: 'allowedModes phải là chuỗi JSON' };
+    }
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(value);
+    } catch {
+        return { valid: false, error: 'allowedModes phải là JSON hợp lệ' };
+    }
+
+    if (!Array.isArray(parsed)) {
+        return { valid: false, error: 'allowedModes phải là mảng' };
+    }
+
+    const invalid = parsed.filter((m) => typeof m !== 'string' || !VALID_MODES.has(m));
+    if (invalid.length > 0) {
+        return { valid: false, error: `allowedModes chứa giá trị không hợp lệ: ${invalid.join(', ')}` };
+    }
+
+    return { valid: true, normalized: JSON.stringify(parsed) };
+}
