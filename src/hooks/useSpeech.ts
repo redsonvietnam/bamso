@@ -27,7 +27,7 @@ export interface TtsSettings {
     tts_prepare_template: string;
 }
 
-const DEFAULT_TTS_SETTINGS: TtsSettings = {
+export const DEFAULT_TTS_SETTINGS: TtsSettings = {
     tts_enabled: 'true',
     tts_speed: '0.9',
     tts_volume: '1',
@@ -49,6 +49,13 @@ const TTS_SETTING_KEYS = [
     'tts_announcement_template',
     'tts_prepare_template',
 ] as const;
+
+export async function fetchTtsSettingsForTest(): Promise<TtsSettings> {
+    // Reset cache so tests can exercise the fetch path fresh.
+    cachedSettings = null;
+    settingsFetchPromise = null;
+    return fetchTtsSettings();
+}
 
 async function fetchTtsSettings(): Promise<TtsSettings> {
     if (cachedSettings) return cachedSettings;
