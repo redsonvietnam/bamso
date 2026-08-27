@@ -242,15 +242,15 @@ export default function ThemeBuilderPanel() {
                   <div className="flex gap-1">
                     {!theme.builtIn && (
                       <>
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(theme as CustomTheme)} title="Sửa">
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(theme as CustomTheme)} title="Sửa" aria-label="Sửa">
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(theme.id)} title="Xóa">
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(theme.id)} title="Xóa" aria-label="Xóa">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => startClone(theme)} title="Nhân bản">
+                    <Button variant="ghost" size="icon" onClick={() => startClone(theme)} title="Nhân bản" aria-label="Nhân bản">
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>

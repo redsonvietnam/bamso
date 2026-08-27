@@ -166,10 +166,10 @@ export default function StaffPanel() {
                                 <td className="p-3 text-muted-foreground">{new Date(s.createdAt).toLocaleDateString('vi-VN')}</td>
                                 <td className="p-3 text-right">
                                     <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>
+                                        <Button variant="ghost" size="sm" onClick={() => startEdit(s)} aria-label="Sửa">
                                             <Edit className="w-4 h-4" />
                                         </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)}>
+                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)} aria-label="Xóa">
                                             <Trash2 className="w-4 h-4 text-red-500" />
                                         </Button>
                                     </div>

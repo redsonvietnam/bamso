@@ -62,7 +62,7 @@ export function VoiceSelector({
                   }}
                 >
                   <span className="text-sm">{v.name}</span>
-                  <button className="p-1 hover:bg-muted rounded" onClick={(e) => { e.stopPropagation(); onTestEdge(v.id); }} title={`Phát thử ${v.name}`}>
+                  <button className="p-1 hover:bg-muted rounded" onClick={(e) => { e.stopPropagation(); onTestEdge(v.id); }} title={`Phát thử ${v.name}`} aria-label={`Phát thử ${v.name}`}>
                     <Play className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </div>
