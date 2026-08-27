@@ -48,9 +48,18 @@ export function VoiceSelector({
               {EDGE_VI_VOICES.map((v) => (
                 <div
                   key={v.id}
+                  role="radio"
+                  aria-checked={edgeVoice === v.id}
+                  tabIndex={0}
                   className={`flex items-center justify-between gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${edgeVoice === v.id
                     ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
                   onClick={() => onEdgeVoiceChange(v.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onEdgeVoiceChange(v.id);
+                    }
+                  }}
                 >
                   <span className="text-sm">{v.name}</span>
                   <button className="p-1 hover:bg-muted rounded" onClick={(e) => { e.stopPropagation(); onTestEdge(v.id); }} title={`Phát thử ${v.name}`}>
