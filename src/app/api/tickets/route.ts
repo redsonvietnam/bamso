@@ -139,8 +139,22 @@ export async function DELETE(request: Request): Promise<NextResponse> {
         );
     }
 
-    const cutoffDate = new Date(cutoff);
-    if (isNaN(cutoffDate.getTime())) {
+    const dateParts = cutoff.split('-');
+    if (dateParts.length !== 3) {
+        return NextResponse.json(
+            { error: 'cutoff phải có định dạng YYYY-MM-DD', code: 'INVALID_FIELDS' },
+            { status: 400 }
+        );
+    }
+    const [year, month, day] = dateParts.map(Number);
+    if (isNaN(year) || isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+        return NextResponse.json(
+            { error: 'cutoff không hợp lệ', code: 'INVALID_FIELDS' },
+            { status: 400 }
+        );
+    }
+    const cutoffDate = new Date(year, month - 1, day);
+    if (cutoffDate.getFullYear() !== year || cutoffDate.getMonth() !== month - 1 || cutoffDate.getDate() !== day) {
         return NextResponse.json(
             { error: 'cutoff không hợp lệ', code: 'INVALID_FIELDS' },
             { status: 400 }
