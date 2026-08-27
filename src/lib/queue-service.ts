@@ -141,27 +141,29 @@ export async function callNextTicket(serviceId: string, pos: string) {
  * Completes a ticket atomically: combines status check and update into one operation.
  */
 export async function completeTicket(ticketId: string) {
-    const result = await prisma.ticket.updateMany({
-        where: {
-            id: ticketId,
-            status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
-        },
-        data: {
-            status: TicketStatus.COMPLETED,
-            completedAt: new Date(),
-        },
-    });
+    return prisma.$transaction(async (tx) => {
+        const result = await tx.ticket.updateMany({
+            where: {
+                id: ticketId,
+                status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
+            },
+            data: {
+                status: TicketStatus.COMPLETED,
+                completedAt: new Date(),
+            },
+        });
 
-    if (result.count === 0) {
-        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-        if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
-        throw new Error('Vé không ở trạng thái đang phục vụ để hoàn thành.');
-    }
+        if (result.count === 0) {
+            const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
+            if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
+            throw new Error('Vé không ở trạng thái đang phục vụ để hoàn thành.');
+        }
 
-    return prisma.ticket.findUnique({
-        where: { id: ticketId },
-        include: { service: true },
-    });
+        return tx.ticket.findUnique({
+            where: { id: ticketId },
+            include: { service: true },
+        });
+    }, { timeout: 15000 });
 }
 
 /**
