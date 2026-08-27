@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { hashPassword } from '@/lib/password';
+import { hashPassword, validatePassword } from '@/lib/password';
 import { UserRole } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
@@ -50,6 +50,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         if (!username || !password || !name || !role) {
             return NextResponse.json(
                 { error: 'username, password, name, role là bắt buộc', code: 'MISSING_FIELDS' },
+                { status: 400 }
+            );
+        }
+
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return NextResponse.json(
+                { error: passwordValidation.error, code: 'INVALID_PASSWORD' },
                 { status: 400 }
             );
         }
@@ -126,6 +134,13 @@ export async function PUT(request: Request): Promise<NextResponse> {
             updateData.role = role;
         }
         if (password) {
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return NextResponse.json(
+                    { error: passwordValidation.error, code: 'INVALID_PASSWORD' },
+                    { status: 400 }
+                );
+            }
             updateData.passwordHash = hashPassword(password);
         }
 
