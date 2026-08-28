@@ -76,11 +76,21 @@ export function speakWithWebSpeech(text: string, rate: number, volume: number): 
 }
 
 export async function loadTTSSettings(): Promise<Record<string, string>> {
-  const data = await apiClient.get<{ key: string; value: string }[]>('/api/settings');
+  const keys = Object.keys(DEFAULT_TTS_SETTINGS);
   const map: Record<string, string> = { ...DEFAULT_TTS_SETTINGS };
-  data.forEach((s) => {
-    if (s.key in DEFAULT_TTS_SETTINGS) {
-      map[s.key] = s.value;
+  const results = await Promise.all(
+    keys.map(async (key) => {
+      try {
+        const data = await apiClient.get<{ key: string; value: string }>(`/api/settings?key=${key}`);
+        return { key, value: data.value };
+      } catch {
+        return { key, value: undefined };
+      }
+    })
+  );
+  results.forEach(({ key, value }) => {
+    if (value !== undefined && value !== null) {
+      map[key] = value;
     }
   });
   return map;
