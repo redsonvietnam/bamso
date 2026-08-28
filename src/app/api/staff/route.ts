@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { hashPassword } from '@/lib/password';
+import { hashPassword, validatePassword } from '@/lib/password';
 import { UserRole } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
@@ -50,6 +50,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         if (!username || !password || !name || !role) {
             return NextResponse.json(
                 { error: 'username, password, name, role là bắt buộc', code: 'MISSING_FIELDS' },
+                { status: 400 }
+            );
+        }
+
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return NextResponse.json(
+                { error: passwordValidation.error, code: 'INVALID_PASSWORD' },
                 { status: 400 }
             );
         }
@@ -105,7 +113,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
         }
 
         const body = await request.json();
-        const { id, password, ...data } = body;
+        const { id, name, role, password } = body;
 
         if (!id) {
             return NextResponse.json(
@@ -114,8 +122,25 @@ export async function PUT(request: Request): Promise<NextResponse> {
             );
         }
 
-        const updateData: Record<string, unknown> = { ...data };
+        const updateData: Record<string, unknown> = {};
+        if (name !== undefined) updateData.name = name;
+        if (role !== undefined) {
+            if (!['STAFF', 'KIOSK', 'DISPLAY'].includes(role)) {
+                return NextResponse.json(
+                    { error: 'role phải là STAFF, KIOSK hoặc DISPLAY', code: 'INVALID_ROLE' },
+                    { status: 400 }
+                );
+            }
+            updateData.role = role;
+        }
         if (password) {
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return NextResponse.json(
+                    { error: passwordValidation.error, code: 'INVALID_PASSWORD' },
+                    { status: 400 }
+                );
+            }
             updateData.passwordHash = hashPassword(password);
         }
 
@@ -162,6 +187,24 @@ export async function DELETE(request: Request): Promise<NextResponse> {
                 { error: 'id là bắt buộc', code: 'MISSING_ID' },
                 { status: 400 }
             );
+        }
+
+        const user = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+        if (!user) {
+            return NextResponse.json(
+                { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
+                { status: 404 }
+            );
+        }
+
+        if (user.role === UserRole.ADMIN) {
+            const adminCount = await prisma.user.count({ where: { role: UserRole.ADMIN } });
+            if (adminCount <= 1) {
+                return NextResponse.json(
+                    { error: 'Không thể xóa admin cuối cùng', code: 'LAST_ADMIN' },
+                    { status: 400 }
+                );
+            }
         }
 
         await prisma.user.delete({ where: { id } });

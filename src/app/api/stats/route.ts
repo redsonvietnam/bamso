@@ -5,6 +5,10 @@ import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 
 function parseDateParam(value: string): Date | null {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
     const d = new Date(value);
     if (isNaN(d.getTime())) return null;
     return d;
@@ -19,6 +23,7 @@ export async function GET(request: Request) {
         const dateParam = searchParams.get('date');
         const fromParam = searchParams.get('from');
         const toParam = searchParams.get('to');
+        const serviceIdParam = searchParams.get('serviceId');
 
         let startDate: Date;
         let endDate: Date;
@@ -58,40 +63,39 @@ export async function GET(request: Request) {
         const startOfDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
         const endOfDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
 
-        const totalTickets = await prisma.ticket.count({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay } },
-        });
+        const where: Record<string, unknown> = { createdAt: { gte: startOfDay, lte: endOfDay } };
+        if (serviceIdParam) {
+            where.serviceId = serviceIdParam;
+        }
 
-        const completedTickets = await prisma.ticket.count({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.COMPLETED },
-        });
+        const [totalTickets, completedTickets, missedTickets, pendingTickets, activeTickets] = await Promise.all([
+            prisma.ticket.count({ where }),
+            prisma.ticket.count({ where: { ...where, status: TicketStatus.COMPLETED } }),
+            prisma.ticket.count({ where: { ...where, status: TicketStatus.MISSED } }),
+            prisma.ticket.count({ where: { ...where, status: TicketStatus.PENDING } }),
+            prisma.ticket.count({ where: { ...where, status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] } } }),
+        ]);
 
-        const missedTickets = await prisma.ticket.count({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.MISSED },
-        });
-
-        const pendingTickets = await prisma.ticket.count({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.PENDING },
-        });
-
-        const activeTickets = await prisma.ticket.count({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] } },
-        });
-
-        const completedWithTimes = await prisma.ticket.findMany({
-            where: { createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.COMPLETED, completedAt: { not: null } },
-            select: { createdAt: true, completedAt: true },
-        });
+        const [completedWithTickets, serviceList] = await Promise.all([
+            prisma.ticket.findMany({
+                where: { ...where, status: TicketStatus.COMPLETED, completedAt: { not: null } },
+                select: { createdAt: true, completedAt: true },
+            }),
+            prisma.service.findMany({
+                where: { isActive: true },
+                orderBy: { order: 'asc' },
+            }),
+        ]);
 
         let avgWaitTimeSeconds = 0;
-        if (completedWithTimes.length > 0) {
-            const totalWaitMs = completedWithTimes.reduce((sum, t) => sum + (t.completedAt!.getTime() - t.createdAt.getTime()), 0);
-            avgWaitTimeSeconds = Math.round(totalWaitMs / completedWithTimes.length / 1000);
+        if (completedWithTickets.length > 0) {
+            const totalWaitMs = completedWithTickets.reduce((sum, t) => sum + (t.completedAt!.getTime() - t.createdAt.getTime()), 0);
+            avgWaitTimeSeconds = Math.round(totalWaitMs / completedWithTickets.length / 1000);
         }
 
         const ticketsPerHour = await prisma.ticket.groupBy({
             by: ['createdAt'],
-            where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+            where,
             _count: { id: true },
         });
 
@@ -109,17 +113,15 @@ export async function GET(request: Request) {
             count,
         }));
 
-        const services = await prisma.service.findMany({
-            where: { isActive: true },
-            orderBy: { order: 'asc' },
-        });
+        const peakHours = [...hourlyData].sort((a, b) => b.count - a.count).slice(0, 5);
 
         const serviceBreakdown = await Promise.all(
-            services.map(async (service) => {
+            serviceList.map(async (service) => {
+                const svcWhere = { ...where, serviceId: service.id };
                 const [total, completed, pending] = await Promise.all([
-                    prisma.ticket.count({ where: { serviceId: service.id, createdAt: { gte: startOfDay, lte: endOfDay } } }),
-                    prisma.ticket.count({ where: { serviceId: service.id, createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.COMPLETED } }),
-                    prisma.ticket.count({ where: { serviceId: service.id, createdAt: { gte: startOfDay, lte: endOfDay }, status: TicketStatus.PENDING } }),
+                    prisma.ticket.count({ where: svcWhere }),
+                    prisma.ticket.count({ where: { ...svcWhere, status: TicketStatus.COMPLETED } }),
+                    prisma.ticket.count({ where: { ...svcWhere, status: TicketStatus.PENDING } }),
                 ]);
 
                 return { id: service.id, name: service.name, code: service.code, color: service.color, total, completed, pending };
@@ -129,6 +131,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             summary: { total: totalTickets, completed: completedTickets, missed: missedTickets, pending: pendingTickets, active: activeTickets, avgWaitTimeSeconds },
             hourly: hourlyData,
+            peakHours,
             services: serviceBreakdown,
         });
     } catch (error) {

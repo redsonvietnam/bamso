@@ -3,9 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Ticket, CheckCircle, XCircle, Clock, Users } from 'lucide-react';
+import { Ticket, CheckCircle, XCircle, Clock, Users, Download, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
+import { buildStatsCsv } from '@/lib/stats-csv';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 
 type StatsData = {
     summary: {
@@ -18,10 +21,17 @@ type StatsData = {
     };
     hourly: { hour: string; count: number }[];
     services: { id: string; name: string; code: string; color: string; total: number; completed: number; pending: number }[];
+    peakHours: { hour: string; count: number }[];
 };
 
 function todayStr() {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function yesterdayStr() {
+    const d = new Date(Date.now() - 86400000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export default function StatsPanel() {
@@ -29,12 +39,18 @@ export default function StatsPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [fromDate, setFromDate] = useState(todayStr());
     const [toDate, setToDate] = useState(todayStr());
-
+    const [selectedService, setSelectedService] = useState<string>('');
+    const [cleanupCutoff, setCleanupCutoff] = useState('');
+    const [isCleaning, setIsCleaning] = useState(false);
+    const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
     useEffect(() => {
         const fetchStats = async () => {
             setIsLoading(true);
             try {
-                const data = await apiClient.get<StatsData>(`/api/stats?from=${fromDate}&to=${toDate}`);
+                const url = selectedService
+                    ? `/api/stats?from=${fromDate}&to=${toDate}&serviceId=${selectedService}`
+                    : `/api/stats?from=${fromDate}&to=${toDate}`;
+                const data = await apiClient.get<StatsData>(url);
                 setStats(data);
             } catch (error) {
                 logger.error('Error fetching stats:', error);
@@ -44,7 +60,40 @@ export default function StatsPanel() {
         };
 
         fetchStats();
-    }, [fromDate, toDate]);
+    }, [fromDate, toDate, selectedService]);
+
+    const handleExportCsv = () => {
+        if (!stats) return;
+        const blob = new Blob([buildStatsCsv(stats, dateRangeLabel)], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `thong-ke-bamso-${dateRangeLabel}.csv`);
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleCleanup = async () => {
+        if (!cleanupCutoff) return;
+        setIsCleaning(true);
+        try {
+            const res = await fetch('/api/tickets', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ cutoff: cleanupCutoff }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Lỗi xóa vé');
+            toast.success(data.message);
+            setShowCleanupConfirm(false);
+            setCleanupCutoff('');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Lỗi xóa vé');
+        } finally {
+            setIsCleaning(false);
+        }
+    };
 
     const formatWaitTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -85,6 +134,22 @@ export default function StatsPanel() {
                         onChange={(e) => setToDate(e.target.value)}
                         className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
+                    <select
+                        value={selectedService}
+                        onChange={(e) => setSelectedService(e.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="">Tất cả dịch vụ</option>
+                        {stats.services?.map((s) => (
+                            <option key={s.id} value={s.id}>
+                                {s.name}
+                            </option>
+                        ))}
+                        {stats.services?.length === 0 && <option value="">Không có dịch vụ</option>}
+                    </select>
+                    <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                        <Download className="w-4 h-4 mr-2" /> Xuất CSV
+                    </Button>
                 </div>
             </div>
 
@@ -155,6 +220,25 @@ export default function StatsPanel() {
                 </Card>
             </div>
 
+            {/* Peak Hours Chart */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Giờ cao điểm</CardTitle>
+                    <CardDescription>Lượng vé cao nhất trong ngày</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={stats.peakHours ?? []}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
             {/* Service Breakdown */}
             <Card>
                 <CardHeader>
@@ -204,6 +288,69 @@ export default function StatsPanel() {
                             </tbody>
                         </table>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Ticket Cleanup */}
+            <Card className="border-destructive/30">
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                        Dọn dẹp vé cũ
+                    </CardTitle>
+                    <CardDescription>
+                        Xóa vĩnh viễn các vé đã hoàn thành hoặc nhỡ lượt trước ngày cutoff.
+                        Vé đang hoạt động và vé hôm nay KHÔNG bị ảnh hưởng.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {showCleanupConfirm ? (
+                        <div className="space-y-3">
+                            <p className="text-sm text-destructive font-medium">
+                                Xác nhận xóa tất cả vé hoàn thành/nhỡ lượt trước ngày {cleanupCutoff}?
+                                Hành động này không thể hoàn tác.
+                            </p>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={handleCleanup}
+                                    disabled={isCleaning || !cleanupCutoff}
+                                >
+                                    {isCleaning ? 'Đang xóa...' : 'Xác nhận xóa'}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowCleanupConfirm(false)}
+                                    disabled={isCleaning}
+                                >
+                                    Hủy
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-end gap-3">
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium">Xóa vé trước ngày</label>
+                                <input
+                                    type="date"
+                                    value={cleanupCutoff}
+                                    onChange={(e) => setCleanupCutoff(e.target.value)}
+                                    max={yesterdayStr()}
+                                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setShowCleanupConfirm(true)}
+                                disabled={!cleanupCutoff}
+                            >
+                                <Trash2 className="w-4 h-4 mr-2" /> Xóa vé cũ
+                            </Button>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

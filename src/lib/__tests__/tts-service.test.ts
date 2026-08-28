@@ -1,5 +1,39 @@
-import { describe, it, expect } from 'vitest';
-import { formatNumberForTTS, formatTemplateMessage } from '@/lib/tts-service';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { formatNumberForTTS, formatTemplateMessage, loadTTSSettings, DEFAULT_TTS_SETTINGS } from '@/lib/tts-service';
+import { apiClient } from '@/lib/api-client';
+
+vi.mock('@/lib/api-client', () => ({
+  apiClient: {
+    get: vi.fn(),
+    put: vi.fn(),
+  },
+}));
+
+describe('loadTTSSettings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches each setting by key via public settings endpoint', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url === '/api/settings?key=tts_speed') {
+        return { key: 'tts_speed', value: '1.2' };
+      }
+      return { key: '', value: null };
+    });
+
+    const settings = await loadTTSSettings();
+    expect(settings.tts_speed).toBe('1.2');
+    expect(settings.tts_enabled).toBe(DEFAULT_TTS_SETTINGS.tts_enabled);
+    expect(apiClient.get).toHaveBeenCalledWith('/api/settings?key=tts_speed');
+  });
+
+  it('falls back to defaults if key fetch fails', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new Error('Network error'));
+    const settings = await loadTTSSettings();
+    expect(settings).toEqual(DEFAULT_TTS_SETTINGS);
+  });
+});
 
 describe('formatNumberForTTS', () => {
   it('formats single digit', () => {

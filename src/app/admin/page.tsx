@@ -12,16 +12,27 @@ import TtsPanel from '@/components/admin/TtsPanel';
 import ThemeBuilderPanel from '@/components/admin/ThemeBuilderPanel';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
 import { useHeaderRight } from '@/components/layout/app-shell';
+import { apiClient } from '@/lib/api-client';
 
 type Tab = 'services' | 'staff' | 'settings' | 'stats' | 'tts' | 'themes';
 
 export default function AdminPage() {
     const { fetchMe, logout } = useAuthStore();
     const [activeTab, setActiveTab] = useState<Tab>('services');
+    const [watermarkOpacity, setWatermarkOpacity] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         fetchMe();
     }, [fetchMe]);
+
+    useEffect(() => {
+        apiClient.get<{ key: string; value: string }[]>('/api/settings').then((data) => {
+            const val = data.find((s) => s.key === 'surface_opacity')?.value;
+            if (val !== undefined && !Number.isNaN(Number(val))) {
+                setWatermarkOpacity(Number(val) / 100);
+            }
+        }).catch(() => {});
+    }, []);
 
     const handleLogout = useCallback(async () => {
         await logout();
@@ -45,7 +56,10 @@ export default function AdminPage() {
 
     return (
         <div className="relative min-h-full bg-background overflow-hidden">
-            <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+            <PageWatermark
+                className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem]"
+                opacity={watermarkOpacity}
+            />
 
             <div className="max-w-6xl mx-auto px-6 py-8">
                 <div className="flex gap-2 mb-6 border-b pb-1">

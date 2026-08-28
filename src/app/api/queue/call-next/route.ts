@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
-import { readJsonObject, requiredStringFields } from '@/lib/api-validation';
+import { readJsonObject, requiredStringFields, sanitizeQueueError } from '@/lib/api-validation';
 
 export async function POST(request: Request) {
     try {
@@ -54,11 +54,10 @@ export async function POST(request: Request) {
         return NextResponse.json(ticket);
     } catch (error) {
         logger.error('Call next error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Lỗi hệ thống';
-        const isNoTickets = errorMessage.includes('Không còn số thứ tự');
+        const { message, isClientError } = sanitizeQueueError(error);
         return NextResponse.json(
-            { error: errorMessage, code: isNoTickets ? 'QUEUE_EMPTY' : 'INTERNAL_ERROR' },
-            { status: isNoTickets ? 404 : 500 }
+            { error: message, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
+            { status: isClientError ? 400 : 500 }
         );
     }
 }

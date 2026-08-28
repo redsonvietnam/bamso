@@ -36,3 +36,56 @@ export function requiredStringFields(
 export function requiredPositiveInteger(value: unknown): boolean {
     return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
+
+const SAFE_ERROR_MESSAGES: Record<string, string> = {
+    'Không còn số thứ tự': 'Không còn số thứ tự nào đang chờ.',
+    'Không thể gọi vé': 'Không thể gọi vé — vui lòng thử lại.',
+    'Không tìm thấy phiếu yêu cầu': 'Không tìm thấy phiếu yêu cầu.',
+    'không ở trạng thái đang phục vụ để hoàn thành': 'Vé không ở trạng thái có thể hoàn thành.',
+    'không ở trạng thái đang phục vụ để bỏ qua': 'Vé không ở trạng thái có thể bỏ qua.',
+    'Trạng thái vé đã thay đổi': 'Trạng thái vé đã thay đổi, vui lòng thử lại.',
+    'Chỉ có thể khôi phục': 'Chỉ có thể khôi phục vé ở trạng thái nhỡ lượt.',
+    'Dịch vụ không tồn tại': 'Dịch vụ không tồn tại hoặc đã ngừng hoạt động.',
+};
+
+export function sanitizeApiError(error: unknown): { message: string; isClientError: boolean } {
+    const rawMessage = error instanceof Error ? error.message : '';
+
+    for (const [pattern, sanitized] of Object.entries(SAFE_ERROR_MESSAGES)) {
+        if (rawMessage.includes(pattern)) {
+            return { message: sanitized, isClientError: true };
+        }
+    }
+
+    return { message: 'Đã xảy ra lỗi hệ thống.', isClientError: false };
+}
+
+export function sanitizeQueueError(error: unknown): { message: string; isClientError: boolean } {
+    return sanitizeApiError(error);
+}
+
+const VALID_MODES = new Set(['quick', 'manual', 'qr']);
+
+export function validateAllowedModes(value: unknown): { valid: boolean; normalized?: string; error?: string } {
+    if (typeof value !== 'string') {
+        return { valid: false, error: 'allowedModes phải là chuỗi JSON' };
+    }
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(value);
+    } catch {
+        return { valid: false, error: 'allowedModes phải là JSON hợp lệ' };
+    }
+
+    if (!Array.isArray(parsed)) {
+        return { valid: false, error: 'allowedModes phải là mảng' };
+    }
+
+    const invalid = parsed.filter((m) => typeof m !== 'string' || !VALID_MODES.has(m));
+    if (invalid.length > 0) {
+        return { valid: false, error: `allowedModes chứa giá trị không hợp lệ: ${invalid.join(', ')}` };
+    }
+
+    return { valid: true, normalized: JSON.stringify(parsed) };
+}

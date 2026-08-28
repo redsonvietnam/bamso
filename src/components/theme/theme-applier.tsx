@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useThemes } from "@/lib/theme/use-themes";
 import { TOKEN_VARS } from "@/lib/theme/types";
@@ -112,14 +113,29 @@ function loadGlobalGoogleFont(font: string) {
  * overrides: surface opacity (--surface-alpha) + global font overrides.
  */
 export function ThemeApplier() {
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const pathname = usePathname();
   const { all, loading } = useThemes();
   const [globalFonts, setGlobalFonts] = useState<{ fontSans?: string; fontDisplay?: string }>({});
   const [surfaceOpacity, setSurfaceOpacity] = useState<string>("100%");
+  const [systemTheme, setSystemTheme] = useState<string | null>(null);
 
   // Load admin overrides from settings (custom-theme builder + global UI).
   useEffect(() => {
     let cancelled = false;
+
+    const applySettingsMap = (map: Record<string, string>) => {
+      const opacity = map["surface_opacity"];
+      setSurfaceOpacity(opacity && !Number.isNaN(Number(opacity)) ? `${opacity}%` : "100%");
+      setGlobalFonts({
+        fontSans: map["font_sans"] || undefined,
+        fontDisplay: map["font_display"] || undefined,
+      });
+      if (map["system_theme"]) {
+        setSystemTheme(map["system_theme"]);
+      }
+    };
+
     const loadSettings = () => {
       apiClient
         .get<{ key: string; value: string }[]>("/api/settings")
@@ -129,14 +145,25 @@ export function ThemeApplier() {
           settings.forEach((s) => {
             map[s.key] = s.value;
           });
-          const opacity = map["surface_opacity"];
-          setSurfaceOpacity(opacity && !Number.isNaN(Number(opacity)) ? `${opacity}%` : "100%");
-          setGlobalFonts({
-            fontSans: map["font_sans"] || undefined,
-            fontDisplay: map["font_display"] || undefined,
-          });
+          applySettingsMap(map);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (cancelled) return;
+          Promise.all([
+            apiClient.get<{ key: string; value: string }>("/api/settings?key=system_theme").catch(() => null),
+            apiClient.get<{ key: string; value: string }>("/api/settings?key=surface_opacity").catch(() => null),
+            apiClient.get<{ key: string; value: string }>("/api/settings?key=font_sans").catch(() => null),
+            apiClient.get<{ key: string; value: string }>("/api/settings?key=font_display").catch(() => null),
+          ]).then(([themeSet, opacitySet, sansSet, displaySet]) => {
+            if (cancelled) return;
+            const map: Record<string, string> = {};
+            if (themeSet) map[themeSet.key] = themeSet.value;
+            if (opacitySet) map[opacitySet.key] = opacitySet.value;
+            if (sansSet) map[sansSet.key] = sansSet.value;
+            if (displaySet) map[displaySet.key] = displaySet.value;
+            applySettingsMap(map);
+          });
+        });
     };
     loadSettings();
     // Admin saves via /api/settings -> re-apply live without a page reload.
@@ -180,6 +207,14 @@ export function ThemeApplier() {
       loadGlobalGoogleFont(globalFonts.fontDisplay);
     }
   }, [theme, all, loading, surfaceOpacity, globalFonts]);
+
+  useEffect(() => {
+    if (!systemTheme || !theme) return;
+    if (pathname === "/demo") return; 
+    if (theme !== systemTheme) {
+      setTheme(systemTheme);
+    }
+  }, [theme, systemTheme, setTheme, pathname]);
 
   return null;
 }

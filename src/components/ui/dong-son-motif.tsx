@@ -62,9 +62,13 @@ export function DongSonSun(props: SVGProps<SVGSVGElement>) {
  * Positioned absolutely, ignores pointer events, and never blocks content.
  * Tune size / placement / opacity via `className`.
  */
-export function PageWatermark({ className = '' }: { className?: string }) {
+export function PageWatermark({ className = '', opacity }: { className?: string; opacity?: number }) {
     return (
-        <div aria-hidden="true" className={`pointer-events-none select-none absolute overflow-hidden scale-[3] ${className}`}>
+        <div
+            aria-hidden="true"
+            className={`pointer-events-none select-none absolute overflow-hidden scale-[3] ${className}`}
+            {...(opacity !== undefined ? { style: { opacity } } : {})}
+        >
             <motion.img
     src="/brand/trong-dong-dong-son.svg"
     alt=""

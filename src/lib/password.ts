@@ -57,6 +57,19 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     }
 }
 
+export function validatePassword(password: string): { valid: boolean; error?: string } {
+    if (typeof password !== 'string') {
+        return { valid: false, error: 'Mật khẩu phải là chuỗi ký tự' };
+    }
+    if (password.length < 8) {
+        return { valid: false, error: 'Mật khẩu phải có ít nhất 8 ký tự' };
+    }
+    if (password.trim().length === 0) {
+        return { valid: false, error: 'Mật khẩu không được chỉ chứa khoảng trắng' };
+    }
+    return { valid: true };
+}
+
 /**
  * Checks if a stored hash needs to be rehashed with more iterations.
  * Returns true if the hash was created with fewer than DEFAULT_ITERATIONS.

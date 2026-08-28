@@ -19,6 +19,7 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/password', () => ({
     hashPassword: vi.fn(() => 'hashed-password'),
+    validatePassword: vi.fn(() => ({ valid: true })),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -109,7 +110,7 @@ describe('POST /api/staff', () => {
         const req = new Request('http://localhost/api/staff', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'new', password: 'pass', name: 'New', role: 'STAFF' }),
+            body: JSON.stringify({ username: 'new', password: 'password123', name: 'New', role: 'STAFF' }),
         });
         const res = await POST(req);
         expect(res.status).toBe(403);
@@ -135,7 +136,7 @@ describe('POST /api/staff', () => {
         const req = new Request('http://localhost/api/staff', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'new', password: 'pass', name: 'New', role: 'STAFF' }),
+            body: JSON.stringify({ username: 'new', password: 'password123', name: 'New', role: 'STAFF' }),
         });
         const res = await POST(req);
         expect(res.status).toBe(201);
@@ -152,6 +153,7 @@ describe('DELETE /api/staff', () => {
 
     it('deletes staff for ADMIN', async () => {
         adminAuth();
+        mockedFindUnique.mockResolvedValue({ role: 'STAFF' });
         mockedDelete.mockResolvedValue({});
         const req = new Request('http://localhost/api/staff?id=1');
         const res = await DELETE(req);

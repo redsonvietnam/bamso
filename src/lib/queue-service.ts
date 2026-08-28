@@ -3,55 +3,39 @@ import { TicketStatus } from '@/lib/constants';
 
 const MAX_CALL_RETRIES = 5;
 
+function createMutex() {
+    const locks = new Map<string, Promise<void>>();
+
+    return async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+        const previous = locks.get(key) ?? Promise.resolve();
+        let release!: () => void;
+        const current = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        locks.set(key, current);
+        await previous;
+
+        try {
+            return await fn();
+        } finally {
+            release();
+            if (locks.get(key) === current) {
+                locks.delete(key);
+            }
+        }
+    };
+}
+
 // Serialize call-next operations per counter. This prevents a concurrent request
 // on the same counter from auto-completing the ticket just claimed by the first
 // request. Different counters remain independent and can proceed concurrently.
-const callNextLocks = new Map<string, Promise<void>>();
-
-async function withPosLock<T>(pos: string, fn: () => Promise<T>): Promise<T> {
-    const previous = callNextLocks.get(pos) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-        release = resolve;
-    });
-
-    callNextLocks.set(pos, current);
-    await previous;
-
-    try {
-        return await fn();
-    } finally {
-        release();
-        if (callNextLocks.get(pos) === current) {
-            callNextLocks.delete(pos);
-        }
-    }
-}
+const withPosLock = createMutex();
 
 // Serialize operations that mutate queue positions for the same service.
 // This lock is shared by skip and restore because both read the current queue
 // and then derive a new position from that snapshot.
-const serviceQueueLocks = new Map<string, Promise<void>>();
-
-async function withServiceQueueLock<T>(serviceId: string, fn: () => Promise<T>): Promise<T> {
-    const previous = serviceQueueLocks.get(serviceId) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-        release = resolve;
-    });
-
-    serviceQueueLocks.set(serviceId, current);
-    await previous;
-
-    try {
-        return await fn();
-    } finally {
-        release();
-        if (serviceQueueLocks.get(serviceId) === current) {
-            serviceQueueLocks.delete(serviceId);
-        }
-    }
-}
+const withServiceQueueLock = createMutex();
 
 function getTodayBounds() {
     const now = new Date();
@@ -141,27 +125,29 @@ export async function callNextTicket(serviceId: string, pos: string) {
  * Completes a ticket atomically: combines status check and update into one operation.
  */
 export async function completeTicket(ticketId: string) {
-    const result = await prisma.ticket.updateMany({
-        where: {
-            id: ticketId,
-            status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
-        },
-        data: {
-            status: TicketStatus.COMPLETED,
-            completedAt: new Date(),
-        },
-    });
+    return prisma.$transaction(async (tx) => {
+        const result = await tx.ticket.updateMany({
+            where: {
+                id: ticketId,
+                status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
+            },
+            data: {
+                status: TicketStatus.COMPLETED,
+                completedAt: new Date(),
+            },
+        });
 
-    if (result.count === 0) {
-        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-        if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
-        throw new Error('Vé không ở trạng thái đang phục vụ để hoàn thành.');
-    }
+        if (result.count === 0) {
+            const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
+            if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
+            throw new Error('Vé không ở trạng thái đang phục vụ để hoàn thành.');
+        }
 
-    return prisma.ticket.findUnique({
-        where: { id: ticketId },
-        include: { service: true },
-    });
+        return tx.ticket.findUnique({
+            where: { id: ticketId },
+            include: { service: true },
+        });
+    }, { timeout: 15000 });
 }
 
 /**

@@ -8,12 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TtsSliderControl } from '@/components/admin/TtsSliderControl';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import { Check, Palette } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import { FONT_OPTIONS } from '@/lib/theme/fonts';
+import { useThemes } from '@/lib/theme/use-themes';
+import { PRESET_THEMES } from '@/lib/theme/presets';
+import { hslToHex } from '@/lib/theme/color';
 
 export default function SettingsPanel() {
+    const { customs } = useThemes();
+    const all = [...PRESET_THEMES, ...customs];
     const [settings, setSettings] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -77,7 +82,55 @@ export default function SettingsPanel() {
                 isLoading={isSaving}
                 onValueChange={(val) => setSettings({ ...settings, surface_opacity: val })}
                 onSave={() => handleSave('surface_opacity', settings['surface_opacity'] || '100')}
-            />
+             />
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Palette className="w-5 h-5" />
+                        Giao diện hệ thống
+                    </CardTitle>
+                    <CardDescription>
+                        Chọn giao diện mặc định cho toàn bộ máy khách và thiết bị.
+                        Người dùng ở trang chủ, trang chờ, kiosk, màn hình hiển thị... sẽ thấy giao diện này.
+                        Chỉ Admin mới có thể thay đổi.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Label>Chọn giao diện</Label>
+                    <Select
+                        value={settings['system_theme'] || 'doodle'}
+                        onValueChange={(v) => setSettings({ ...settings, system_theme: v })}
+                    >
+                        <SelectTrigger className="mt-1 max-w-xs">
+                            <SelectValue placeholder="Chọn giao diện" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {all.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className="h-3 w-3 rounded-full"
+                                            style={{ backgroundColor: t.colors.primary ? hslToHex(t.colors.primary) : '#ccc' }}
+                                        />
+                                        <span>{t.name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {t.builtIn ? '(mặc định)' : '(tùy chỉnh)'}
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        className="mt-4"
+                        onClick={() => handleSave('system_theme', settings['system_theme'] || 'doodle')}
+                        disabled={isSaving}
+                    >
+                        <Check className="w-4 h-4 mr-1" /> Lưu giao diện hệ thống
+                    </Button>
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>

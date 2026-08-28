@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+import { validateAllowedModes } from '@/lib/api-validation';
 
 export async function GET(request: Request) {
     try {
@@ -73,7 +74,7 @@ export async function PUT(request: Request) {
         if ('error' in auth) return auth.error;
 
         const body = await request.json();
-        const { id, ...data } = body;
+        const { id, code, name, description, color, prefix, order, allowedModes } = body;
 
         if (!id) {
             return NextResponse.json(
@@ -82,9 +83,27 @@ export async function PUT(request: Request) {
             );
         }
 
+        const updateData: Record<string, unknown> = {};
+        if (code !== undefined) updateData.code = code;
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description || null;
+        if (color !== undefined) updateData.color = color;
+        if (prefix !== undefined) updateData.prefix = prefix;
+        if (order !== undefined) updateData.order = order;
+        if (allowedModes !== undefined) {
+            const modesValidation = validateAllowedModes(allowedModes);
+            if (!modesValidation.valid) {
+                return NextResponse.json(
+                    { error: modesValidation.error, code: 'INVALID_MODES' },
+                    { status: 400 }
+                );
+            }
+            updateData.allowedModes = modesValidation.normalized;
+        }
+
         const service = await prisma.service.update({
             where: { id },
-            data,
+            data: updateData,
         });
 
         return NextResponse.json(service);
