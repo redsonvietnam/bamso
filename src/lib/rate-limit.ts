@@ -1,4 +1,4 @@
-import redis from '@/lib/redis';
+import { getRedisClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
 interface RateLimitConfig {
@@ -24,6 +24,9 @@ export async function checkRateLimit(
         const { windowMs, maxRequests } = config;
         const windowSeconds = Math.ceil(windowMs / 1000);
         const redisKey = `ratelimit:${key}`;
+
+        const redis = getRedisClient();
+        if (!redis) return { allowed: true, remaining: maxRequests };
 
         const pipeline = redis.pipeline();
         pipeline.incr(redisKey);

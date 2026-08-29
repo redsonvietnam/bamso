@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import { redis, redisPubSub } from '@/lib/redis';
+import { getRedisClient, getRedisPubSubClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 import { UserRole } from '@/lib/constants';
 
@@ -44,6 +44,9 @@ export class SSEBroker {
 
         // Subscribe to Redis channels for cross-instance synchronization
         // Fail-open: if Redis is unavailable, run in single-instance mode
+        const redisPubSub = getRedisPubSubClient();
+        if (!redisPubSub) return;
+
         try {
             redisPubSub.subscribe(CHANNELS.QUEUE_UPDATE, CHANNELS.DISPLAY_CALL).catch((err) => {
                 logger.error('Redis subscribe failed (single-instance mode):', err);
@@ -97,13 +100,16 @@ export class SSEBroker {
 
     async broadcastQueueUpdate(serviceId?: string) {
         // Use Promise.allSettled to ensure both local and Redis broadcasts are attempted.
+        const redis = getRedisClient();
         const promises = [
             this.broadcastQueueUpdateLocal(serviceId).catch((err) => {
                 logger.error('Local queue broadcast failed:', err);
             }),
-            redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId })).catch((err) => {
-                logger.error('Redis publish queue update failed:', err);
-            })
+            redis
+                ? redis.publish(CHANNELS.QUEUE_UPDATE, JSON.stringify({ serviceId })).catch((err) => {
+                      logger.error('Redis publish queue update failed:', err);
+                  })
+                : Promise.resolve(0),
         ];
         await Promise.allSettled(promises);
     }
@@ -143,13 +149,16 @@ export class SSEBroker {
     }
 
     async broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+        const redis = getRedisClient();
         const promises = [
             this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber).catch((err) => {
                 logger.error('Local display call broadcast failed:', err);
             }),
-            redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
-                logger.error('Redis publish display call failed:', err);
-            })
+            redis
+                ? redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
+                      logger.error('Redis publish display call failed:', err);
+                  })
+                : Promise.resolve(0),
         ];
         await Promise.allSettled(promises);
     }

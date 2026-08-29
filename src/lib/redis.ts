@@ -18,8 +18,8 @@ const redisConfig = {
 };
 
 declare global {
-    var redis: Redis | undefined;
-    var redisPubSub: Redis | undefined;
+    var _redisClient: Redis | undefined;
+    var _redisPubSubClient: Redis | undefined;
 }
 
 function createRedisClient(): Redis {
@@ -36,10 +36,18 @@ function createRedisClient(): Redis {
     return client;
 }
 
-export const redis = global.redis || createRedisClient();
-if (process.env.NODE_ENV !== 'production') global.redis = redis;
+export function getRedisClient(): Redis | null {
+    if (!process.env.REDIS_HOST) return null;
+    if (!global._redisClient) {
+        global._redisClient = createRedisClient();
+    }
+    return global._redisClient;
+}
 
-export const redisPubSub = global.redisPubSub || createRedisClient();
-if (process.env.NODE_ENV !== 'production') global.redisPubSub = redisPubSub;
-
-export default redis;
+export function getRedisPubSubClient(): Redis | null {
+    if (!process.env.REDIS_HOST) return null;
+    if (!global._redisPubSubClient) {
+        global._redisPubSubClient = createRedisClient();
+    }
+    return global._redisPubSubClient;
+}

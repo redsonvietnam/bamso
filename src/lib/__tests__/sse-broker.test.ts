@@ -10,14 +10,13 @@ vi.mock('@/lib/db', () => ({
     },
 }));
 
+const { mockRedis, mockRedisPubSub } = vi.hoisted(() => ({
+    mockRedis: { publish: vi.fn() },
+    mockRedisPubSub: { subscribe: vi.fn(), on: vi.fn() },
+}));
 vi.mock('@/lib/redis', () => ({
-    redis: {
-        publish: vi.fn(),
-    },
-    redisPubSub: {
-        subscribe: vi.fn(),
-        on: vi.fn(),
-    },
+    getRedisClient: vi.fn(() => mockRedis),
+    getRedisPubSubClient: vi.fn(() => mockRedisPubSub),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -30,7 +29,6 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import prisma from '@/lib/db';
-import { redis, redisPubSub } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 import { SSEBroker } from '@/lib/sse-broker';
 
@@ -38,11 +36,6 @@ const mockedPrisma = prisma as unknown as {
     ticket: {
         findMany: ReturnType<typeof vi.fn>;
     };
-};
-const mockedRedis = redis as unknown as { publish: ReturnType<typeof vi.fn> };
-const mockedRedisPubSub = redisPubSub as unknown as {
-    subscribe: ReturnType<typeof vi.fn>;
-    on: ReturnType<typeof vi.fn>;
 };
 
 const decoder = new TextDecoder();
@@ -79,8 +72,8 @@ function createBroker(): SSEBroker {
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockedRedis.publish.mockResolvedValue(1);
-    mockedRedisPubSub.subscribe.mockResolvedValue([]);
+    mockRedis.publish.mockResolvedValue(1);
+    mockRedisPubSub.subscribe.mockResolvedValue([]);
 });
 
 describe('subscribeQueue / unsubscribeQueue', () => {
@@ -263,7 +256,7 @@ describe('broadcastQueueUpdate — fail-open Redis', () => {
         const broker = createBroker();
         const { controller } = makeController();
         mockedPrisma.ticket.findMany.mockResolvedValue([{ id: 't1', serviceId: 'svc-1' }]);
-        mockedRedis.publish.mockRejectedValue(new Error('Redis down'));
+        mockRedis.publish.mockRejectedValue(new Error('Redis down'));
 
         broker.subscribeQueue('client-1', controller);
         await expect(broker.broadcastQueueUpdate()).resolves.not.toThrow();
@@ -276,7 +269,7 @@ describe('broadcastQueueUpdate — fail-open Redis', () => {
         const broker = createBroker();
         const { controller } = makeController();
         mockedPrisma.ticket.findMany.mockResolvedValue([{ id: 't1', serviceId: 'svc-1' }]);
-        mockedRedisPubSub.subscribe.mockRejectedValue(new Error('Redis down'));
+        mockRedisPubSub.subscribe.mockRejectedValue(new Error('Redis down'));
 
         broker.subscribeQueue('client-1', controller);
         await expect(broker.broadcastQueueUpdate()).resolves.not.toThrow();
@@ -291,7 +284,7 @@ describe('broadcastQueueUpdate — fail-open Redis', () => {
 
         await broker.broadcastQueueUpdate('svc-1');
 
-        expect(mockedRedis.publish).toHaveBeenCalledWith(
+        expect(mockRedis.publish).toHaveBeenCalledWith(
             'queue:updates',
             JSON.stringify({ serviceId: 'svc-1' })
         );
@@ -333,7 +326,7 @@ describe('broadcastDisplayCall', () => {
         const broker = createBroker();
         await broker.broadcastDisplayCall('A001', 'Q1', 'Nguyễn Văn A');
 
-        expect(mockedRedis.publish).toHaveBeenCalledWith(
+        expect(mockRedis.publish).toHaveBeenCalledWith(
             'display:calls',
             JSON.stringify({ ticketNumber: 'A001', pos: 'Q1', customerName: 'Nguyễn Văn A', nextTicketNumber: undefined })
         );
@@ -377,7 +370,7 @@ describe('controller.enqueue ném lỗi → client bị gỡ', () => {
 
     it('logger.error được gọi khi redis.publish thất bại', async () => {
         const broker = createBroker();
-        mockedRedis.publish.mockRejectedValue(new Error('Redis down'));
+        mockRedis.publish.mockRejectedValue(new Error('Redis down'));
 
         await broker.broadcastQueueUpdate('svc-1');
 
