@@ -732,9 +732,9 @@ Script: `scripts/install-backup-task.ps1`
 | Static IP | Cần cấu hình khi deploy |
 | Internal HTTPS | **ĐÃTriển khai** — `server.js` + `scripts/generate-cert.ps1` |
 | Certificate | Self-signed PFX, DNS SAN, port 3443 |
-| Firewall | Cần cấu hình (WS-56) |
-| Startup/restart | Task Scheduler (WS-58) |
-| Database backup | Script sao lưu (WS-57) |
+| Firewall | **ĐÃTriển khai** — `scripts/setup-firewall.ps1` |
+| Startup/restart | **ĐÃTriển khai** — Task Scheduler + `scripts/start-production.ps1` |
+| Database backup | **ĐÃTriển khai** — `scripts/backup-db.py` (WS-57) |
 | Power failure recovery | SQLite survive restart, nhưng cần UPS |
 | Kiosk clients | Trình duyệt Chromium (cần trust certificate) |
 | Display clients | Trình duyệt Chromium (cần trust certificate) |
@@ -746,10 +746,10 @@ Script: `scripts/install-backup-task.ps1`
 | Hạng mục | Trạng thái | Ghi chú |
 |---|---|---|
 | HTTPS | **ĐÃTriển khai** | `npm run start:https`, cert via `npm run cert:generate` |
-| Backup | WS-57 | Script sao lưu `dev.db` định kỳ |
-| Startup | WS-58 | Task Scheduler hoặc PM2 |
+| Backup | **ĐÃTriển khai** | `npm run backup`, Task Scheduler via `npm run backup:install-task` |
+| Startup | **ĐÃTriển khai** | `npm run install:service`, auto-start on boot |
 | Monitoring | Health check có sẵn | `GET /api/health` |
-| Firewall | WS-56 | Block port 3443 từ WAN |
+| Firewall | **ĐÃTriển khai** | `scripts/setup-firewall.ps1` |
 | Kiosk | Cấu hình khi deploy | Kiosk mode Chrome/Edge |
 | Display | Cấu hình khi deploy | Full-screen Chrome/Edge |
 
@@ -761,11 +761,40 @@ Script: `scripts/install-backup-task.ps1`
 4. **Start server:** `npm run start:https`
 5. **Verify:** `https://<server-ip>:3443/api/health`
 
-### 12.3 Cần quyết định (WS-54)
+### 12.4 Process Management (WS-58)
 
-- Cấu hình HTTPS nội bộ
-- Chính sách backup database
-- Startup tự động khi reboot
+**Process Model:** Windows Task Scheduler (native, no extra software)
+
+**Startup Command:**
+```
+Working directory: D:\bamso (project root)
+Executable: powershell.exe
+Arguments: -NoProfile -ExecutionPolicy Bypass -File "scripts\start-production.ps1"
+```
+
+**Auto-start:** Task Scheduler trigger at system boot (30s delay) + daily safety net at 06:00
+
+**Auto-restart:** Task Scheduler RestartCount=3, RestartInterval=1 minute
+
+**Health Check:** `GET /api/health` — checks DB connectivity
+
+**Graceful Shutdown:** SIGTERM/SIGINT handlers in server.js — closes active servers, 5s timeout
+
+**Logging:** stdout/stderr captured by Task Scheduler; startup log at `logs/startup.log`
+
+**npm Scripts:**
+| Script | Command |
+|---|---|
+| `npm run start:production` | Start with preflight checks |
+| `npm run install:service` | Install Task Scheduler |
+
+**DEPLOYMENT-TIME:** Task Scheduler installation requires running `npm run install:service` as Administrator on production machine.
+
+### 12.5 Cần quyết định (WS-54)
+
+- Cấu hình HTTPS nội bộ (đã có WS-55B)
+- Chính sách backup database (đã có WS-57)
+- Startup tự động khi reboot (đã có WS-58)
 - Kiosk lockdown policy
 - Network topology (switch, cáp)
 - Phân quyền VLAN (nếu có)

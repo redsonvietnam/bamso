@@ -22,7 +22,9 @@
     "backup": "python scripts/backup-db.py",
     "backup:verify": "python scripts/backup-db.py --dry-run",
     "restore": "python scripts/restore-db.py",
-    "backup:install-task": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1"
+    "backup:install-task": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1",
+    "start:production": "powershell -ExecutionPolicy Bypass -File scripts/start-production.ps1",
+    "install:service": "powershell -ExecutionPolicy Bypass -File scripts/install-bamso-task.ps1"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

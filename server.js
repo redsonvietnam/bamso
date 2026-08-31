@@ -88,12 +88,31 @@ validateProductionSecrets();
 
 app.prepare().then(() => {
   const credentials = loadCredentials();
+  const servers = [];
+
+  function gracefulShutdown(signal) {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+    for (const server of servers) {
+      server.close(() => {
+        console.log('Server closed.');
+      });
+    }
+    // Force exit after 5 seconds if connections don't close
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout.');
+      process.exit(1);
+    }, 5000);
+  }
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   if (credentials) {
     // HTTPS server
     const httpsServer = https.createServer(credentials, (req, res) => {
       handle(req, res);
     });
+    servers.push(httpsServer);
 
     httpsServer.listen(HTTPS_PORT, HOST, (err) => {
       if (err) throw err;
@@ -106,6 +125,7 @@ app.prepare().then(() => {
       res.writeHead(301, { Location: `https://${host}:${HTTPS_PORT}${req.url}` });
       res.end();
     });
+    servers.push(httpServer);
 
     httpServer.listen(HTTP_PORT, HOST, () => {
       console.log(`> HTTP redirect on http://${HOST}:${HTTP_PORT} → https://${HOST}:${HTTPS_PORT}`);
@@ -120,6 +140,7 @@ app.prepare().then(() => {
     const httpServer = http.createServer((req, res) => {
       handle(req, res);
     });
+    servers.push(httpServer);
 
     httpServer.listen(HTTP_PORT, HOST, (err) => {
       if (err) throw err;
