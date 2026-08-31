@@ -15,6 +15,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3443', 10);
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -24,6 +26,36 @@ const PFX_PATH = process.env.HTTPS_PFX_PATH || path.join(process.cwd(), 'certs',
 const PFX_PASSWORD = process.env.HTTPS_PFX_PASSWORD || 'bamso2026';
 const KEY_PATH = process.env.HTTPS_KEY_PATH || path.join(process.cwd(), 'certs', 'localhost-key.pem');
 const CERT_PATH = process.env.HTTPS_CERT_PATH || path.join(process.cwd(), 'certs', 'localhost.pem');
+
+// --- Production startup security checks ---
+function validateProductionSecrets() {
+  if (!isProd) return;
+
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('FATAL: JWT_SECRET environment variable is required in production.');
+    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
+    process.exit(1);
+  }
+  if (jwtSecret.length < 32) {
+    console.error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+    process.exit(1);
+  }
+
+  // Check for known development JWT secret
+  const knownDevSecrets = [
+    '5a9ade818174541b4f391068d265b4d52003cb31903c9c589f5cd3a0bcacf364',
+  ];
+  if (knownDevSecrets.includes(jwtSecret)) {
+    console.error('FATAL: JWT_SECRET is a known development value. Generate a unique production secret.');
+    process.exit(1);
+  }
+
+  // Warn about default PFX password
+  if (PFX_PASSWORD === 'bamso2026') {
+    console.warn('WARNING: HTTPS_PFX_PASSWORD is the default value. Set a unique password for production.');
+  }
+}
 
 const dev = process.env.NODE_ENV !== 'production';
 
@@ -51,6 +83,8 @@ function loadCredentials() {
 
   return null;
 }
+
+validateProductionSecrets();
 
 app.prepare().then(() => {
   const credentials = loadCredentials();

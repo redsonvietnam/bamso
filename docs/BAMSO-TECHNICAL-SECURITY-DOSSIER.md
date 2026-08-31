@@ -256,7 +256,62 @@ Nguồn: `next.config.ts:7-18`
 - React mặc hiểm escape JSX — XSS thường khó xảy ra trừ khi dùng `dangerouslySetInnerHTML`
 - Không tìm thấy `dangerouslySetInnerHTML` trong codebase
 
-**Cookie security:** HTTP-only, SameSite=lax, secure khi chạy qua HTTPS (xác định bởi `x-forwarded-proto` header).
+**Cookie security:** HTTP-only, SameSite=lax, secure khi chạy qua HTTPS (xác định bởi `x-forwarded-proto` header hoặc request URL protocol).
+
+### 5.6 Production Security Hardening (WS-56)
+
+**Mục tiêu:** Loại bỏ credentials mặc định, bảo vệ secrets, cấu hình firewall.
+
+#### Credential Policy
+
+| Hành vi | Trạng thái | Ghi chú |
+|---|---|---|
+| Seed credentials | Chỉ development | `prisma/seed.ts` tạo default accounts |
+| Known default passwords | **KHÔNG an toàn cho production** | `admin@2026`, `canbo1@123`, etc. |
+| Password change | Qua Admin panel → Staff management | ADMIN có thể tạo/sửa user |
+| Production requirement | **Phải thay đổi default passwords** | Deployment-time operational procedure |
+
+#### JWT Secret Policy
+
+| Hành vi | Trạng thái | Evidence |
+|---|---|---|
+| Source | `JWT_SECRET` env var | `auth.ts:6` |
+| Minimum length | 32 chars (production enforced) | `auth.ts:10-12` |
+| Known dev secret | **BỊ CHẶN trong production** | `server.js` startup check |
+| Committed to Git | `.env` is gitignored | `.gitignore:36` |
+| Secret in logs | KHÔNG | Không có logging secret |
+
+#### HTTPS PFX Password Policy
+
+| Hành vi | Trạng thái | Evidence |
+|---|---|---|
+| Default | `bamso2026` | `server.js:24` |
+| Configurable | `HTTPS_PFX_PASSWORD` env var | `server.js:24` |
+| Production warning | Console warning if default used | `server.js` |
+| Committed to Git | NO (`certs/` gitignored) | `.gitignore:54` |
+
+#### Rate Limiting
+
+| Hành vi | Trạng thái | Evidence |
+|---|---|---|
+| Implementation | Redis-backed (fail-open) | `rate-limit.ts:14-49` |
+| Auth rate limit | 50 req/phút | `rate-limit.ts:67` |
+| Disable flag | `RATE_LIMIT_DISABLED=true` | `.env:4` |
+| Production | **PHẢI BẬT** — xóa `RATE_LIMIT_DISABLED` hoặc set `false` | Deployment-time |
+
+#### Windows Firewall
+
+Script triển khai: `scripts/setup-firewall.ps1`
+- ALLOW TCP 3443 (HTTPS) từ LAN subnet
+- ALLOW TCP 3000 (HTTP redirect) từ LAN subnet
+- BLOCK TCP 3443/3000 từ WAN/external
+- Không disable Windows Firewall
+
+#### SQLite File Protection
+
+- File: `prisma/dev.db` (+ `dev.db-wal`, `dev.db-shm`)
+- ACL: Chỉ BAMSO process account và administrators
+- Triển khai: Manual Windows ACL configuration khi deploy
 
 ---
 
