@@ -10,6 +10,8 @@
     "clean": "if exist .next rmdir /s /q .next && if exist out rmdir /s /q out",
     "rebuild": "npm run clean && npm run build",
     "start": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" next start --hostname 0.0.0.0",
+    "start:https": "node server.js",
+    "cert:generate": "powershell -ExecutionPolicy Bypass -File scripts/generate-cert.ps1",
     "lint": "eslint src --max-warnings=0",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write src",

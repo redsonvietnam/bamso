@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+*.pfx
+*.key
 
 # debug
 npm-debug.log*
@@ -47,6 +49,9 @@ next-env.d.ts
 # local sqlite database
 *.db
 *.db-journal
+
+# certificates
+/certs/
 
 # scratch / test files
 /scratch/
