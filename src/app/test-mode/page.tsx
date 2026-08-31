@@ -286,7 +286,7 @@ export default function TestModePage() {
                 <div className="h-1.5 bg-brand-red shrink-0" />
  
                  {/* Header */}
-                 <div className="header-chrome flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                 <div className="relative z-10 header-chrome flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
                     <div className="flex items-center gap-4 min-w-0">
                         <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -309,7 +309,7 @@ export default function TestModePage() {
                 </div>
 
                 {/* Camera section */}
-                <div className="flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
+                <div className="relative z-10 flex-1 flex flex-col p-5 gap-4 overflow-hidden min-h-0">
 
                     {/* Camera panel */}
                     <div className="flex-1 relative rounded-2xl overflow-hidden bg-black shadow-xl min-h-0">

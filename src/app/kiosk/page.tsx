@@ -139,7 +139,7 @@ export default function KioskPage() {
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[62.5rem] w-[62.5rem] opacity-[0.10]" />
                 <div className="h-1.5 bg-brand-red shrink-0" />
                 {/* Header */}
-                <div className="header-chrome flex items-center justify-between px-4 md:px-8 py-3 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                <div className="relative z-10 header-chrome flex items-center justify-between px-4 md:px-8 py-3 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
                     <div className="flex items-center gap-4 min-w-0">
                         <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -162,7 +162,7 @@ export default function KioskPage() {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-y-auto min-h-0">
+                <div className="relative z-10 flex-1 flex items-center justify-center p-4 md:p-8 overflow-y-auto min-h-0">
                     {/* Step: Service Selection */}
                     {step === 'service' && (
                         <div className="w-full max-w-xl space-y-6 md:space-y-8">

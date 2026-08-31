@@ -92,7 +92,7 @@ function WaitingContent() {
   return (
     <div className="relative min-h-full bg-background overflow-hidden">
       <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-      <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+      <div className="relative z-10 mx-auto max-w-5xl px-4 pt-6 sm:px-6">
         <div className="flex items-center justify-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 w-fit mx-auto">
           <span className="h-2 w-2 rounded-full bg-brand-gold" />
           <span className="text-xs font-medium text-primary">Trạng thái vé — {ticket.service.name}</span>

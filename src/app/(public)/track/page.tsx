@@ -46,7 +46,7 @@ export default function TrackPage() {
     return (
         <div className="relative min-h-full bg-background overflow-hidden">
             <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-            <div className="flex min-h-full items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+            <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
                 {foundTicket ? (
                     <div className="space-y-6">
                         <LiveTracker initialTicket={foundTicket} />

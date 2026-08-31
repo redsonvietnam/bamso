@@ -56,7 +56,7 @@ export default function LoginPage() {
     return (
         <div className="relative min-h-full bg-background font-sans overflow-hidden">
             <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-            <div className="flex min-h-full items-center justify-center px-4 py-8">
+            <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8">
                 <Card className="w-full max-w-md sketch-radius riso-paper-card glass-card shadow-md">
                     <CardHeader className="space-y-1 text-center">
                         <CardTitle className="text-2xl font-bold tracking-tight">Đăng nhập hệ thống</CardTitle>

@@ -61,7 +61,7 @@ export default function AdminPage() {
                 opacity={watermarkOpacity}
             />
 
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
                 <div className="flex gap-2 mb-6 border-b pb-1">
                     {tabs.map((tab) => (
                         <Button

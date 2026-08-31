@@ -241,7 +241,7 @@ const handleScanSuccess = (decodedText: string) => {
         return (
             <div className="relative min-h-full bg-background overflow-hidden">
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-                <div className="flex min-h-full items-center justify-center px-4 py-8">
+                <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8">
                     <Card className="w-full max-w-md sketch-radius riso-paper-card glass-card shadow-md">
                     <CardHeader className="text-center">
                         <Button
@@ -402,7 +402,7 @@ const handleScanSuccess = (decodedText: string) => {
     return (
         <div className="relative min-h-full bg-background overflow-hidden">
             <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-            <div className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
+            <div className="relative z-10 mx-auto max-w-4xl px-4 py-8 sm:py-10">
                 <div className="text-center mb-6 sm:mb-8">
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Chọn dịch vụ để lấy số</h1>
                     <p className="text-muted-foreground mt-2 text-sm sm:text-base">Quý bà con vui lòng chọn thủ tục cần thực hiện</p>

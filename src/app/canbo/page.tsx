@@ -136,7 +136,7 @@ export default function CanboPage() {
         return (
             <div className="relative min-h-full bg-background overflow-hidden">
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-4 flex items-center gap-3 flex-wrap">
+                <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 pt-4 flex items-center gap-3 flex-wrap">
                     <Button
                         variant="ghost"
                         size="sm"
@@ -165,7 +165,7 @@ export default function CanboPage() {
         return (
             <div className="relative flex min-h-full items-center justify-center bg-background px-4 overflow-hidden">
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-                <Card className="w-full max-w-md relative">
+                <Card className="w-full max-w-md relative z-10">
                     <CardHeader>
                         <Button
                             variant="ghost"
@@ -236,7 +236,7 @@ export default function CanboPage() {
     return (
             <div className="relative min-h-full bg-background px-4 py-8 sm:py-12 overflow-hidden">
             <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
-            <div className="max-w-4xl mx-auto relative">
+            <div className="max-w-4xl mx-auto relative z-10">
                 <div className="flex justify-between items-center mb-6 sm:mb-8">
                     <div>
                         <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Chọn dịch vụ bạn sẽ trực hôm nay</h1>
