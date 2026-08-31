@@ -869,9 +869,31 @@ Arguments: -NoProfile -ExecutionPolicy Bypass -File "scripts\start-production.ps
 - Cấu hình HTTPS nội bộ (đã có WS-55B)
 - Chính sách backup database (đã có WS-57)
 - Startup tự động khi reboot (đã có WS-58)
+- Logging & Monitoring (đã có WS-59)
 - Kiosk lockdown policy
 - Network topology (switch, cáp)
 - Phân quyền VLAN (nếu có)
+
+### 12.6 Production Rehearsal Checklist (WS-60)
+
+**STATUS:** READY FOR ON-SITE EXECUTION
+
+**Document:** `docs/WS-60-PRODUCTION-REHEARSAL.md`
+
+**Checklist sections:**
+| Section | Items | Requirement |
+|---|---|---|
+| A: Infrastructure | 20 | Windows PC, Node.js, Python, Static IP, Network |
+| B: BAMSO Deployment | 20 | Code, Env, Seed, HTTPS, Database |
+| C: Process Management | 12 | Task Scheduler, Backup Task, Firewall |
+| D: Application Verification | 24 | Server, Health, Login, Queue, LAN, QR, TTS |
+| E: Operations | 16 | Restart, Reboot, Logging, Backup, Monitoring, Security |
+| F: Failure Scenarios | 8 | Crash, Locked DB, Expired Cert, Disk Full |
+
+**Total:** 100 verification items
+
+**CODE-VERIFIED:** 23 items (from WS-55B through WS-59)
+**ON-SITE REQUIRED:** 77 items (require real hardware + network)
 
 ---
 
