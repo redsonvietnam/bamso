@@ -15,6 +15,34 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// --- Simple logger for server.js (CommonJS, no TS dependency) ---
+const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
+const LEVEL_ORDER = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+function shouldLog(level) { return LEVEL_ORDER[level] >= LEVEL_ORDER[LOG_LEVEL]; }
+function ts() { return new Date().toISOString(); }
+function fmt(level, msg) { return `${ts()} [${level}] ${msg}`; }
+
+// File logging for production
+let logStream = null;
+function writeToFile(formatted) {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (logStream === undefined) return; // false = failed to open
+  try {
+    if (logStream === null) {
+      const logDir = path.join(process.cwd(), 'logs');
+      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+      logStream = fs.createWriteStream(path.join(logDir, 'app.log'), { flags: 'a' });
+    }
+    if (logStream) logStream.write(formatted + '\n');
+  } catch { logStream = false; }
+}
+
+const log = {
+  info(msg) { const f = fmt('INFO', msg); if (shouldLog('INFO')) { console.log(f); writeToFile(f); } },
+  warn(msg) { const f = fmt('WARN', msg); if (shouldLog('WARN')) { console.warn(f); writeToFile(f); } },
+  error(msg) { const f = fmt('ERROR', msg); console.error(f); writeToFile(f); },
+};
+
 const isProd = process.env.NODE_ENV === 'production';
 
 const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3443', 10);
@@ -33,12 +61,12 @@ function validateProductionSecrets() {
 
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    console.error('FATAL: JWT_SECRET environment variable is required in production.');
-    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
+    log.error('FATAL: JWT_SECRET environment variable is required in production.');
+    log.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
     process.exit(1);
   }
   if (jwtSecret.length < 32) {
-    console.error('FATAL: JWT_SECRET must be at least 32 characters in production.');
+    log.error('FATAL: JWT_SECRET must be at least 32 characters in production.');
     process.exit(1);
   }
 
@@ -47,13 +75,13 @@ function validateProductionSecrets() {
     '5a9ade818174541b4f391068d265b4d52003cb31903c9c589f5cd3a0bcacf364',
   ];
   if (knownDevSecrets.includes(jwtSecret)) {
-    console.error('FATAL: JWT_SECRET is a known development value. Generate a unique production secret.');
+    log.error('FATAL: JWT_SECRET is a known development value. Generate a unique production secret.');
     process.exit(1);
   }
 
   // Warn about default PFX password
   if (PFX_PASSWORD === 'bamso2026') {
-    console.warn('WARNING: HTTPS_PFX_PASSWORD is the default value. Set a unique password for production.');
+    log.warn('WARNING: HTTPS_PFX_PASSWORD is the default value. Set a unique password for production.');
   }
 }
 
@@ -65,7 +93,7 @@ const handle = app.getRequestHandler();
 function loadCredentials() {
   // Prefer PFX if it exists
   if (fs.existsSync(PFX_PATH)) {
-    console.log(`Loading PFX certificate from: ${PFX_PATH}`);
+    log.info(`Loading PFX certificate from: ${PFX_PATH}`);
     return {
       pfx: fs.readFileSync(PFX_PATH),
       passphrase: PFX_PASSWORD,
@@ -74,7 +102,7 @@ function loadCredentials() {
 
   // Fall back to PEM pair
   if (fs.existsSync(KEY_PATH) && fs.existsSync(CERT_PATH)) {
-    console.log(`Loading PEM certificates from: ${KEY_PATH}, ${CERT_PATH}`);
+    log.info(`Loading PEM certificates from: ${KEY_PATH}, ${CERT_PATH}`);
     return {
       key: fs.readFileSync(KEY_PATH),
       cert: fs.readFileSync(CERT_PATH),
@@ -91,15 +119,15 @@ app.prepare().then(() => {
   const servers = [];
 
   function gracefulShutdown(signal) {
-    console.log(`\n${signal} received. Shutting down gracefully...`);
+    log.info(`${signal} received. Shutting down gracefully...`);
     for (const server of servers) {
       server.close(() => {
-        console.log('Server closed.');
+        log.info('Server closed.');
       });
     }
     // Force exit after 5 seconds if connections don't close
     setTimeout(() => {
-      console.error('Forced shutdown after timeout.');
+      log.error('Forced shutdown after timeout.');
       process.exit(1);
     }, 5000);
   }
@@ -116,7 +144,7 @@ app.prepare().then(() => {
 
     httpsServer.listen(HTTPS_PORT, HOST, (err) => {
       if (err) throw err;
-      console.log(`> BAMSO HTTPS ready on https://${HOST}:${HTTPS_PORT}`);
+      log.info(`BAMSO HTTPS ready on https://${HOST}:${HTTPS_PORT}`);
     });
 
     // Also start HTTP server that redirects to HTTPS
@@ -128,14 +156,14 @@ app.prepare().then(() => {
     servers.push(httpServer);
 
     httpServer.listen(HTTP_PORT, HOST, () => {
-      console.log(`> HTTP redirect on http://${HOST}:${HTTP_PORT} → https://${HOST}:${HTTPS_PORT}`);
+      log.info(`HTTP redirect on http://${HOST}:${HTTP_PORT} -> https://${HOST}:${HTTPS_PORT}`);
     });
   } else {
     // No certificates — plain HTTP only (development fallback)
-    console.warn('⚠ No SSL certificates found. Starting in HTTP-only mode.');
-    console.warn(`  Expected PFX: ${PFX_PATH}`);
-    console.warn(`  Expected PEM:  ${KEY_PATH}, ${CERT_PATH}`);
-    console.warn('  Run: powershell -ExecutionPolicy Bypass -File scripts/generate-cert.ps1');
+    log.warn('No SSL certificates found. Starting in HTTP-only mode.');
+    log.warn(`  Expected PFX: ${PFX_PATH}`);
+    log.warn(`  Expected PEM:  ${KEY_PATH}, ${CERT_PATH}`);
+    log.warn('  Run: powershell -ExecutionPolicy Bypass -File scripts/generate-cert.ps1');
 
     const httpServer = http.createServer((req, res) => {
       handle(req, res);
@@ -144,7 +172,7 @@ app.prepare().then(() => {
 
     httpServer.listen(HTTP_PORT, HOST, (err) => {
       if (err) throw err;
-      console.log(`> BAMSO HTTP ready on http://${HOST}:${HTTP_PORT}`);
+      log.info(`BAMSO HTTP ready on http://${HOST}:${HTTP_PORT}`);
     });
   }
 });

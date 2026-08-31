@@ -672,6 +672,80 @@ Script: `scripts/install-backup-task.ps1`
 - Task Scheduler installation requires manual step
 - Recovery drill is CODE-VERIFIED, not PRODUCTION-VERIFIED
 
+### 10.8 Logging & Monitoring (WS-59)
+
+#### Logger
+
+| Hành vi | Chi tiết |
+|---|---|
+| Abstraction | `src/lib/logger.ts` — 4 levels: DEBUG, INFO, WARN, ERROR |
+| Format | `ISO timestamp [LEVEL] message` |
+| Levels | Configurable via `LOG_LEVEL` env var (default: INFO) |
+| Production | ERROR always logged; INFO/WARN controlled by LOG_LEVEL |
+| File logging | `logs/app.log` (server.js only, production mode) |
+| Sensitive data | Không log passwords, JWT, cookies, raw CCCD |
+
+#### Log Levels
+
+| Level | Production | Development | Use case |
+|---|---|---|---|
+| ERROR | Always | Always | Failures, exceptions |
+| WARN | Configurable | Always | Degraded state, fallbacks |
+| INFO | Configurable | Always | Startup, operations |
+| DEBUG | Configurable | Disabled by default | Detailed tracing |
+
+#### Log Location
+
+| Log | Location | Writer |
+|---|---|---|
+| Application | `logs/app.log` | server.js (file) + logger.ts (console) |
+| Startup | Task Scheduler stdout | start-production.ps1 |
+| Backup | Task Scheduler stdout | backup-db.py |
+
+#### Log Rotation
+
+Script: `scripts/rotate-logs.ps1`
+- Default retention: 30 days
+- Only deletes files in `logs/` directory
+- npm script: `npm run logs:rotate`
+
+#### Health Check
+
+| Endpoint | Check | Response |
+|---|---|---|
+| `GET /api/health` | Database connectivity | `{ ok: true, db: "connected" }` |
+
+#### Local Monitoring Scripts
+
+| Script | Purpose | Exit code |
+|---|---|---|
+| `scripts/check-health.ps1` | Query health endpoint | 0=healthy, 1=unhealthy |
+| `scripts/check-backup.ps1` | Check backup freshness | 0=pass, 1=fail, 2=warn |
+| `scripts/ops-status.ps1` | Full operational status | Combined report |
+
+#### npm Scripts
+
+| Script | Command |
+|---|---|
+| `npm run health` | Check health endpoint |
+| `npm run backup:status` | Check backup freshness |
+| `npm run ops:status` | Full operational status |
+| `npm run logs:rotate` | Rotate old log files |
+
+#### Alerting
+
+- Monitoring: local (no cloud dependency)
+- Alerting: operator-driven (no automated alerts)
+- Future: optional (email, Telegram, etc.)
+
+#### Security
+
+- Logs không chứa secrets (JWT, passwords, tokens)
+- Logs không chứa raw CCCD QR payload
+- Logs không chứa customer PII trừ khi cần troubleshooting
+- `logs/` directory gitignored, không served by Next.js
+- Health endpoint không expose secrets
+
 ---
 
 ## 11. Kiểm thử & Chất lượng kỹ thuật
@@ -748,7 +822,7 @@ Script: `scripts/install-backup-task.ps1`
 | HTTPS | **ĐÃTriển khai** | `npm run start:https`, cert via `npm run cert:generate` |
 | Backup | **ĐÃTriển khai** | `npm run backup`, Task Scheduler via `npm run backup:install-task` |
 | Startup | **ĐÃTriển khai** | `npm run install:service`, auto-start on boot |
-| Monitoring | Health check có sẵn | `GET /api/health` |
+| Monitoring | **ĐÃTriển khai** | `npm run ops:status`, `npm run health` |
 | Firewall | **ĐÃTriển khai** | `scripts/setup-firewall.ps1` |
 | Kiosk | Cấu hình khi deploy | Kiosk mode Chrome/Edge |
 | Display | Cấu hình khi deploy | Full-screen Chrome/Edge |
