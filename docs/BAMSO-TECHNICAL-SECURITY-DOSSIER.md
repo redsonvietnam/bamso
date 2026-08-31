@@ -568,6 +568,110 @@ localhost:3000             ← Camera hoạt động (dev/test only)
 | TTS không khả dụng | Fallback sang Web Speech API |
 | Network mất | API calls fail, user thấy toast error |
 
+### 10.7 Backup & Recovery (WS-57)
+
+**Mục tiêu:** Backup SQLite database an toàn, consistent, có thể restore trên Windows production.
+
+#### Kiến trúc Backup
+
+| Thành phần | Chi tiết |
+|---|---|
+| Script | `scripts/backup-db.py` (Python 3, standard library) |
+| Consistency | SQLite online backup API (`sqlite3.backup()`) — consistent snapshot ngay cả khi server đang chạy |
+| Journal mode | DELETE (không phải WAL) — xác nhận qua Prisma query |
+| Source | `prisma/dev.db` (resolved từ `DATABASE_URL`) |
+| Destination | `backups/bamso_YYYYMMDD_HHmmss.db` |
+| Retention | 30 ngày (default) |
+| Frequency | Daily qua Windows Task Scheduler |
+| Internet | Không yêu cầu |
+
+#### Quy trình Backup
+
+```
+1. Mở source DB (read-only)
+2. Tạo destination DB
+3. Gọi sqlite3.backup() — SQLite online backup API
+4. Đóng connections
+5. Verify backup: exists, size > 0, PRAGMA integrity_check = ok
+6. Apply retention: xóa backup > 30 ngày
+7. Log kết quả
+```
+
+#### Integrity Verification
+
+```
+backup exists → size > 0 → PRAGMA integrity_check → PASS/FAIL
+```
+
+#### Retention Policy
+
+- Chỉ xóa file matching `bamso_YYYYMMDD_HHmmss.db`
+- Nếu backup hôm nay fail → KHÔNG xóa backup cũ
+- Nếu retention cleanup fail → log warning
+
+#### Restore Procedure
+
+Script: `scripts/restore-db.py`
+- Yêu cầu explicit confirmation (`type 'RESTORE'`)
+- Backup current DB trước khi restore (safety net)
+- Verify backup integrity trước khi restore
+- Stop BAMSO server → Replace DB → Verify → Restart
+- **KHÔNG tự ý restore trong workstream này**
+
+#### Task Scheduler
+
+Script: `scripts/install-backup-task.ps1`
+- Task name: "BAMSO Daily Backup"
+- Schedule: Daily at 02:00
+- Working directory: project root
+- Log: `logs/backup-task.log`
+- **DEPLOYMENT-TIME**: Chưa install trên production
+
+#### npm Scripts
+
+| Script | Command |
+|---|---|
+| `npm run backup` | `python scripts/backup-db.py` |
+| `npm run backup:verify` | `python scripts/backup-db.py --dry-run` |
+| `npm run restore` | `python scripts/restore-db.py --backup <file>` |
+| `npm run backup:install-task` | Install Task Scheduler |
+
+#### Recovery Drill
+
+Đã thực hiện non-production recovery drill:
+- Tạo backup → Copy to temp → Integrity check → Inspect schema/data → PASS
+- Classification: **CODE-VERIFIED** (chưa phải PRODUCTION-VERIFIED)
+
+#### Security
+
+- Backup script KHÔNG log secrets (JWT_SECRET, passwords, tokens)
+- Backup location: `backups/` — gitignored
+- ACL đề xuất: BAMSO service account = Modify, Administrators = Full Control
+
+#### Failure Matrix
+
+| Failure | Behavior |
+|---|---|
+| DB missing | FAIL |
+| DB locked/busy | FAIL gracefully (sqlite3.backup handles this) |
+| Destination unavailable | FAIL |
+| Disk full | FAIL |
+| Backup zero bytes | FAIL |
+| Integrity check fails | FAIL |
+| Retention fails | WARN |
+| Old backups absent | PASS (no-op) |
+| Backup directory absent | create automatically |
+| Internet unavailable | backup still works |
+| BAMSO server offline | backup still works (offline backup) |
+
+#### Limitations
+
+- Python required on production machine
+- No encryption-at-rest for backup files
+- No remote/offsite backup (by design — local-first)
+- Task Scheduler installation requires manual step
+- Recovery drill is CODE-VERIFIED, not PRODUCTION-VERIFIED
+
 ---
 
 ## 11. Kiểm thử & Chất lượng kỹ thuật

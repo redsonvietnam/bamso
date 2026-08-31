@@ -49,9 +49,14 @@ next-env.d.ts
 # local sqlite database
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 
 # certificates
 /certs/
+
+# backups
+/backups/
 
 # scratch / test files
 /scratch/
@@ -67,6 +72,7 @@ next-env.d.ts
 
 # local logs
 *.log
+/logs/
 
 # local archives
 *.tar.gz

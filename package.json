@@ -18,7 +18,11 @@
     "format:check": "prettier --check src",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backup": "python scripts/backup-db.py",
+    "backup:verify": "python scripts/backup-db.py --dry-run",
+    "restore": "python scripts/restore-db.py",
+    "backup:install-task": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
