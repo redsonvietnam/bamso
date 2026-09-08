@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
 import { apiClient } from '@/lib/api-client';
 import { parseCCCDName } from '@/lib/cccd-parser';
+import { storeCustomerName } from '@/lib/customer-name-handoff';
 import QRScanner from '@/components/qr-scanner/QRScanner';
 
 function parseModes(service: Service): string[] {
@@ -88,7 +89,8 @@ export function GetTicketFlow() {
 
         setIsCreating(true);
         try {
-            const ticket = await apiClient.post<{ id: string }>('/api/tickets', { serviceId: selectedService.id });
+            const ticket = await apiClient.post<{ id: string; customerName?: string | null }>('/api/tickets', { serviceId: selectedService.id });
+            if (ticket.customerName) storeCustomerName(ticket.id, ticket.customerName);
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -123,7 +125,8 @@ export function GetTicketFlow() {
                 body.phone = phone.trim();
             }
 
-            const ticket = await apiClient.post<{ id: string }>('/api/tickets', body);
+            const ticket = await apiClient.post<{ id: string; customerName?: string | null }>('/api/tickets', body);
+            if (ticket.customerName) storeCustomerName(ticket.id, ticket.customerName);
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
@@ -149,10 +152,11 @@ const handleScanSuccess = (decodedText: string) => {
 
         setIsCreating(true);
         try {
-            const ticket = await apiClient.post<{ id: string }>('/api/tickets', {
+            const ticket = await apiClient.post<{ id: string; customerName?: string | null }>('/api/tickets', {
                 serviceId: selectedService.id,
                 customerName: customerName.trim(),
             });
+            if (ticket.customerName) storeCustomerName(ticket.id, ticket.customerName);
             router.push(`/waiting?ticketId=${ticket.id}`);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');

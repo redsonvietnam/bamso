@@ -11,6 +11,7 @@ import { PageWatermark } from '@/components/ui/dong-son-motif';
 import { ArrowLeft, Ticket as TicketIcon, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
+import { getCustomerName, clearCustomerName } from '@/lib/customer-name-handoff';
 
 function WaitingContent() {
   const searchParams = useSearchParams();
@@ -33,7 +34,15 @@ function WaitingContent() {
     const fetchTicket = async () => {
       try {
         const data = await apiClient.get<(Ticket & { service: Service })>(`/api/tickets/track?query=${encodeURIComponent(ticketId)}`);
-        setTicket(data);
+
+        const localName = getCustomerName(ticketId);
+        if (localName && !data.customerName) {
+          setTicket({ ...data, customerName: localName });
+          clearCustomerName(ticketId);
+        } else {
+          if (localName) clearCustomerName(ticketId);
+          setTicket(data);
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Lỗi khi tải vé.';
         setError(msg);
