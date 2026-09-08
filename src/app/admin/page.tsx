@@ -62,7 +62,7 @@ export default function AdminPage() {
             />
 
             <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
-                <div className="flex gap-2 mb-6 border-b pb-1">
+                <div className="flex gap-2 mb-6 border-b pb-1 overflow-x-auto">
                     {tabs.map((tab) => (
                         <Button
                             key={tab.id}

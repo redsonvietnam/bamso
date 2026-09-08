@@ -90,7 +90,7 @@ export default function LoginPage() {
                                     className="h-10"
                                 />
                             </div>
-                            <Button type="submit" className="w-full h-10 font-medium" disabled={isLoading}>
+                            <Button type="submit" className="w-full font-medium" disabled={isLoading}>
                                 {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                             </Button>
                         </form>

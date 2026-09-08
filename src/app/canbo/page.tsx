@@ -214,7 +214,7 @@ export default function CanboPage() {
                             </div>
                             <Button
                                 type="submit"
-                                className="w-full h-10 font-medium"
+                                className="w-full font-medium"
                                 disabled={!selectedPos.trim()}
                                 onClick={(e) => {
                                     if (!selectedPos.trim()) {

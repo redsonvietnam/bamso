@@ -145,9 +145,9 @@ export default function KioskPage() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                         </div>
-                        <div className="min-w-0">
-                            <p className="text-lg md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                            <h1 className="text-2xl md:text-3xl font-black uppercase text-foreground">
+                        <div className="min-w-0 overflow-hidden">
+                            <p className="truncate text-lg md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                            <h1 className="truncate text-2xl md:text-3xl font-black uppercase text-foreground">
                                 {agencyName}
                             </h1>
                         </div>
@@ -195,7 +195,7 @@ export default function KioskPage() {
                                         >
                                             {service.prefix}
                                         </div>
-                                        <div className="text-center min-w-0 w-full">
+                                        <div className="text-center min-w-0 overflow-hidden w-full">
                                             <p className="text-base md:text-xl font-bold text-foreground truncate">{service.name}</p>
                                             {service.description && (
                                                 <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1 truncate">{service.description}</p>

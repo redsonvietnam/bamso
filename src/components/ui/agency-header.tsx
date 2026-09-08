@@ -33,7 +33,7 @@ export function AgencyHeader({ title, right, backTo }: AgencyHeaderProps) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 overflow-hidden">
             <p className="truncate text-xs font-black uppercase tracking-wide text-brand-red sm:text-xl">CÔNG AN TỈNH LÂM ĐỒNG</p>
             <p className="truncate text-sm font-black uppercase tracking-wide text-foreground sm:text-2xl">CÔNG AN XÃ NÂM NUNG</p>
             {title && <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">{title}</p>}

@@ -14,10 +14,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     if (variant === "ghost") variantStyles = "hover:bg-accent hover:text-accent-foreground";
     if (variant === "destructive") variantStyles = "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90";
 
-    let sizeStyles = "h-9 px-4 py-2";
-    if (size === "lg") sizeStyles = "h-10 rounded-md px-8";
+    let sizeStyles = "h-11 px-4 py-2";
+    if (size === "lg") sizeStyles = "h-12 rounded-md px-8";
     if (size === "sm") sizeStyles = "h-8 rounded-md px-3 text-xs";
-    if (size === "icon") sizeStyles = "h-9 w-9";
+    if (size === "icon") sizeStyles = "h-11 w-11";
 
     return (
       <button

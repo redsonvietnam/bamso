@@ -369,7 +369,7 @@ const handleScanSuccess = (decodedText: string) => {
                                 </Button>
                                 <Button
                                     variant="outline"
-                                    className="w-full h-10"
+                                    className="w-full"
                                     onClick={() => {
                                         setMode(null);
                                         setCustomerName('');

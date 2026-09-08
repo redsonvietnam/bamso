@@ -262,33 +262,33 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
 
             <header className={`header-chrome relative z-10 flex items-center justify-between gap-4 md:gap-6 ${compact ? 'px-3 md:px-5 py-2 md:py-3' : 'px-8 md:px-12 py-4'} bg-white/80 backdrop-blur-sm border-b border-border shadow-sm`}>
                 <div className="flex items-center gap-3 md:gap-5 min-w-0">
-                    <div className={`${compact ? 'h-10 w-10 md:h-12 md:w-12' : 'h-28 w-28'} shrink-0 overflow-hidden rounded-full`}>
+                    <div className={`${compact ? 'h-10 w-10 md:h-12 md:w-12' : 'h-16 w-16 md:h-28 md:w-28'} shrink-0 overflow-hidden rounded-full`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 overflow-hidden">
                         {compact ? (
                             <h1 className="text-xs md:text-sm font-black uppercase tracking-wide text-foreground truncate">{agencyName}</h1>
                         ) : (
                             <>
-                                <p className="text-lg sm:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">{agencyName}</h1>
+                                <p className="truncate text-lg sm:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                                <h1 className="truncate text-2xl sm:text-3xl font-black uppercase tracking-wide text-foreground">{agencyName}</h1>
                             </>
                         )}
                     </div>
                 </div>
                 <div className={`flex items-center gap-3 md:gap-6 shrink-0 ${compact ? 'min-w-0' : ''}`}>
-                    <div className={`flex items-center gap-2 sticker rounded-full border transition-colors ${compact ? 'px-2 py-0.5' : 'px-3 py-1'} ${isConnected ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)]' : 'bg-red-50 border-red-300'}`}>
+                    <div className={`flex items-center gap-2 sticker rounded-full border transition-colors ${compact ? 'px-2 py-0.5' : 'px-2 py-0.5 md:px-3 md:py-1'} ${isConnected ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)]' : 'bg-red-50 border-red-300'}`}>
                         <span className={`inline-block rounded-full ${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} ${isConnected ? 'bg-[color:var(--display-accent)] animate-pulse' : 'bg-red-500'}`} />
-                        <span className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'} font-bold uppercase tracking-widest ${isConnected ? 'text-foreground' : 'text-red-600'}`}>
-                            {isConnected ? 'Hệ thống trực tuyến' : 'Mất kết nối'}
+                        <span className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs'} font-bold uppercase tracking-widest ${isConnected ? 'text-foreground' : 'text-red-600'}`}>
+                            {isConnected ? 'Trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
-                    <div className={`text-right ${compact ? 'min-w-0' : ''}`}>
+                    <div className={`text-right shrink-0`}>
                         {!compact && (
-                            <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Hệ thống lấy số dịch vụ công</p>
+                            <p className="hidden md:block text-sm font-bold uppercase tracking-wide text-muted-foreground">Hệ thống lấy số dịch vụ công</p>
                         )}
-                        <p className={`${compact ? 'text-base md:text-lg' : 'text-2xl'} font-mono font-bold text-foreground`}>{timeStr}</p>
+                        <p className={`${compact ? 'text-base md:text-lg' : 'text-lg md:text-2xl'} font-mono font-bold text-foreground`}>{timeStr}</p>
                     </div>
                 </div>
             </header>
