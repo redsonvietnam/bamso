@@ -77,20 +77,12 @@ if ($IncludeLocalhost) {
 }
 $sanString = $sanEntries -join ", "
 
-# Create the SAN extension using ASN.1
-$sanOid = [System.Security.Cryptography.Oid]::LookupOidByValue("2.5.29.17")
-$sanAsn = [System.Security.Cryptography.Asnn]::Create()
-
-# Build the SAN raw data
-$ipBytes = [System.Net.IPAddress]::Parse($ServerIP.Trim()).GetAddressBytes()
-$ipOctetString = [System.Security.Cryptography.AsnEncodedData]::new("2.5.29.17", $ipBytes)
-
 # Use TextExtension approach for PS 5.1 compatibility
 # The format "ip_address=x.x.x.x" works with TextExtension
 $textExtensions = @("2.5.29.37={text}1.3.6.1.5.5.7.3.1")
 
 # --- Create output directory ---
-$fullOutputDir = Join-Path $PSScriptRoot ".." $OutputDir
+$fullOutputDir = Join-Path (Join-Path $PSScriptRoot "..") $OutputDir
 if (-not (Test-Path $fullOutputDir)) {
     New-Item -ItemType Directory -Path $fullOutputDir -Force | Out-Null
     Write-Host "Created directory: $fullOutputDir" -ForegroundColor Green
