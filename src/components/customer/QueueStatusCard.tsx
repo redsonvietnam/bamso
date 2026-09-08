@@ -81,7 +81,7 @@ export function QueueStatusCard({ ticket, queueAhead, proximityLevel }: QueueSta
           Số của bạn
         </p>
 
-        <p className={`mt-1 font-display text-6xl font-bold tracking-tight text-foreground leading-none ${config.attention ? 'text-amber-600' : ''}`}>
+        <p className={`mt-1 font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-none ${config.attention ? 'text-amber-600' : ''}`}>
           {ticket.ticketNumber}
         </p>
 

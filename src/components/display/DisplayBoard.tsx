@@ -346,7 +346,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                             </span>
                                             <span className={`text-foreground uppercase tracking-[0.3em] font-black ${compact ? 'text-[10px] md:text-xs' : 'text-sm'}`}>Đang gọi số</span>
                                         </div>
-                                        <p className={`font-display font-semibold tracking-tight leading-none text-foreground ${compact ? 'text-5xl md:text-7xl' : 'text-[12rem]'}`}>
+                                        <p className={`font-display font-semibold tracking-tight leading-none text-foreground ${compact ? 'text-5xl md:text-7xl' : 'text-4xl sm:text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem]'}`}>
                                             {lastCalledTicket.ticketNumber}
                                         </p>
                                         <div className={`flex items-center ${compact ? 'gap-4 md:gap-6 mt-2' : 'gap-12 mt-6'}`}>
