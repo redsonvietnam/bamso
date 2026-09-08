@@ -258,7 +258,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
         <div className={`relative flex flex-col ${compact ? 'h-full w-full' : 'h-screen w-screen'} bg-background text-foreground font-sans overflow-hidden selection:bg-[color:var(--display-accent-20)]`}>
             {/* Brand accent line */}
             <div className="absolute top-0 left-0 w-full h-2 bg-[color:var(--display-red)]" />
-            <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.15]" />
+            {!compact && <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.15]" />}
 
             <header className={`header-chrome relative z-10 flex items-center justify-between gap-4 md:gap-6 ${compact ? 'px-3 md:px-5 py-2 md:py-3' : 'px-8 md:px-12 py-4'} bg-white/80 backdrop-blur-sm border-b border-border shadow-sm`}>
                 <div className="flex items-center gap-3 md:gap-5 min-w-0">
