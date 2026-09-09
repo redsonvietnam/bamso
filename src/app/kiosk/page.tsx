@@ -139,9 +139,9 @@ export default function KioskPage() {
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[62.5rem] w-[62.5rem] opacity-[0.10]" />
                 <div className="h-1.5 bg-brand-red shrink-0" />
                 {/* Header */}
-                <div className="relative z-10 header-chrome flex items-center justify-between px-4 md:px-8 py-3 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
+                <div className="relative z-10 header-chrome flex items-center justify-between px-4 md:px-8 py-2 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                        <div className="w-14 h-14 md:w-28 md:h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                         </div>
@@ -310,7 +310,7 @@ export default function KioskPage() {
             </div>
 
             {/* RIGHT PANEL — Display Board */}
-            <div className="h-72 md:h-auto md:w-[45%] flex flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
+            <div className="h-48 sm:h-64 md:h-auto md:w-[45%] flex flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
                 <DisplayBoard variant="compact" />
             </div>
         </div>

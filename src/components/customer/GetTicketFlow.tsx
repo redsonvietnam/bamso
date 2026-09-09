@@ -323,7 +323,7 @@ const handleScanSuccess = (decodedText: string) => {
                                             type="button"
                                             variant={isListening ? 'destructive' : 'outline'}
                                             size="icon"
-                                            className="h-10 w-10 shrink-0"
+                                            className="h-11 w-11 shrink-0"
                                             onClick={toggleVoice}
                                             title={isListening ? 'Đang nghe...' : 'Nhập bằng giọng nói'}
                                         >

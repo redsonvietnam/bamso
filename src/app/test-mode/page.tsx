@@ -230,7 +230,7 @@ export default function TestModePage() {
     }
 
     return (
-        <div className="flex flex-row h-screen w-screen bg-background overflow-hidden select-none">
+        <div className="flex flex-col md:flex-row h-screen w-screen bg-background overflow-hidden select-none">
 
             {/* SERVICE SELECT MODAL OVERLAY */}
             {step === 'service-select' && (
@@ -248,7 +248,7 @@ export default function TestModePage() {
                             </div>
                             <button
                                 onClick={reset}
-                                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted transition-colors"
+                                className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-muted transition-colors"
                             >
                                 <X className="w-4 h-4 text-muted-foreground" />
                             </button>
@@ -281,12 +281,12 @@ export default function TestModePage() {
             )}
 
             {/* LEFT PANEL */}
-            <div className="flex-1 w-[55%] flex flex-col bg-gradient-to-br from-muted via-card to-primary/5 relative overflow-hidden min-h-0">
+            <div className="flex-1 md:w-[55%] flex flex-col bg-gradient-to-br from-muted via-card to-primary/5 relative overflow-hidden min-h-0">
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
                 <div className="h-1.5 bg-brand-red shrink-0" />
  
                  {/* Header */}
-                 <div className="relative z-10 header-chrome flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                 <div className="relative z-10 header-chrome flex items-center justify-between px-3 md:px-6 py-2 md:py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
                     <div className="flex items-center gap-4 min-w-0">
                         <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -400,7 +400,7 @@ export default function TestModePage() {
                     </div>
 
                     {/* QR Code panel — bottom */}
-                    <div className="shrink-0 flex items-center gap-5 bg-card rounded-2xl border border-border shadow-sm px-5 py-4">
+                    <div className="shrink-0 flex items-center gap-3 md:gap-5 bg-card rounded-2xl border border-border shadow-sm px-3 md:px-5 py-3 md:py-4">
                         <div className="shrink-0 p-2 bg-card rounded-xl border border-border shadow-sm">
                             <QRCodeSVG
                                 value={getTicketUrl}
@@ -421,7 +421,7 @@ export default function TestModePage() {
             </div>
 
             {/* RIGHT PANEL — Live Queue */}
-            <div className="w-[45%] flex flex-col bg-card border-l border-border overflow-hidden min-h-0">
+            <div className="hidden md:flex w-full md:w-[45%] flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">

@@ -66,7 +66,7 @@ export function PageWatermark({ className = '', opacity }: { className?: string;
     return (
         <div
             aria-hidden="true"
-            className={`pointer-events-none select-none absolute overflow-hidden scale-[3] ${className}`}
+            className={`pointer-events-none select-none absolute overflow-hidden scale-[1.5] sm:scale-[2] md:scale-[2.5] lg:scale-[3] ${className}`}
             {...(opacity !== undefined ? { style: { opacity } } : {})}
         >
             <motion.img

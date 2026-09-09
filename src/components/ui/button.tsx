@@ -16,7 +16,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     let sizeStyles = "h-11 px-4 py-2";
     if (size === "lg") sizeStyles = "h-12 rounded-md px-8";
-    if (size === "sm") sizeStyles = "h-8 rounded-md px-3 text-xs";
+    if (size === "sm") sizeStyles = "h-10 rounded-md px-4 text-xs";
     if (size === "icon") sizeStyles = "h-11 w-11";
 
     return (

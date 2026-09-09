@@ -260,7 +260,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
             <div className="absolute top-0 left-0 w-full h-2 bg-[color:var(--display-red)]" />
             {!compact && <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.15]" />}
 
-            <header className={`header-chrome relative z-10 flex items-center justify-between gap-4 md:gap-6 ${compact ? 'px-3 md:px-5 py-2 md:py-3' : 'px-8 md:px-12 py-4'} bg-white/80 backdrop-blur-sm border-b border-border shadow-sm`}>
+            <header className={`header-chrome relative z-10 flex items-center justify-between gap-3 md:gap-6 ${compact ? 'px-3 md:px-5 py-2 md:py-3' : 'px-4 md:px-12 py-2 md:py-4'} bg-white/80 backdrop-blur-sm border-b border-border shadow-sm`}>
                 <div className="flex items-center gap-3 md:gap-5 min-w-0">
                     <div className={`${compact ? 'h-10 w-10 md:h-12 md:w-12' : 'h-16 w-16 md:h-28 md:w-28'} shrink-0 overflow-hidden rounded-full`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -300,7 +300,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                 </div>
             )}
 
-            <main className={`relative z-10 flex-1 ${compact ? 'p-3 md:p-4' : 'p-8'} overflow-y-auto`}>
+            <main className={`relative z-10 flex-1 ${compact ? 'p-3 md:p-4' : 'p-4 md:p-8'} overflow-y-auto`}>
                 {isLoading ? (
                     <div className={`flex h-full flex-col ${compact ? 'gap-3' : 'gap-8'}`}>
                         <div className={`rounded-[28px] bg-card border border-border animate-pulse ${compact ? 'p-6' : 'p-12'}`}>

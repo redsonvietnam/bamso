@@ -254,14 +254,14 @@ export default function CanboPage() {
                             <CardHeader>
                                 <div className="flex items-center gap-3">
                                     <div
-                                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
                                         style={{ backgroundColor: service.color }}
                                     >
                                         {service.prefix}
                                     </div>
-                                    <div>
-                                        <CardTitle className="text-lg">{service.name}</CardTitle>
-                                        <CardDescription>{service.description || 'Không có mô tả'}</CardDescription>
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        <CardTitle className="text-lg truncate">{service.name}</CardTitle>
+                                        <CardDescription className="truncate">{service.description || 'Không có mô tả'}</CardDescription>
                                     </div>
                                 </div>
                             </CardHeader>
