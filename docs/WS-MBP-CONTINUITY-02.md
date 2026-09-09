@@ -1,6 +1,6 @@
 ---
 id: WS-MBP-CONTINUITY-02
-version: 1
+version: 2
 status: DESIGN
 ---
 
@@ -29,7 +29,7 @@ The ability to reconstruct project state from:
 
 The ability to continue correct context on a destination machine using:
 - Actual destination machine
-- Actual destination MBP baseline
+- Actual destination MBP baseline (verified CURRENT)
 - Fresh session (no conversation history)
 
 **Requires actual machine access.** Not interchangeable with project reconstruction.
@@ -38,7 +38,7 @@ The ability to continue correct context on a destination machine using:
 
 ### Precondition
 
-OFFICE MBP established at `mbp/OFFICE.md`.
+OFFICE MBP established at `mbp/OFFICE.md` and verified CURRENT.
 
 ### On HOME (source)
 
@@ -62,7 +62,10 @@ Additional check:
 - HOME baseline remains valid or is detected STALE
 - if HOME machine state changed since baseline creation
 
-## 5. Fresh-Session Bootstrap
+## 5. Fresh-Session Bootstrap Overview
+
+This section provides a high-level overview.
+For canonical execution, see Section 12.
 
 1. Read CONTEXT.md
 2. Resolve Git HEAD
@@ -90,6 +93,30 @@ Three distinct concepts:
 
 No field may mix these concepts.
 
+### Checkout Relation
+
+| Condition | Classification |
+|-----------|----------------|
+| HEAD == canonical | CURRENT |
+| canonical is ancestor of HEAD | AHEAD |
+| HEAD is ancestor of canonical | STALE |
+| neither is ancestor | DIVERGED |
+
+### MBP Baseline Status
+
+| Status | Meaning |
+|--------|---------|
+| CURRENT | Baseline exists, machine match verified, required facts verified, project/binding expectations verified |
+| STALE | Baseline exists but no longer represents valid machine-local/project-binding state |
+| UNKNOWN | Insufficient evidence to determine |
+| MISSING | Baseline file does not exist |
+
+**Important:** Checkout relation and MBP baseline status are independent concepts.
+
+- Checkout AHEAD does NOT imply MBP STALE
+- MBP CURRENT does NOT imply checkout CURRENT
+- MBP verification is about machine state, not checkout state
+
 ## 7. Relay Semantics
 
 Using Git ancestry (not numeric SHA comparison):
@@ -105,12 +132,29 @@ AHEAD/DIVERGED never become canonical automatically.
 
 ## 8. MBP Freshness Semantics
 
-| Status | Meaning |
-|--------|---------|
-| CURRENT | Baseline verified, matches machine |
-| STALE | Baseline exists but checkout differs |
-| UNKNOWN | Insufficient evidence |
-| MISSING | Baseline file does not exist |
+### CURRENT Requirements
+
+Baseline status = CURRENT requires ALL:
+
+- Baseline file exists
+- Machine match verified (platform, toolchain)
+- Required machine facts verified
+- Relevant project/binding expectations verified
+
+### STALE Definition
+
+STALE only when baseline no longer represents valid
+machine-local/project-binding state.
+
+Not triggered by checkout relation changes.
+
+### UNKNOWN Definition
+
+UNKNOWN when insufficient evidence to determine status.
+
+### MISSING Definition
+
+MISSING when baseline file does not exist.
 
 ## 9. HANDOFF / Evidence / Decisions Checks
 
@@ -127,6 +171,10 @@ Each entry supports:
 - verified_at_commit
 - status: CURRENT | HISTORICAL | STALE | UNKNOWN
 - provenance: SELF-REPORTED | INDEPENDENT | AUTOMATIC
+
+**Important:** SELF-REPORTED != INDEPENDENT proof.
+Use SELF-REPORTED if no independent evidence exists.
+Never use INDEPENDENT without supporting evidence.
 
 ### Decisions
 
@@ -181,6 +229,7 @@ Requires ALL:
 
 - [ ] Actual destination machine used
 - [ ] Actual destination MBP exists
+- [ ] Destination MBP verified CURRENT
 - [ ] Fresh session performed (no conversation history)
 - [ ] Project context reconstructed correctly
 - [ ] Machine context reconstructed correctly
@@ -195,6 +244,7 @@ If ANY:
 
 - [ ] Only static inspection performed
 - [ ] Destination MBP missing
+- [ ] Destination MBP not verified CURRENT
 - [ ] Fresh session not performed
 - [ ] Conversation history used
 - [ ] UNKNOWN promoted without evidence
@@ -209,6 +259,7 @@ If ANY:
 - [ ] Checkout relation classification
 - [ ] MBP baseline file content
 - [ ] Baseline-machine match verification
+- [ ] MBP verification status (CURRENT/STALE/UNKNOWN/MISSING)
 - [ ] PCM/PWF binding resolution
 - [ ] HANDOFF validity check
 - [ ] Evidence provenance check
@@ -221,18 +272,18 @@ If ANY:
 
 | # | Scenario | Expected Behavior |
 |---|----------|-------------------|
-| 1 | destination baseline CURRENT | PASS |
-| 2 | destination baseline STALE | DETECT |
-| 3 | destination baseline UNKNOWN | PRESERVE |
-| 4 | destination baseline MISSING | DETECT |
-| 5 | canonical changed | RE-EVALUATE |
-| 6 | checkout AHEAD | CLASSIFY CORRECTLY |
-| 7 | checkout STALE | CLASSIFY CORRECTLY |
-| 8 | checkout DIVERGED | CLASSIFY CORRECTLY |
-| 9 | stale HANDOFF | DETECT |
-| 10 | stale evidence | DETECT |
+| 1 | destination baseline CURRENT | PASS (if all criteria met) |
+| 2 | destination baseline STALE | DETECT, re-verify |
+| 3 | destination baseline UNKNOWN | PRESERVE, do not promote |
+| 4 | destination baseline MISSING | DETECT, BLOCKED |
+| 5 | canonical changed | RE-EVALUATE all references |
+| 6 | checkout AHEAD | CLASSIFY CORRECTLY, not MBP failure |
+| 7 | checkout STALE | CLASSIFY CORRECTLY, not MBP failure |
+| 8 | checkout DIVERGED | CLASSIFY CORRECTLY, not MBP failure |
+| 9 | stale HANDOFF | DETECT, preserve UNKNOWN |
+| 10 | stale evidence | DETECT, preserve UNKNOWN |
 | 11 | no active task | PRESERVE UNKNOWN |
-| 12 | machine changed since baseline | RE-VERIFY |
+| 12 | machine changed since baseline | RE-VERIFY, baseline may be STALE |
 
 ## 16. Explicit Statements
 
@@ -243,7 +294,7 @@ If ANY:
 ### REAL CROSS-MACHINE CONTINUITY
 
 **NOT PROVEN** unless an actual fresh session is executed
-on the destination machine.
+on the destination machine AND destination MBP is verified CURRENT.
 
 ## 17. Explicit Prohibitions
 
@@ -254,6 +305,8 @@ on the destination machine.
 | recommendation != authorization | next.action is recommendation only |
 | branch name != active task | No inference from branch |
 | old HANDOFF != current authority | Historical, not current |
+| checkout AHEAD != MBP STALE | Independent concepts |
+| SELF-REPORTED != INDEPENDENT | Different provenance levels |
 
 ## 18. Evidence Provenance
 
@@ -265,6 +318,7 @@ on the destination machine.
 
 Use SELF-REPORTED if no independent evidence exists.
 Never use INDEPENDENT without supporting evidence.
+SELF-REPORTED is NOT proof of INDEPENDENT verification.
 
 ## 19. Failure Behavior
 
@@ -272,6 +326,7 @@ Never use INDEPENDENT without supporting evidence.
 - No silent promotion
 - No inference from incomplete evidence
 - No authorization from baseline verification
+- No conflation of checkout relation with MBP status
 
 ## 20. Current Status
 
