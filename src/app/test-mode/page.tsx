@@ -211,17 +211,17 @@ export default function TestModePage() {
 
     if (isLoading) {
         return (
-            <div className="flex flex-row h-screen w-screen bg-background">
-                <div className="flex-1 flex flex-col gap-4 p-6">
-                    <Skeleton className="h-10 w-48" />
+            <div className="flex flex-col md:flex-row h-screen w-screen bg-background">
+                <div className="flex-1 flex flex-col gap-4 p-4 md:p-6 min-h-0">
+                    <Skeleton className="h-8 md:h-10 w-48" />
                     <Skeleton className="flex-1 rounded-2xl" />
-                    <Skeleton className="h-36 rounded-2xl" />
+                    <Skeleton className="h-24 md:h-36 rounded-2xl" />
                 </div>
-                <div className="w-[45%] bg-card border-l border-border p-6">
-                    <Skeleton className="h-8 w-40 mb-6" />
-                    <div className="grid grid-cols-2 gap-4">
+                <div className="h-44 sm:h-56 md:h-auto w-full md:w-[45%] bg-card border-t md:border-t-0 md:border-l border-border p-4 md:p-6">
+                    <Skeleton className="h-6 md:h-8 w-40 mb-4 md:mb-6" />
+                    <div className="grid grid-cols-2 gap-3 md:gap-4">
                         {[1, 2, 3, 4].map(i => (
-                            <Skeleton key={i} className="h-32 rounded-2xl" />
+                            <Skeleton key={i} className="h-20 md:h-32 rounded-2xl" />
                         ))}
                     </div>
                 </div>
@@ -287,14 +287,14 @@ export default function TestModePage() {
  
                  {/* Header */}
                  <div className="relative z-10 header-chrome flex items-center justify-between px-3 md:px-6 py-2 md:py-4 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-28 h-28 shrink-0 overflow-hidden rounded-full">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                        <div className="w-14 h-14 md:w-28 md:h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-lg font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                            <h1 className="text-2xl font-black tracking-tight truncate text-foreground">
+                            <p className="text-base md:text-lg font-black uppercase tracking-wide text-brand-red truncate">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                            <h1 className="text-lg md:text-2xl font-black tracking-tight truncate text-foreground">
                                 CÔNG AN XÃ NÂM NUNG
                             </h1>
                         </div>
@@ -421,24 +421,80 @@ export default function TestModePage() {
             </div>
 
             {/* RIGHT PANEL — Live Queue */}
-            <div className="hidden md:flex w-full md:w-[45%] flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
+            <div className="w-full md:w-[45%] flex flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0 h-44 sm:h-56 md:h-auto shrink-0 md:shrink">
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-8 bg-primary rounded-full shrink-0" />
-                        <h2 className="text-xl font-black text-foreground tracking-tight uppercase">Đang phục vụ</h2>
+                <div className="flex items-center justify-between px-4 md:px-6 py-2 md:py-4 border-b border-border/60 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <div className="w-2 md:w-2.5 h-5 md:h-8 bg-primary rounded-full shrink-0" />
+                        <h2 className="text-base md:text-xl font-black text-foreground tracking-tight uppercase">Đang phục vụ</h2>
+                        {queueState.pendingCount > 0 && (
+                            <span className="md:hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                {queueState.pendingCount} chờ
+                            </span>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2 sticker px-3 py-1.5 rounded-full bg-muted border border-border">
+                    <div className="flex items-center gap-2 sticker px-2.5 md:px-3 py-1 md:py-1.5 rounded-full bg-muted border border-border">
                         <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        <span className="text-[9px] md:text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                             {isConnected ? 'Trực tuyến' : 'Mất kết nối'}
                         </span>
                     </div>
                 </div>
 
-                {/* Queue Content */}
-                <div className="flex-1 p-5 overflow-y-auto min-h-0">
+                {/* Mobile Compact Queue Content */}
+                <div className="md:hidden flex-1 p-3 overflow-y-auto min-h-0">
+                    {currentServing.length > 0 ? (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                            {currentServing.map((call) => (
+                                <div
+                                    key={call.pos}
+                                    className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl
+                                        bg-gradient-to-br from-primary/5 to-primary/10
+                                        border border-primary/20"
+                                >
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                                        {call.pos}
+                                    </span>
+                                    <span className="text-lg font-black text-foreground tracking-tight">
+                                        {call.ticketNumber}
+                                    </span>
+                                    {call.customerName && (
+                                        <span className="text-xs text-muted-foreground truncate max-w-[70px]">
+                                            {call.customerName}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between text-xs text-muted-foreground py-2 px-1">
+                            <span className="font-medium">Đang chờ gọi số</span>
+                            <span>{queueState.pendingCount > 0 ? `${queueState.pendingCount} phiếu đang chờ` : 'Chưa có phiếu chờ'}</span>
+                        </div>
+                    )}
+                    {queueState.pendingCount > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/60">
+                            {services.map((service) => {
+                                const count = queueState.servicePending[service.id] || 0;
+                                if (count === 0) return null;
+                                return (
+                                    <span
+                                        key={service.id}
+                                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted text-[10px] text-muted-foreground font-medium"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: service.color }} />
+                                        <span className="truncate max-w-[100px]">{service.name}</span>
+                                        <span className="font-bold text-foreground">{count}</span>
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop Queue Content */}
+                <div className="hidden md:flex flex-col flex-1 p-5 overflow-y-auto min-h-0">
                     {currentServing.length > 0 ? (
                         <div className="grid grid-cols-2 gap-4">
                             {currentServing.map((call) => (
