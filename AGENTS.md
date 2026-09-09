@@ -62,8 +62,16 @@ Success signal: smaller diffs, fewer rewrites, clarifying questions before imple
 | Workflow | `AGENTS.md` (this file) |
 | Technical conventions | `CLAUDE.md` |
 | Decisions | `decisions.md` |
-| Current project state | `HANDOFF.md` |
 | Project entry / overview | `README.md` |
+
+### Operational / Continuity artifacts
+
+| Artifact | Purpose |
+|----------|---------|
+| `HANDOFF.md` | Operational continuity bridge — NOT authority |
+| `CONTEXT.md` | Bootstrap context — NOT authority |
+| `docs/continuity-contract.md` | Durable continuity semantics — NOT authority |
+| `docs/ROADMAP.md` | Current roadmap reference |
 
 ### Git branches
 

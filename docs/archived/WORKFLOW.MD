@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It is NOT current workflow authority.
+> Current workflow authority: `AGENTS.md`
+
 # Workflow tổng hợp: Đa tài khoản Claude + Lưu trữ hội thoại
 
 Tài liệu này gộp toàn bộ ý tưởng đã bàn thành quy trình dùng ngay. Đặt file
