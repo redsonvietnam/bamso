@@ -95,8 +95,8 @@ Each evidence entry supports:
 
 ### HOME
 
-- baseline_ref: UNKNOWN
-- status: UNKNOWN
+- baseline_ref: mbp/HOME.md
+- status: CURRENT
 
 ### OFFICE
 
