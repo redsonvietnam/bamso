@@ -93,6 +93,53 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
         });
     });
 
+    describe('Bounded reasonCode Validation', () => {
+        it('persists valid reasonCodes including production codes CLIENT_ERROR and INTERNAL_ERROR', async () => {
+            const clientErrRecord = await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: 'u-1', actorRole: 'STAFF' },
+                action: 'CALL_NEXT',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'CLIENT_ERROR',
+            });
+            expect(clientErrRecord).not.toBeNull();
+            expect(clientErrRecord?.reasonCode).toBe('CLIENT_ERROR');
+
+            const internalErrRecord = await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: 'u-1', actorRole: 'STAFF' },
+                action: 'COMPLETE',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'INTERNAL_ERROR',
+            });
+            expect(internalErrRecord).not.toBeNull();
+            expect(internalErrRecord?.reasonCode).toBe('INTERNAL_ERROR');
+
+            const dbLogs = await prisma.auditLog.findMany({
+                where: { reasonCode: { in: ['CLIENT_ERROR', 'INTERNAL_ERROR'] } },
+            });
+            expect(dbLogs).toHaveLength(2);
+        });
+
+        it('rejects invalid reasonCode and does not persist to database', async () => {
+            const initialCount = await prisma.auditLog.count();
+
+            await expect(
+                writeAuditLog(prisma, {
+                    actor: { actorType: 'ANONYMOUS' },
+                    action: 'LOGIN',
+                    entityType: 'AUTH',
+                    success: false,
+                    // @ts-expect-error testing runtime rejection of arbitrary unallowed string
+                    reasonCode: 'ARBITRARY_UNALLOWED_REASON_CODE',
+                })
+            ).rejects.toThrow(/Invalid audit reasonCode: ARBITRARY_UNALLOWED_REASON_CODE/);
+
+            const postCount = await prisma.auditLog.count();
+            expect(postCount).toBe(initialCount);
+        });
+    });
+
     describe('TICKET_CREATED Atomic Audit', () => {
         it('creates ticket and writes TICKET_CREATED audit atomically with anonymous actor', async () => {
             const ticket = await createTicket({

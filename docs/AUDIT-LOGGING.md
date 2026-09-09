@@ -24,6 +24,10 @@ The audit trail covers six domain actions:
 | `COMPLETE` | `TICKET` | `USER` | **Yes (in tx)** | Ticket marked completed |
 | `RESTORE` | `TICKET` | `USER` | **Yes (in tx)** | Missed ticket restored to queue |
 
+### Finite Reason Codes
+Failures record a bounded reason code strictly validated at runtime against the following finite allowlist:
+`INVALID_CREDENTIALS`, `MISSING_CREDENTIALS`, `RATE_LIMITED`, `SERVER_ERROR`, `INTERNAL_ERROR`, `CLIENT_ERROR`, `INVALID_FIELDS`, `FIELD_TOO_LONG`, `SERVICE_INACTIVE`, `NO_PENDING_TICKETS`, `INVALID_STATUS`, `NOT_FOUND`, `UNAUTHORIZED`, `FORBIDDEN`, `CALL_FAILED`, `CONCURRENCY_CONFLICT`.
+
 ### CALL_NEXT Special Rule
 When `CALL_NEXT` is executed and an active ticket at the counter is automatically completed, BAMSO **does not** emit a separate `COMPLETE` audit event. Instead, the side-effect is recorded in the `CALL_NEXT` event metadata:
 ```json

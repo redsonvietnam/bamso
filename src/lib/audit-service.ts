@@ -10,6 +10,8 @@ export const AUDIT_REASON_CODES = [
     'MISSING_CREDENTIALS',
     'RATE_LIMITED',
     'SERVER_ERROR',
+    'INTERNAL_ERROR',
+    'CLIENT_ERROR',
     'INVALID_FIELDS',
     'FIELD_TOO_LONG',
     'SERVICE_INACTIVE',
@@ -41,7 +43,7 @@ export interface AuditLogInput {
     entityType: AuditEntityType;
     entityId?: string | null;
     success: boolean;
-    reasonCode?: AuditReasonCode | string | null;
+    reasonCode?: AuditReasonCode | null;
     metadata?: AuditMetadata | null;
 }
 
@@ -49,6 +51,7 @@ type DbClient = Prisma.TransactionClient | typeof prisma;
 
 const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId']);
 const MAX_METADATA_LENGTH = 500;
+const VALID_REASON_CODES = new Set<string>(AUDIT_REASON_CODES);
 
 /**
  * Serializes allowlisted metadata keys into compact JSON string.
@@ -73,10 +76,17 @@ function sanitizeMetadata(metadata?: AuditMetadata | null): string | null {
 /**
  * Writes a durable audit record.
  * Can be executed inside an existing Prisma transaction or standalone.
+ * Strictly validates that reasonCode (if provided) is in the finite allowlist.
  */
 export async function writeAuditLog(db: DbClient, input: AuditLogInput) {
     if (!db || !('auditLog' in db) || typeof (db as unknown as { auditLog?: { create?: unknown } }).auditLog?.create !== 'function') {
         return null;
+    }
+
+    if (input.reasonCode !== undefined && input.reasonCode !== null) {
+        if (!VALID_REASON_CODES.has(input.reasonCode)) {
+            throw new Error(`Invalid audit reasonCode: ${input.reasonCode}`);
+        }
     }
 
     const sanitizedMetadata = sanitizeMetadata(input.metadata);
