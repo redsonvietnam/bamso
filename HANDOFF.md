@@ -13,8 +13,8 @@
 
 ## Canonical Git State
 
-- **main:** `19a7496` — production-ready
-- **Recent work:** call-next non-blocking fix (`c96479c`, `19a7496`)
+- **main:** `f2246069` — production-ready
+- **Recent work:** mobile responsive pass (`d970ff3`, `020fa2a`), domain audit logging implementation and reasonCode contract (`323e558`, `f224606`)
 
 ## Key Files
 
@@ -31,7 +31,7 @@
 ```bash
 npm run dev          # Dev server (port 3000)
 npm run build        # Production build
-npm test             # Unit tests (374 pass)
+npm test             # Test suite (394 passed, 2 skipped)
 npm run lint         # Lint (0 warnings)
 npx tsc --noEmit     # Type check (0 errors)
 node scratch/e2e-test.mjs  # E2E integration test

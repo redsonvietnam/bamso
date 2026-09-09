@@ -3,9 +3,9 @@
 > Tài liệu này mô tả hiện trạng triển khai BAMSO dựa trên mã nguồn, cấu hình, kiểm thử, và bằng chứng kỹ thuật đã được xác minh. Tài liệu không đưa ra các tuyên bố bảo mật, tuân thủ, hoặc vận hành không thể chứng minh từ kho mã nguồn hoặc môi trường triển khai.
 
 **Phiên bản:** 1.0
-**Cập nhật:** 2026-08-31
+**Cập nhật:** 2026-09-10
 **Kho mã nguồn:** `https://github.com/redsonvietnam/bamso`
-**Nhánh:** `main` — `19a7496`
+**Nhánh:** `main` — `f2246069`
 
 ---
 
@@ -764,8 +764,8 @@ Script: `scripts/rotate-logs.ps1`
 
 | Chỉ số | Giá trị |
 |---|---|
-| Test files | 34 passed, 1 skipped |
-| Tests | 374 passed, 2 skipped |
+| Test files | 37 passed, 1 skipped |
+| Tests | 394 passed, 2 skipped |
 | Typecheck (`tsc --noEmit`) | 0 errors |
 | Lint (`eslint --max-warnings=0`) | 0 warnings |
 | Build (`next build`) | Pass |
@@ -969,7 +969,7 @@ Arguments: -NoProfile -ExecutionPolicy Bypass -File "scripts\start-production.ps
 
 7. **Backup capability exists but production deployment unverified:** Repository contains `scripts/backup-db.py`, `scripts/restore-db.py`, and Task Scheduler installer. Recovery drill CODE-VERIFIED. Production deployment/configuration not yet verified on target hardware.
 
-8. **Audit logging chưa đầy đủ:** Không có audit log cho các hành động quan trọng (login, tạo vé, gọi số). Chỉ có error logging.
+8. **Audit logging implemented, production scheduler unverified:** Đã triển khai durable domain audit trail (`AuditLog`, `src/lib/audit-service.ts`, `scripts/purge-audit-logs.py`). Giới hạn: lưu trữ cục bộ trên SQLite (không ghi được nếu DB file unavailable/disk full); Task Scheduler tự động định kỳ 365 ngày trên production chưa triển khai.
 
 9. **Không có MFA:** Chỉ dựa vào username/password. Có thể cần bổ sung cho tài khoản admin.
 

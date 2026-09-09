@@ -9,7 +9,7 @@
 
 ## Canonical Reference
 
-- **main:** `19a7496`
+- **main:** `f2246069`
 - **Repository:** `https://github.com/redsonvietnam/bamso`
 
 ## Authority Entry Points

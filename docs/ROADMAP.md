@@ -1,7 +1,7 @@
 # ROADMAP.md — Current Roadmap
 
 > This is the single source of truth for current roadmap information.
-> Updated: 2026-09-09
+> Updated: 2026-09-10
 
 ## Completed Work
 
@@ -15,7 +15,9 @@
 - CI/CD (GitHub Actions)
 - SQLite busy_timeout + connection_limit
 - Call-next non-blocking fix (fire-and-forget broadcasts)
-- Test suite (374 tests, 0 failures)
+- Mobile responsive pass (/kiosk, /test-mode, /get-ticket, /display, /canbo)
+- Domain audit logging (LOGIN, TICKET_CREATED, CALL_NEXT, SKIP, COMPLETE, RESTORE)
+- Test suite (394 passed, 2 skipped)
 
 ## Current State
 
@@ -26,7 +28,6 @@
 
 - Redis production deployment (optional dependency)
 - DEMO_MODE_ENABLED production setting
-- Audit logging (login, ticket creation, call-next events)
 - MFA for admin accounts
 - QR Scanner automated tests
 - Browser integration tests (Playwright/Cypress)
