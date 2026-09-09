@@ -110,6 +110,77 @@ describe('call-next route pos contract', () => {
         }
     });
 
+    it('returns HTTP response before notification completes (non-blocking)', async () => {
+        const ticket = {
+            id: 't1',
+            ticketNumber: 'A001',
+            serviceId: 'service-1',
+            customerName: 'Test User',
+        };
+        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedFindFirst.mockResolvedValue(null);
+
+        // Controllable broadcast promises — we decide when they resolve
+        let resolveQueueBroadcast!: () => void;
+        let resolveDisplayBroadcast!: () => void;
+        const broadcastStarted = { queue: false, display: false };
+
+        mockedBroadcastQueueUpdate.mockImplementation(() => {
+            broadcastStarted.queue = true;
+            return new Promise<void>((resolve) => { resolveQueueBroadcast = resolve; });
+        });
+
+        mockedBroadcastDisplayCall.mockImplementation(() => {
+            broadcastStarted.display = true;
+            return new Promise<void>((resolve) => { resolveDisplayBroadcast = resolve; });
+        });
+
+        // Capture setImmediate callback WITHOUT executing it
+        let capturedCallback: (() => void) | null = null;
+        const originalSetImmediate = global.setImmediate;
+        global.setImmediate = ((cb: () => void) => {
+            capturedCallback = cb;
+            return 0 as unknown as NodeJS.Immediate;
+        }) as unknown as typeof setImmediate;
+
+        try {
+            // Act: invoke route handler
+            const response = await callNext(
+                request('POST', JSON.stringify({ serviceId: 'service-1', pos: 'Q1' }))
+            );
+            if (!response) throw new Error('expected a response');
+
+            // ASSERTION 1: HTTP response returned successfully
+            expect(response.status).toBe(200);
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+
+            // ASSERTION 2: setImmediate callback captured but NOT executed yet
+            expect(capturedCallback).not.toBeNull();
+
+            // ASSERTION 3: Notification has NOT started — broadcasts not called
+            expect(broadcastStarted.queue).toBe(false);
+            expect(broadcastStarted.display).toBe(false);
+
+            // Act: execute captured callback (simulating Node event loop scheduling)
+            capturedCallback!();
+
+            // Flush microtasks: findFirst resolves → broadcasts called
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // ASSERTION 4: Broadcasts started but NOT completed (promises pending)
+            expect(broadcastStarted.queue).toBe(true);
+            expect(broadcastStarted.display).toBe(true);
+
+            // Act: resolve broadcasts to complete notification
+            resolveQueueBroadcast();
+            resolveDisplayBroadcast();
+        } finally {
+            global.setImmediate = originalSetImmediate;
+        }
+    });
+
     it('rejects a request without pos with HTTP 400', async () => {
         const response = await callNext(request('POST', JSON.stringify({ serviceId: 'service-1' })));
         if (!response) throw new Error('expected a response');
