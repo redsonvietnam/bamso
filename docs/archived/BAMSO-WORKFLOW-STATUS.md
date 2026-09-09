@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It is NOT current status or authority.
+> Current status: Check git history and `HANDOFF.md`.
+
 # BAMSO Workflow Status
 
 > Canonical status snapshot for the PAIRFLOW hardening workflow.

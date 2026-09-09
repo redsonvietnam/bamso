@@ -5,7 +5,7 @@
 **Phiên bản:** 1.0
 **Cập nhật:** 2026-08-31
 **Kho mã nguồn:** `https://github.com/redsonvietnam/bamso`
-**Nhánh:** `main` — `0df9c42`
+**Nhánh:** `main` — `19a7496`
 
 ---
 
@@ -754,8 +754,8 @@ Script: `scripts/rotate-logs.ps1`
 
 | Chỉ số | Giá trị |
 |---|---|
-| Test files | 33 passed, 1 skipped |
-| Tests | 363 passed, 2 skipped |
+| Test files | 34 passed, 1 skipped |
+| Tests | 374 passed, 2 skipped |
 | Typecheck (`tsc --noEmit`) | 0 errors |
 | Lint (`eslint --max-warnings=0`) | 0 warnings |
 | Build (`next build`) | Pass |

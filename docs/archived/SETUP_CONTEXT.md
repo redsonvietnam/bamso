@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It contains broken references to non-existent files.
+> Current setup: See `README.md` and `HANDOFF.md`.
+
 # SETUP CONTEXT — đọc trước khi làm bất cứ việc gì khác
 
 Đây là bản BAMSO đã được vá một loạt lỗi bảo mật + concurrency (xem

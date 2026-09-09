@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It describes an early prototype prompt.
+> Not current workflow or onboarding material.
+
 # Prompt — Thiết kế Prototype cho Google AI Studio
 
 > Dán toàn bộ nội dung bên dưới vào Google AI Studio (Gemini) để tạo ra prototype

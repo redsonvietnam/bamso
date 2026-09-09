@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It is NOT current workflow authority.
+> Current workflow authority: `AGENTS.md`
+
 # Tooling Roadmap — Bamso (nhánh `dev`)
 
 Kế hoạch áp dụng công cụ AI **từng bước**, tránh thay đổi đột ngột và trùng lặp tài liệu.

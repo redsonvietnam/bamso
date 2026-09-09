@@ -85,21 +85,18 @@ Kịch bản này sẽ giả lập chính xác:
 
 ## 🤖 AI Workflow & Tooling
 
-Dự án này hiện đã áp dụng một luồng làm việc AI nhẹ nhàng và dần tiến tới công cụ:
+- `AGENTS.md` — agent coding discipline and workflow authority
+- `CLAUDE.md` — technical conventions (auth, queue, Prisma, API)
+- `decisions.md` — architectural decisions
+- `docs/ROADMAP.md` — current roadmap
 
-- `AGENTS.md` — quy tắc hành vi agent, tiêu chuẩn sửa code, và cầu nối tới `CLAUDE.md`.
-- `CLAUDE.md` — các quy ước dự án cụ thể: auth, queue, Prisma, API response, tên nhánh.
-- `docs/workflow-v4.md` — workflow Active cho sửa đổi và feature mới.
-- `docs/tooling-roadmap.md` — kế hoạch từng phase cho CodeGraph, Spec Kit, Codebuff và dọn tài liệu.
+### Git branches
 
-### Nhánh làm việc
+- `main` — production-ready, merge with review
+- Feature branches — for implementation work
 
-- `main` — production-ready, merge có kiểm soát.
-- `dev` — thử tooling, feature, refactor.
+### Verification
 
-### Ghi chú kiểm chứng
-
-- Sau mỗi thay đổi logic/queue/auth: chạy `node scratch/e2e-test.mjs`.
-- Trước merge `dev` → `main`: chạy `npm run build`.
-
-Nếu bạn muốn tiếp tục với feature cụ thể, bắt đầu bằng mô tả và tôi sẽ giúp chuẩn bị Phase 2 Spec Kit trên `dev`.
+- After queue/auth/API changes: `node scratch/e2e-test.mjs`
+- Before merge: `npm run build` must pass
+- Always: `npm run lint` and `npm run type-check`

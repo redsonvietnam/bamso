@@ -1,3 +1,7 @@
+> **⚠️ ARCHIVED — HISTORICAL DOCUMENT**
+> This file is preserved for reference only. It is NOT current workflow authority.
+> Current workflow authority: `AGENTS.md`
+
 # AI Workflow V4 — Bamso
 
 Workflow gọn cho repo **đã mature** (rebuild v1.0 xong). Thay thế dần `workflow.md` V3.5 (838 dòng, thiết kế cho greenfield 3-agent).

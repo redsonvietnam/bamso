@@ -48,29 +48,73 @@ Example verify checklist for Bamso:
 - Queue/auth/API changes → `node scratch/e2e-test.mjs`
 - Schema changes → `npx prisma db push` and seed if needed
 - UI changes → review `docs/design-system/` then check `/`, `/waiting`, `/admin`
-- Merge `dev` → `main` only after `npm run build` passes and `codegraph sync .` if many files changed
 
 Success signal: smaller diffs, fewer rewrites, clarifying questions before implementation — not after mistakes.
 
 ---
 
-## Tooling & Workflow (nhánh `dev`)
+## Workflow
 
-- **Workflow active:** [`docs/workflow-v4.md`](docs/workflow-v4.md)
-- **Roadmap từng phase:** [`docs/tooling-roadmap.md`](docs/tooling-roadmap.md)
-- **CodeGraph (Phase 1):** Sau thay đổi lớn chạy `codegraph sync .` — index local tại `.codegraph/` (không commit DB)
-- **Spec Kit (Phase 2):** Chỉ khi bắt đầu feature mới — chưa init; xem roadmap
-- **Archive:** `workflow.md` V3.5 — prompt template cũ, không dùng làm workflow chính
+### Authority hierarchy
+
+| Concern | Authority |
+|---------|-----------|
+| Workflow | `AGENTS.md` (this file) |
+| Technical conventions | `CLAUDE.md` |
+| Decisions | `decisions.md` |
+| Current project state | `HANDOFF.md` |
+| Project entry / overview | `README.md` |
+
+### Git branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Canonical, production-ready |
+| Feature branches | Implementation work |
+
+### Execution model
+
+```
+User / R1
+    ↓
+C1 execution (feature branch)
+    ↓
+CC independent review
+    ↓
+R1 GATE
+    ↓
+main (after merge)
+```
+
+- Feature branch for implementation
+- Independent audit before merge
+- No self-approval
+- `main` is canonical
+- Git canonical state wins over stale docs
+
+### Before editing
+
+1. Read `AGENTS.md` (this file)
+2. Read `CLAUDE.md` for technical conventions
+3. Read `decisions.md` for architectural decisions
+4. Check current state in `HANDOFF.md`
+5. For UI/UX work, read `docs/design-system/`
+
+### Verification
+
+- After queue/auth/API changes: `node scratch/e2e-test.mjs`
+- After schema changes: `npx prisma db push`
+- Before merge: `npm run build` must pass
+- Always: `npm run lint` and `npm run type-check`
 
 ---
 
-<!-- BEGIN:nextjs-agent-rules -->
 ## Next.js
 
 This is NOT the Next.js you know. This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
 
-<!-- BEGIN:design-system-rules -->
+---
+
 ## Design System
 
 For any UI/UX work in this repository, read these files first:
@@ -80,48 +124,3 @@ For any UI/UX work in this repository, read these files first:
 - `docs/design-system/perspective/DESIGN.md`
 
 Apply token and typography decisions from those files before writing component-level styles.
-<!-- END:design-system-rules -->
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **bamso** (1303 symbols, 2824 relationships, 105 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
-
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/bamso/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/bamso/clusters` | All functional areas |
-| `gitnexus://repo/bamso/processes` | All execution flows |
-| `gitnexus://repo/bamso/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
