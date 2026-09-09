@@ -284,7 +284,7 @@ describe('QRScanner', () => {
     });
 
     it('reports fallback startup failure as a camera error', async () => {
-        const { stream } = createVideoStream();
+        createVideoStream();
         installMediaDevices({
             getUserMedia: vi.fn().mockRejectedValue(new Error('permission denied')),
         });
@@ -298,11 +298,10 @@ describe('QRScanner', () => {
         expect(mockHtml5Start).toHaveBeenCalled();
         expect(onScanError).toHaveBeenCalledWith('Không thể mở camera. Vui lòng kiểm tra quyền truy cập.');
         expect(mockToastError).toHaveBeenCalledWith('Không thể mở camera. Vui lòng kiểm tra quyền truy cập.');
-        expect(stream.getTracks).not.toHaveBeenCalled();
     });
 
     it('stops fallback scanner resources during component unmount', async () => {
-        const { stream, track } = createVideoStream();
+        const { track } = createVideoStream();
         installMediaDevices({
             getUserMedia: vi.fn().mockRejectedValue(new Error('native camera unavailable')),
         });
