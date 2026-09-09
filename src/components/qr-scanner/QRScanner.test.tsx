@@ -180,11 +180,15 @@ describe('QRScanner', () => {
         }
     });
 
-    async function renderScanner(props: React.ComponentProps<typeof QRScanner> = {}) {
+    async function renderScanner(props: Partial<React.ComponentProps<typeof QRScanner>> = {}) {
         if (!container) throw new Error('Test container missing');
         root = createRoot(container);
+        const mergedProps: React.ComponentProps<typeof QRScanner> = {
+            onScanSuccess: vi.fn(),
+            ...props,
+        };
         await act(async () => {
-            root?.render(<QRScanner {...props} />);
+            root?.render(<QRScanner {...mergedProps} />);
         });
         await flushAsyncWork();
         return container;
