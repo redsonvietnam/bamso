@@ -1,7 +1,7 @@
 # CONTEXT.md — Continuity Bootstrap
 
 > **Bootstrap context only.** Not authority, not canonical state.
-> Git canonical state wins if CONTEXT is stale.
+> For full continuity semantics, read `docs/continuity-contract.md`.
 
 ## Identity
 
@@ -33,7 +33,7 @@
 6. `next.authorized = false` unless explicit authority/GATE exists.
 7. MBP/machine baseline is distinct from project canonical state.
 8. Relay is not canonical authority.
-9. Continuity semantics are defined in durable contracts, not CONTEXT itself.
+9. Continuity semantics are defined in `docs/continuity-contract.md`, not CONTEXT itself.
 
 ## References
 
