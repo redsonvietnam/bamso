@@ -1,50 +1,47 @@
-# CONTEXT.md — Continuity Context
+# CONTEXT.md — Continuity Bootstrap
 
-> This file provides bootstrap context for AI agents and new team members.
-> It is NOT workflow authority — that's `AGENTS.md`.
+> **Bootstrap context only.** Not authority, not canonical state.
+> Git canonical state wins if CONTEXT is stale.
 
-## Project Identity
+## Identity
 
 **BAMSO** — Queue Management System for public service offices.
 
-## Canonical Git State
+## Canonical Reference
 
-- **main:** `19a7496` — production-ready
+- **main:** `19a7496`
 - **Repository:** `https://github.com/redsonvietnam/bamso`
 
-## Key Files
+## Authority Entry Points
 
-| File | Purpose |
-|------|---------|
-| `AGENTS.md` | Workflow authority + coding discipline |
-| `CLAUDE.md` | Technical conventions |
-| `decisions.md` | Architectural decisions |
-| `HANDOFF.md` | Current operational handoff |
-| `docs/ROADMAP.md` | Current roadmap |
-| `docs/BAMSO-TECHNICAL-SECURITY-DOSSIER.md` | Security/technical reference |
+| Concern | Source |
+|---------|--------|
+| Workflow | `AGENTS.md` |
+| Technical | `CLAUDE.md` |
+| Decisions | `decisions.md` |
+| Roadmap | `docs/ROADMAP.md` |
+| Handoff | `HANDOFF.md` |
+| Security | `docs/BAMSO-TECHNICAL-SECURITY-DOSSIER.md` |
 
-## Workflow
+## Continuity Invariants
 
-```
-User / R1
-    ↓
-C1 execution (feature branch)
-    ↓
-CC independent review
-    ↓
-R1 GATE
-    ↓
-main (after merge)
-```
+1. CONTEXT is bootstrap context only — not canonical state.
+2. CONTEXT is NOT authority — `AGENTS.md` is workflow authority.
+3. Git canonical state wins if CONTEXT is stale.
+4. UNKNOWN must remain UNKNOWN when evidence is insufficient.
+5. `next.action` (if present) is recommendation only.
+6. `next.authorized = false` unless explicit authority/GATE exists.
+7. MBP/machine baseline is distinct from project canonical state.
+8. Relay is not canonical authority.
+9. Continuity semantics are defined in durable contracts, not CONTEXT itself.
 
-## Stack
+## References
 
-- Next.js 16.2.6 (App Router) + React 19 + TypeScript strict
-- Prisma 6.3 ORM — SQLite
-- Auth: `jose` JWT → HttpOnly cookie
-- Real-time: SSE via `src/lib/sse-broker.ts`
-- Redis: optional (rate-limit + pub/sub, fail-open)
+- **MBP:** Machine-local context (not project authority)
+- **PCM:** External governance/authority semantics
+- **Archive:** `docs/archived/` — historical, not current
+- **Sessions:** `docs/sessions/` — historical records
 
-## Historical Context
+## UNKNOWN
 
-Session history and archived documents are in `docs/sessions/` and `docs/archived/`.
+Active task: UNKNOWN (no authoritatively established current task).

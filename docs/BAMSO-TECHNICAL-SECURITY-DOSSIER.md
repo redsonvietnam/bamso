@@ -227,7 +227,7 @@ Màn hình hiển thị → Kết nối SSE
 - **Prisma ORM:** Type-safe queries, không có raw SQL trong codebase
 - **Connection:** `connection_limit=1`, `socket_timeout=5` (phù hợp SQLite)
 - **Không có encryption-at-rest** — SQLite không hỗ trợ native encryption
-- **Không có backup tự động** — cần quyết định triển khai
+- **Backup capability implemented** — `scripts/backup-db.py`, `scripts/restore-db.py`, Task Scheduler installer. Production deployment/configuration not yet verified.
 
 ### 5.5 Bảo mật Browser
 
@@ -910,7 +910,7 @@ Arguments: -NoProfile -ExecutionPolicy Bypass -File "scripts\start-production.ps
 | SQL injection | RẤT THẤP | Prisma ORM (parameterized queries) | RẤT THẤP | Không có raw SQL |
 | Exposed database | TRUNG BÌNH | File-based SQLite, không encryption | TRUNG BÌNH | File permissions, backup encryption |
 | Compromised Windows server | CAO | Phụ thuộc vào OS security | CAO | Hardening Windows, firewall |
-| Lost backup | TRUNG BÌNH | Chưa có backup tự động | CAO | Triển khai backup script |
+| Lost backup | TRUNG BÌNH | Backup scripts implemented (`scripts/backup-db.py`); production deployment not verified | TRUNG BÌNH | Verify production backup task |
 | Internet outage | THẤP | Core flow offline-capable | RẤT THẤP | LAN vẫn cần thiết |
 | LAN outage | TRUNG BÌNH | Multi-device không hoạt động | TRUNG BÌNH | Single-device fallback |
 | Server outage | CAO | Tất cả clients mất functionality | CAO | Auto-restart, monitoring |
@@ -957,7 +957,7 @@ Arguments: -NoProfile -ExecutionPolicy Bypass -File "scripts\start-production.ps
 
 6. **QR Scanner thiếu automated test:** Component phức tạp (camera + async) chưa có unit test.
 
-7. **Backup chưa formalized:** Không có script backup tự động. Database file cần được sao lưu thủ công hoặc qua script tùy chỉnh.
+7. **Backup capability exists but production deployment unverified:** Repository contains `scripts/backup-db.py`, `scripts/restore-db.py`, and Task Scheduler installer. Recovery drill CODE-VERIFIED. Production deployment/configuration not yet verified on target hardware.
 
 8. **Audit logging chưa đầy đủ:** Không có audit log cho các hành động quan trọng (login, tạo vé, gọi số). Chỉ có error logging.
 
