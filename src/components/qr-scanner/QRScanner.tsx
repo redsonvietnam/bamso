@@ -92,6 +92,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
     }, [debugMode]);
 
     const refreshDevices = useCallback(() => {
+        if (!navigator.mediaDevices?.enumerateDevices) return;
         navigator.mediaDevices.enumerateDevices().then(devices => {
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
             setAvailableDevices(videoDevices);
