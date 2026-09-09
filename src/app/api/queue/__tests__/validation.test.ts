@@ -90,15 +90,24 @@ describe('call-next route pos contract', () => {
         mockedCallNextTicket.mockResolvedValue(ticket);
         mockedFindFirst.mockResolvedValue(null);
 
-        const response = await callNext(
-            request('POST', JSON.stringify({ serviceId: 'service-1', pos: 'Q1' }))
-        );
-        if (!response) throw new Error('expected a response');
+        // Mock setImmediate to execute callbacks synchronously in tests
+        const originalSetImmediate = global.setImmediate;
+        const flushSetImmediate = (fn: () => void) => fn();
+        global.setImmediate = flushSetImmediate as unknown as typeof setImmediate;
 
-        expect(response.status).toBe(200);
-        expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
-        expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
-        expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
+        try {
+            const response = await callNext(
+                request('POST', JSON.stringify({ serviceId: 'service-1', pos: 'Q1' }))
+            );
+            if (!response) throw new Error('expected a response');
+
+            expect(response.status).toBe(200);
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
+            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
+        } finally {
+            global.setImmediate = originalSetImmediate;
+        }
     });
 
     it('rejects a request without pos with HTTP 400', async () => {

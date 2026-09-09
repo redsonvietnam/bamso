@@ -32,24 +32,38 @@ export async function POST(request: Request) {
             );
         }
 
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        // Fire-and-forget: broadcasts are best-effort side effects.
+        // The business transaction is complete when callNextTicket succeeds.
+        // Do not block the HTTP response on notification delivery.
+        const serviceIdForBroadcast = ticket.serviceId;
+        const ticketNumber = ticket.ticketNumber;
+        const customerName = ticket.customerName;
+        const posForBroadcast = pos as string;
 
-        const nextPending = await prisma.ticket.findFirst({
-            where: {
-                serviceId: ticket.serviceId,
-                status: TicketStatus.PENDING,
-                createdAt: { gte: startOfDay, lte: endOfDay },
-                id: { not: ticket.id },
-            },
-            orderBy: { position: 'asc' },
+        setImmediate(async () => {
+            try {
+                const now = new Date();
+                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+                const nextPending = await prisma.ticket.findFirst({
+                    where: {
+                        serviceId: serviceIdForBroadcast,
+                        status: TicketStatus.PENDING,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                        id: { not: ticket.id },
+                    },
+                    orderBy: { position: 'asc' },
+                });
+
+                await Promise.allSettled([
+                    broadcastQueueUpdate(serviceIdForBroadcast),
+                    broadcastDisplayCall(ticketNumber, posForBroadcast, customerName, nextPending?.ticketNumber)
+                ]);
+            } catch (err) {
+                logger.error('Post-call-next broadcast failed:', err);
+            }
         });
-
-        await Promise.all([
-            broadcastQueueUpdate(ticket.serviceId),
-            broadcastDisplayCall(ticket.ticketNumber, pos as string, ticket.customerName, nextPending?.ticketNumber)
-        ]);
 
         return NextResponse.json(ticket);
     } catch (error) {
