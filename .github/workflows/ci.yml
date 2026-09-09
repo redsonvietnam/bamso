@@ -32,6 +32,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Initialize SQLite test database
+        run: npx prisma db push --skip-generate
+
       - name: Lint
         run: npm run lint
 
