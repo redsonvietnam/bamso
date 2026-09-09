@@ -1,0 +1,121 @@
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
+
+export type AuditActorType = 'USER' | 'ANONYMOUS' | 'SYSTEM';
+export type AuditAction = 'LOGIN' | 'TICKET_CREATED' | 'CALL_NEXT' | 'SKIP' | 'COMPLETE' | 'RESTORE';
+export type AuditEntityType = 'AUTH' | 'TICKET';
+
+export const AUDIT_REASON_CODES = [
+    'INVALID_CREDENTIALS',
+    'MISSING_CREDENTIALS',
+    'RATE_LIMITED',
+    'SERVER_ERROR',
+    'INVALID_FIELDS',
+    'FIELD_TOO_LONG',
+    'SERVICE_INACTIVE',
+    'NO_PENDING_TICKETS',
+    'INVALID_STATUS',
+    'NOT_FOUND',
+    'UNAUTHORIZED',
+    'FORBIDDEN',
+    'CALL_FAILED',
+    'CONCURRENCY_CONFLICT',
+] as const;
+
+export type AuditReasonCode = (typeof AUDIT_REASON_CODES)[number];
+
+export interface AuditActor {
+    actorType: AuditActorType;
+    actorId?: string | null;
+    actorRole?: string | null;
+}
+
+export interface AuditMetadata {
+    counter?: string;
+    autoCompletedTicketId?: string;
+}
+
+export interface AuditLogInput {
+    actor: AuditActor;
+    action: AuditAction;
+    entityType: AuditEntityType;
+    entityId?: string | null;
+    success: boolean;
+    reasonCode?: AuditReasonCode | string | null;
+    metadata?: AuditMetadata | null;
+}
+
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId']);
+const MAX_METADATA_LENGTH = 500;
+
+/**
+ * Serializes allowlisted metadata keys into compact JSON string.
+ * Enforces strict PII / secret exclusion and length bound.
+ */
+function sanitizeMetadata(metadata?: AuditMetadata | null): string | null {
+    if (!metadata || typeof metadata !== 'object') return null;
+
+    const sanitized: Record<string, string> = {};
+    for (const [key, val] of Object.entries(metadata)) {
+        if (ALLOWED_METADATA_KEYS.has(key) && typeof val === 'string' && val.length > 0) {
+            sanitized[key] = val.slice(0, 100);
+        }
+    }
+
+    if (Object.keys(sanitized).length === 0) return null;
+
+    const json = JSON.stringify(sanitized);
+    return json.length <= MAX_METADATA_LENGTH ? json : null;
+}
+
+/**
+ * Writes a durable audit record.
+ * Can be executed inside an existing Prisma transaction or standalone.
+ */
+export async function writeAuditLog(db: DbClient, input: AuditLogInput) {
+    if (!db || !('auditLog' in db) || typeof (db as unknown as { auditLog?: { create?: unknown } }).auditLog?.create !== 'function') {
+        return null;
+    }
+
+    const sanitizedMetadata = sanitizeMetadata(input.metadata);
+
+    return db.auditLog.create({
+        data: {
+            actorType: input.actor.actorType,
+            actorId: input.actor.actorId ?? null,
+            actorRole: input.actor.actorRole ?? null,
+            action: input.action,
+            entityType: input.entityType,
+            entityId: input.entityId ?? null,
+            success: input.success,
+            reasonCode: input.reasonCode ?? null,
+            metadata: sanitizedMetadata,
+        },
+    });
+}
+
+/**
+ * Deterministic audit log purge by retention cutoff.
+ * Default retention: 365 days.
+ */
+export async function purgeAuditLogs(options?: { olderThanDays?: number; db?: DbClient }) {
+    const days = options?.olderThanDays ?? 365;
+    const client = options?.db ?? prisma;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const result = await client.auditLog.deleteMany({
+        where: {
+            createdAt: { lt: cutoff },
+        },
+    });
+
+    return {
+        deletedCount: result.count,
+        cutoff,
+        retentionDays: days,
+    };
+}

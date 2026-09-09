@@ -5,6 +5,7 @@ import { verifyPassword, hashPassword, needsRehash } from '@/lib/password';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { isSecureCookie } from '@/lib/cookie';
+import { writeAuditLog } from '@/lib/audit-service';
 
 const COOKIE_NAME = 'auth_token';
 const MAX_AGE = 60 * 60 * 24;
@@ -14,12 +15,26 @@ export async function POST(request: Request) {
         const ip = getClientIp(request);
         const { allowed } = await checkRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
         if (!allowed) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'LOGIN',
+                entityType: 'AUTH',
+                success: false,
+                reasonCode: 'RATE_LIMITED',
+            });
             return NextResponse.json({ error: 'Too many requests', code: 'RATE_LIMITED' }, { status: 429 });
         }
 
         const { username, password } = await request.json();
 
         if (!username || !password) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'LOGIN',
+                entityType: 'AUTH',
+                success: false,
+                reasonCode: 'MISSING_CREDENTIALS',
+            });
             return NextResponse.json(
                 { error: 'Tên đăng nhập và mật khẩu là bắt buộc', code: 'MISSING_CREDENTIALS' },
                 { status: 400 }
@@ -32,6 +47,16 @@ export async function POST(request: Request) {
         });
 
         if (!user || !verifyPassword(password, user.passwordHash)) {
+            await writeAuditLog(prisma, {
+                actor: user
+                    ? { actorType: 'USER', actorId: user.id, actorRole: user.role }
+                    : { actorType: 'ANONYMOUS' },
+                action: 'LOGIN',
+                entityType: 'AUTH',
+                entityId: user?.id ?? null,
+                success: false,
+                reasonCode: 'INVALID_CREDENTIALS',
+            });
             return NextResponse.json(
                 { error: 'Tên đăng nhập hoặc mật khẩu không đúng', code: 'INVALID_CREDENTIALS' },
                 { status: 401 }
@@ -49,11 +74,27 @@ export async function POST(request: Request) {
         }
 
         if (!isUserRole(user.role)) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                action: 'LOGIN',
+                entityType: 'AUTH',
+                entityId: user.id,
+                success: false,
+                reasonCode: 'SERVER_ERROR',
+            });
             return NextResponse.json(
                 { error: 'Đã xảy ra lỗi trong quá trình đăng nhập', code: 'SERVER_ERROR' },
                 { status: 500 }
             );
         }
+
+        await writeAuditLog(prisma, {
+            actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+            action: 'LOGIN',
+            entityType: 'AUTH',
+            entityId: user.id,
+            success: true,
+        });
 
         const token = await signJWT({ userId: user.id, role: user.role });
 

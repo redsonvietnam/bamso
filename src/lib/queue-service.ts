@@ -1,5 +1,6 @@
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
+import { writeAuditLog, AuditActor } from '@/lib/audit-service';
 
 const MAX_CALL_RETRIES = 5;
 
@@ -55,13 +56,25 @@ function getDayKey(date: Date): string {
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
  */
-export async function callNextTicket(serviceId: string, pos: string) {
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor) {
     return withPosLock(pos, async () => {
         const { startOfDay, endOfDay } = getTodayBounds();
         const dayKey = getDayKey(new Date());
 
         for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
             const result = await prisma.$transaction(async (tx) => {
+                const autoCompleted = typeof tx.ticket.findMany === 'function'
+                    ? await tx.ticket.findMany({
+                          where: {
+                              pos,
+                              status: { in: [TicketStatus.CALLED, TicketStatus.IN_PROGRESS] },
+                              dayKey,
+                              createdAt: { gte: startOfDay, lte: endOfDay },
+                          },
+                          select: { id: true },
+                      })
+                    : [];
+
                 await tx.ticket.updateMany({
                     where: {
                         pos,
@@ -101,15 +114,32 @@ export async function callNextTicket(serviceId: string, pos: string) {
                     },
                 });
 
-                return claimResult.count === 0
-                    ? { claimed: false as const }
-                    : {
-                          claimed: true as const,
-                          ticket: await tx.ticket.findUnique({
-                              where: { id: nextTicket.id },
-                              include: { service: true },
-                          }),
-                      };
+                if (claimResult.count === 0) {
+                    return { claimed: false as const };
+                }
+
+                const autoCompletedTicketId = Array.isArray(autoCompleted) && autoCompleted.length > 0
+                    ? autoCompleted[0]?.id
+                    : undefined;
+                await writeAuditLog(tx, {
+                    actor: actor ?? { actorType: 'SYSTEM' },
+                    action: 'CALL_NEXT',
+                    entityType: 'TICKET',
+                    entityId: nextTicket.id,
+                    success: true,
+                    metadata: {
+                        counter: pos,
+                        ...(autoCompletedTicketId ? { autoCompletedTicketId } : {}),
+                    },
+                });
+
+                return {
+                    claimed: true as const,
+                    ticket: await tx.ticket.findUnique({
+                        where: { id: nextTicket.id },
+                        include: { service: true },
+                    }),
+                };
             }, { timeout: 15000 });
 
             if (result.claimed) {
@@ -124,7 +154,7 @@ export async function callNextTicket(serviceId: string, pos: string) {
 /**
  * Completes a ticket atomically: combines status check and update into one operation.
  */
-export async function completeTicket(ticketId: string) {
+export async function completeTicket(ticketId: string, actor?: AuditActor) {
     return prisma.$transaction(async (tx) => {
         const result = await tx.ticket.updateMany({
             where: {
@@ -143,6 +173,14 @@ export async function completeTicket(ticketId: string) {
             throw new Error('Vé không ở trạng thái đang phục vụ để hoàn thành.');
         }
 
+        await writeAuditLog(tx, {
+            actor: actor ?? { actorType: 'SYSTEM' },
+            action: 'COMPLETE',
+            entityType: 'TICKET',
+            entityId: ticketId,
+            success: true,
+        });
+
         return tx.ticket.findUnique({
             where: { id: ticketId },
             include: { service: true },
@@ -153,7 +191,7 @@ export async function completeTicket(ticketId: string) {
 /**
  * Skips a ticket with guard against concurrent state changes.
  */
-export async function skipTicket(ticketId: string) {
+export async function skipTicket(ticketId: string, actor?: AuditActor) {
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
 
     if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
@@ -181,6 +219,15 @@ export async function skipTicket(ticketId: string) {
                     data: { status: TicketStatus.MISSED, missCount: newMissCount },
                 });
                 if (result.count === 0) throw new Error('Trạng thái vé đã thay đổi, vui lòng thử lại.');
+
+                await writeAuditLog(tx, {
+                    actor: actor ?? { actorType: 'SYSTEM' },
+                    action: 'SKIP',
+                    entityType: 'TICKET',
+                    entityId: ticketId,
+                    success: true,
+                });
+
                 return tx.ticket.findUnique({ where: { id: ticketId }, include: { service: true } });
             }
 
@@ -236,6 +283,14 @@ export async function skipTicket(ticketId: string) {
             });
             if (result.count === 0) throw new Error('Trạng thái vé đã thay đổi, vui lòng thử lại.');
 
+            await writeAuditLog(tx, {
+                actor: actor ?? { actorType: 'SYSTEM' },
+                action: 'SKIP',
+                entityType: 'TICKET',
+                entityId: ticketId,
+                success: true,
+            });
+
             return tx.ticket.findUnique({ where: { id: ticketId }, include: { service: true } });
         }, { timeout: 15000 });
     });
@@ -244,7 +299,7 @@ export async function skipTicket(ticketId: string) {
 /**
  * Restores a MISSED ticket with guard against concurrent state changes.
  */
-export async function restoreTicket(ticketId: string) {
+export async function restoreTicket(ticketId: string, actor?: AuditActor) {
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
 
     if (!ticket) throw new Error('Không tìm thấy phiếu yêu cầu.');
@@ -322,6 +377,14 @@ export async function restoreTicket(ticketId: string) {
                 },
             });
             if (result.count === 0) throw new Error('Trạng thái vé đã thay đổi, vui lòng thử lại.');
+
+            await writeAuditLog(tx, {
+                actor: actor ?? { actorType: 'SYSTEM' },
+                action: 'RESTORE',
+                entityType: 'TICKET',
+                entityId: ticketId,
+                success: true,
+            });
 
             return tx.ticket.findUnique({ where: { id: ticketId }, include: { service: true } });
         }, { timeout: 15000 });

@@ -27,6 +27,7 @@
     "install:service": "powershell -ExecutionPolicy Bypass -File scripts/install-bamso-task.ps1",
     "health": "powershell -ExecutionPolicy Bypass -File scripts/check-health.ps1 -IgnoreCert",
     "backup:status": "powershell -ExecutionPolicy Bypass -File scripts/check-backup.ps1",
+    "audit:purge": "python scripts/purge-audit-logs.py",
     "ops:status": "powershell -ExecutionPolicy Bypass -File scripts/ops-status.ps1 -IgnoreCert",
     "logs:rotate": "powershell -ExecutionPolicy Bypass -File scripts/rotate-logs.ps1"
   },

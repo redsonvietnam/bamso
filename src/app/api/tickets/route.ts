@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional, requireRole } from '@/lib/api-auth';
 import { readJsonObject, sanitizeApiError } from '@/lib/api-validation';
+import { writeAuditLog } from '@/lib/audit-service';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
@@ -34,10 +35,26 @@ export async function POST(request: Request) {
         }
 
         const parsed = await readJsonObject(request);
-        if (!parsed.ok) return parsed.response;
+        if (!parsed.ok) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'INVALID_FIELDS',
+            });
+            return parsed.response;
+        }
         const { serviceId, customerName, phone } = parsed.value;
 
         if (!serviceId || typeof serviceId !== 'string' || serviceId.trim() === '') {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'INVALID_FIELDS',
+            });
             return NextResponse.json(
                 { error: 'serviceId là bắt buộc và phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
@@ -45,6 +62,13 @@ export async function POST(request: Request) {
         }
 
         if (customerName !== undefined && customerName !== null && (typeof customerName !== 'string' || customerName.trim().length === 0)) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'INVALID_FIELDS',
+            });
             return NextResponse.json(
                 { error: 'customerName phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
@@ -52,6 +76,13 @@ export async function POST(request: Request) {
         }
 
         if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.trim().length === 0)) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'INVALID_FIELDS',
+            });
             return NextResponse.json(
                 { error: 'phone phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
                 { status: 400 }
@@ -59,6 +90,13 @@ export async function POST(request: Request) {
         }
 
         if (customerName !== undefined && customerName !== null && customerName.trim().length > 100) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'FIELD_TOO_LONG',
+            });
             return NextResponse.json(
                 { error: 'customerName không được vượt quá 100 ký tự', code: 'FIELD_TOO_LONG' },
                 { status: 400 }
@@ -66,6 +104,13 @@ export async function POST(request: Request) {
         }
 
         if (phone !== undefined && phone !== null && phone.trim().length > 20) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'FIELD_TOO_LONG',
+            });
             return NextResponse.json(
                 { error: 'phone không được vượt quá 20 ký tự', code: 'FIELD_TOO_LONG' },
                 { status: 400 }
@@ -86,6 +131,14 @@ export async function POST(request: Request) {
     } catch (error) {
         logger.error('Ticket creation error:', error);
         const { message, isClientError } = sanitizeApiError(error);
+        const isInactive = message.includes('ngừng hoạt động') || message.includes('không tồn tại');
+        await writeAuditLog(prisma, {
+            actor: { actorType: 'ANONYMOUS' },
+            action: 'TICKET_CREATED',
+            entityType: 'TICKET',
+            success: false,
+            reasonCode: isInactive ? 'SERVICE_INACTIVE' : isClientError ? 'INVALID_FIELDS' : 'SERVER_ERROR',
+        });
         return NextResponse.json(
             { error: message, code: isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR' },
             { status: isClientError ? 400 : 500 }

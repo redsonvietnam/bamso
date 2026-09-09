@@ -1,5 +1,6 @@
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
+import { writeAuditLog, AuditActor } from '@/lib/audit-service';
 
 const MAX_RETRIES = 5;
 
@@ -10,14 +11,17 @@ function getDayKey(date: Date): string {
     return `${y}-${m}-${d}`;
 }
 
-export async function createTicket(data: {
-    serviceId: string;
-    customerName?: string;
-    phone?: string;
-}) {
+export async function createTicket(
+    data: {
+        serviceId: string;
+        customerName?: string;
+        phone?: string;
+    },
+    actor?: AuditActor
+) {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-            return await createTicketInternal(data);
+            return await createTicketInternal(data, actor);
         } catch (error) {
             // P2002 = unique constraint violation (ticketNumber collision)
             if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002' && attempt < MAX_RETRIES - 1) {
@@ -29,11 +33,14 @@ export async function createTicket(data: {
     throw new Error('Failed to create ticket after maximum retries');
 }
 
-async function createTicketInternal(data: {
-    serviceId: string;
-    customerName?: string;
-    phone?: string;
-}) {
+async function createTicketInternal(
+    data: {
+        serviceId: string;
+        customerName?: string;
+        phone?: string;
+    },
+    actor?: AuditActor
+) {
     return await prisma.$transaction(async (tx) => {
         const service = await tx.service.findUnique({
             where: { id: data.serviceId },
@@ -69,7 +76,7 @@ async function createTicketInternal(data: {
         const ticketNumber = `${service.prefix}${sequence}`;
         const position = (maxPosResult._max.position || 0) + 1;
 
-        return await tx.ticket.create({
+        const ticket = await tx.ticket.create({
             data: {
                 ...data,
                 ticketNumber,
@@ -78,5 +85,15 @@ async function createTicketInternal(data: {
                 status: TicketStatus.PENDING,
             },
         });
+
+        await writeAuditLog(tx, {
+            actor: actor ?? { actorType: 'ANONYMOUS' },
+            action: 'TICKET_CREATED',
+            entityType: 'TICKET',
+            entityId: ticket.id,
+            success: true,
+        });
+
+        return ticket;
     });
 }

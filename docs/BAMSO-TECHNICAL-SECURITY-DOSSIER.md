@@ -746,6 +746,16 @@ Script: `scripts/rotate-logs.ps1`
 - `logs/` directory gitignored, không served by Next.js
 - Health endpoint không expose secrets
 
+### 10.9 Domain Audit Logging (WS-BAMSO-AUDIT-LOGGING-01)
+
+- **Mục tiêu:** Lưu vết bền vững các thay đổi nghiệp vụ quan trọng vào bảng SQLite `AuditLog` độc lập với mutable domain tables.
+- **Phạm vi sự kiện:** `LOGIN`, `TICKET_CREATED`, `CALL_NEXT`, `SKIP`, `COMPLETE`, `RESTORE`.
+- **Atomic transaction:** Mọi thao tác ghi log thành công được thực thi **cùng transaction** với mutation nghiệp vụ tương ứng. Thao tác thất bại ghi audit với `success=false` và `reasonCode` chuẩn hóa.
+- **CALL_NEXT rule:** Khi gọi số tiếp theo tự động hoàn thành vé hiện tại ở quầy, không phát sinh sự kiện `COMPLETE` riêng lẻ; thông tin được ghi nhận qua `metadata.autoCompletedTicketId`.
+- **PII & Secret Minimization:** Tuyệt đối không lưu passwords, JWT, cookies, customerName, phone, IP, hay User-Agent vào bảng audit.
+- **Retention & Purge:** Lưu trữ 365 ngày; script thanh lọc `scripts/purge-audit-logs.py` (`npm run audit:purge`). Cấu hình Task Scheduler tự động trên production: **CHƯA TRIỂN KHAI** (thực hiện theo quy trình vận hành).
+- **Chi tiết kỹ thuật:** Xem `docs/AUDIT-LOGGING.md`.
+
 ---
 
 ## 11. Kiểm thử & Chất lượng kỹ thuật

@@ -60,3 +60,23 @@ model Settings {
   key   String @id @unique
   value String
 }
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorType  String   // USER | ANONYMOUS | SYSTEM
+  actorId    String?
+  actorRole  String?  // STAFF | ADMIN | null
+  action     String   // LOGIN | TICKET_CREATED | CALL_NEXT | SKIP | COMPLETE | RESTORE
+  entityType String   // AUTH | TICKET
+  entityId   String?
+  success    Boolean
+  reasonCode String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityId, createdAt])
+}
+
