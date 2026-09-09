@@ -94,15 +94,25 @@ Do NOT:
 
 ## Authority Model
 
-| Concern | Authority | NOT Authority |
-|---------|-----------|---------------|
-| Workflow | `AGENTS.md` | CONTEXT, HANDOFF, MBP |
-| Technical | `CLAUDE.md` | CONTEXT |
-| Decisions | `decisions.md` | CONTEXT |
-| Roadmap | `docs/ROADMAP.md` | CONTEXT |
-| Operational | `HANDOFF.md` | CONTEXT |
-| Canonical state | Git repository | Any document |
-| Governance | PCM | BAMSO-specific docs |
+| Concern | Authority | Operational Reference | NOT Authority |
+|---------|-----------|----------------------|---------------|
+| Workflow | `AGENTS.md` | — | CONTEXT, HANDOFF, MBP |
+| Technical | `CLAUDE.md` | — | CONTEXT |
+| Decisions | `decisions.md` | — | CONTEXT |
+| Roadmap | `docs/ROADMAP.md` | — | CONTEXT |
+| Operational | — | `HANDOFF.md` | CONTEXT, MBP |
+| Canonical state | Git repository | — | Any document |
+| Governance | PCM | — | BAMSO-specific docs |
+
+### HANDOFF Semantics
+
+HANDOFF is an **operational continuity artifact**, NOT authority:
+- Describes current operational state
+- Bridges sessions for continuity
+- Does NOT authorize actions
+- Does NOT override Git canonical state
+- Does NOT override PCM governance
+- Does NOT grant GATE semantics
 
 ---
 
@@ -116,7 +126,7 @@ Do NOT:
 | Technical conventions | `CLAUDE.md` | Technical patterns |
 | Architectural decisions | `decisions.md` | Decision records |
 | Current roadmap | `docs/ROADMAP.md` | Roadmap source of truth |
-| Operational handoff | `HANDOFF.md` | Current operational status |
+| Operational handoff | `HANDOFF.md` | Operational continuity artifact |
 | Security reference | `docs/BAMSO-TECHNICAL-SECURITY-DOSSIER.md` | Security/technical reference |
 | Historical docs | `docs/archived/` | NOT current authority |
 | Session records | `docs/sessions/` | Historical records |
