@@ -120,10 +120,12 @@ Each evidence entry supports:
 
 ### Relay Status
 
+Using Git ancestry semantics:
+
 - relay == canonical → CURRENT
-- relay < canonical → STALE
-- relay > canonical → AHEAD
-- diverged → DIVERGED
+- canonical is ancestor of relay → AHEAD
+- relay is ancestor of canonical → STALE
+- neither is ancestor → DIVERGED
 
 AHEAD/DIVERGED must never become canonical automatically.
 
