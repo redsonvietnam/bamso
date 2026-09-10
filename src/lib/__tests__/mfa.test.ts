@@ -969,7 +969,10 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
         //   authorization even if proxy() is bypassed (e.g. internal calls).
         //
         // This inventory uses filesystem source inspection to verify that
-        // each route file actually imports and calls requireRole().
+        // each route file has an actual requireRole(...) invocation.
+        //
+        // Explicit maintained route inventory — NOT automatic route discovery.
+        // New privileged routes must be added to the arrays below.
 
         function getSourceFileContent(routePath: string): string {
             // Convert '@/app/api/...' to absolute filesystem path
@@ -982,16 +985,20 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
             return fs.readFileSync(absolutePath, 'utf-8');
         }
 
-        function assertRequiresRole(source: string, routePath: string, expectedRoles: string[]) {
-            // Verify source imports requireRole
+        function assertRequiresRoleInvocation(source: string, routePath: string, expectedRoles: string[]) {
+            // Verify source has requireRole import
             expect(source).toMatch(/import\s*\{[^}]*requireRole[^}]*\}\s*from\s*['"]@\/lib\/api-auth['"]/);
-            // Verify source calls requireRole with expected roles
+            // Verify source has actual requireRole(...) invocation (not just import)
+            // Matches: requireRole(, requireRole (, await requireRole(
+            expect(source).toMatch(/requireRole\s*\(/);
+            // Verify expected roles appear near requireRole calls
             for (const role of expectedRoles) {
+                // Role should appear in source — either as string literal or enum reference
                 expect(source).toContain(role);
             }
         }
 
-        it('All /api/admin/* routes import and call requireRole(ADMIN)', () => {
+        it('All /api/admin/* routes call requireRole(ADMIN)', () => {
             const adminRoutes = [
                 '@/app/api/admin/mfa/status/route',
                 '@/app/api/admin/mfa/enroll/start/route',
@@ -1002,11 +1009,11 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
 
             for (const routePath of adminRoutes) {
                 const source = getSourceFileContent(routePath);
-                assertRequiresRole(source, routePath, ['ADMIN']);
+                assertRequiresRoleInvocation(source, routePath, ['ADMIN']);
             }
         });
 
-        it('All /api/queue/* mutation routes import and call requireRole(STAFF, ADMIN)', () => {
+        it('All /api/queue/* mutation routes call requireRole(STAFF, ADMIN)', () => {
             // Queue mutation routes (POST) require STAFF or ADMIN
             const queueMutationRoutes = [
                 '@/app/api/queue/call-next/route',
@@ -1018,7 +1025,7 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
 
             for (const routePath of queueMutationRoutes) {
                 const source = getSourceFileContent(routePath);
-                assertRequiresRole(source, routePath, ['STAFF', 'ADMIN']);
+                assertRequiresRoleInvocation(source, routePath, ['STAFF', 'ADMIN']);
             }
         });
 
@@ -1030,14 +1037,14 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
             expect(source).not.toMatch(/requireRole/);
         });
 
-        it('/api/staff routes import and call requireRole(ADMIN)', () => {
+        it('/api/staff routes call requireRole(ADMIN)', () => {
             const source = getSourceFileContent('@/app/api/staff/route');
-            assertRequiresRole(source, '@/app/api/staff/route', ['ADMIN']);
+            assertRequiresRoleInvocation(source, '@/app/api/staff/route', ['ADMIN']);
         });
 
-        it('/api/stats routes import and call requireRole(ADMIN)', () => {
+        it('/api/stats routes call requireRole(ADMIN)', () => {
             const source = getSourceFileContent('@/app/api/stats/route');
-            assertRequiresRole(source, '@/app/api/stats/route', ['ADMIN']);
+            assertRequiresRoleInvocation(source, '@/app/api/stats/route', ['ADMIN']);
         });
 
         it('/api/settings (mutation) protected by proxy MFA boundary', () => {
