@@ -8,6 +8,7 @@ import { isSecureCookie } from '@/lib/cookie';
 import { writeAuditLog } from '@/lib/audit-service';
 import {
     verifyMfaSetupToken,
+    consumeEnrollmentToken,
     verifyTotp,
     encryptMfaSecret,
     hashRecoveryCode,
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
             );
         }
 
+        // Validate TOTP BEFORE consuming enrollment token
         const isValid = verifyTotp(code.trim(), setup.secret, { window: 1 });
         if (!isValid) {
             await writeAuditLog(prisma, {
@@ -60,6 +62,23 @@ export async function POST(request: Request) {
             return NextResponse.json(
                 { error: 'Mã OTP xác nhận không chính xác. Vui lòng thử lại', code: 'MFA_INVALID_TOKEN' },
                 { status: 400 }
+            );
+        }
+
+        // Atomic enrollment token claim (prevents replay)
+        const claimed = await consumeEnrollmentToken(setup.jti);
+        if (!claimed) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_ENROLL_COMPLETED',
+                entityType: 'MFA',
+                entityId: auth.payload.userId,
+                success: false,
+                reasonCode: 'MFA_ENROLLMENT_REPLAY',
+            });
+            return NextResponse.json(
+                { error: 'Token đăng ký MFA đã được sử dụng', code: 'MFA_ENROLLMENT_REPLAY' },
+                { status: 401 }
             );
         }
 

@@ -22,7 +22,7 @@ const MAX_AGE = 60 * 60 * 24;
 export async function POST(request: Request) {
     try {
         const ip = getClientIp(request);
-        const ipRateLimit = checkMfaRateLimit(`mfa:ip:${ip}`);
+        const ipRateLimit = await checkMfaRateLimit(`mfa:ip:${ip}`);
         if (!ipRateLimit.allowed) {
             return NextResponse.json(
                 {
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json().catch(() => ({}));
-        const { challengeToken, code, isRecoveryCode } = body;
+        const { challengeToken, code, factor } = body;
 
         if (!challengeToken || typeof challengeToken !== 'string' || !code || typeof code !== 'string') {
             return NextResponse.json(
@@ -44,9 +44,28 @@ export async function POST(request: Request) {
             );
         }
 
+        // Explicit factor mode: 'totp' | 'recovery'
+        const isRecovery = factor === 'recovery';
+        const isTotp = factor === 'totp';
+
+        if (!isRecovery && !isTotp) {
+            return NextResponse.json(
+                { error: 'factor phải là "totp" hoặc "recovery"', code: 'INVALID_FACTOR' },
+                { status: 400 }
+            );
+        }
+
+        // Validate factor format upfront
+        if (isTotp && !/^\d{6}$/.test(code.trim())) {
+            return NextResponse.json(
+                { error: 'Mã TOTP phải gồm đúng 6 chữ số', code: 'INVALID_TOTP_FORMAT' },
+                { status: 400 }
+            );
+        }
+
         const challenge = await verifyMfaChallengeToken(challengeToken);
         if (!challenge) {
-            recordMfaAttempt(`mfa:ip:${ip}`, false);
+            await recordMfaAttempt(`mfa:ip:${ip}`, false);
             await writeAuditLog(prisma, {
                 actor: { actorType: 'ANONYMOUS' },
                 action: 'MFA_VERIFY_FAILED',
@@ -61,7 +80,7 @@ export async function POST(request: Request) {
         }
 
         // Account-level brute force check
-        const userRateLimit = checkMfaRateLimit(`mfa:user:${challenge.userId}`);
+        const userRateLimit = await checkMfaRateLimit(`mfa:user:${challenge.userId}`);
         if (!userRateLimit.allowed) {
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: challenge.userId, actorRole: challenge.role },
@@ -101,19 +120,15 @@ export async function POST(request: Request) {
             );
         }
 
-        // Check whether this is a recovery code or TOTP
-        const cleanCode = code.trim();
-        const seemsRecovery = isRecoveryCode === true || cleanCode.includes('-') || cleanCode.length > 6;
-
-        if (seemsRecovery) {
-            // Atomic verification & consumption of single-use recovery code
+        if (isRecovery) {
+            // Recovery code path
             const consumed = await prisma.$transaction(async (tx) => {
-                return verifyAndConsumeRecoveryCode(tx, user.id, cleanCode);
+                return verifyAndConsumeRecoveryCode(tx, user.id, code.trim());
             });
 
             if (!consumed) {
-                recordMfaAttempt(`mfa:user:${user.id}`, false);
-                recordMfaAttempt(`mfa:ip:${ip}`, false);
+                await recordMfaAttempt(`mfa:user:${user.id}`, false);
+                await recordMfaAttempt(`mfa:ip:${ip}`, false);
                 await writeAuditLog(prisma, {
                     actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                     action: 'MFA_RECOVERY_FAILED',
@@ -129,10 +144,25 @@ export async function POST(request: Request) {
                 );
             }
 
-            // Success with recovery code
-            consumeMfaChallenge(challenge.jti);
-            recordMfaAttempt(`mfa:user:${user.id}`, true);
-            recordMfaAttempt(`mfa:ip:${ip}`, true);
+            // Atomic challenge claim: only winner issues MFA session
+            const claimed = await consumeMfaChallenge(challenge.jti);
+            if (!claimed) {
+                await writeAuditLog(prisma, {
+                    actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                    action: 'MFA_RECOVERY_FAILED',
+                    entityType: 'MFA',
+                    entityId: user.id,
+                    success: false,
+                    reasonCode: 'MFA_CHALLENGE_REPLAY',
+                });
+                return NextResponse.json(
+                    { error: 'Challenge đã được sử dụng hoặc hết hạn', code: 'MFA_CHALLENGE_REPLAY' },
+                    { status: 401 }
+                );
+            }
+
+            await recordMfaAttempt(`mfa:user:${user.id}`, true);
+            await recordMfaAttempt(`mfa:ip:${ip}`, true);
 
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
@@ -174,13 +204,12 @@ export async function POST(request: Request) {
             return response;
         }
 
-        // TOTP verification branch
+        // TOTP verification path
         let secret: string;
         try {
             secret = decryptMfaSecret(user.mfaSecret);
         } catch (error) {
             logger.error('Failed to decrypt MFA secret:', error);
-            // Invariant 14: Failed key decryption MUST fail closed!
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                 action: 'MFA_VERIFY_FAILED',
@@ -195,10 +224,10 @@ export async function POST(request: Request) {
             );
         }
 
-        const validTotp = verifyTotp(cleanCode, secret, { window: 1 });
+        const validTotp = verifyTotp(code.trim(), secret, { window: 1 });
         if (!validTotp) {
-            recordMfaAttempt(`mfa:user:${user.id}`, false);
-            recordMfaAttempt(`mfa:ip:${ip}`, false);
+            await recordMfaAttempt(`mfa:user:${user.id}`, false);
+            await recordMfaAttempt(`mfa:ip:${ip}`, false);
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                 action: 'MFA_VERIFY_FAILED',
@@ -214,10 +243,25 @@ export async function POST(request: Request) {
             );
         }
 
-        // TOTP verification success
-        consumeMfaChallenge(challenge.jti);
-        recordMfaAttempt(`mfa:user:${user.id}`, true);
-        recordMfaAttempt(`mfa:ip:${ip}`, true);
+        // Atomic challenge claim: only winner issues MFA session
+        const claimed = await consumeMfaChallenge(challenge.jti);
+        if (!claimed) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                action: 'MFA_VERIFY_FAILED',
+                entityType: 'MFA',
+                entityId: user.id,
+                success: false,
+                reasonCode: 'MFA_CHALLENGE_REPLAY',
+            });
+            return NextResponse.json(
+                { error: 'Challenge đã được sử dụng hoặc hết hạn', code: 'MFA_CHALLENGE_REPLAY' },
+                { status: 401 }
+            );
+        }
+
+        await recordMfaAttempt(`mfa:user:${user.id}`, true);
+        await recordMfaAttempt(`mfa:ip:${ip}`, true);
 
         await writeAuditLog(prisma, {
             actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },

@@ -45,6 +45,8 @@ export const AUDIT_REASON_CODES = [
     'MFA_ALREADY_ENABLED',
     'MFA_INVALID_RECOVERY_CODE',
     'MFA_DECRYPTION_FAILED',
+    'MFA_CHALLENGE_REPLAY',
+    'MFA_ENROLLMENT_REPLAY',
 ] as const;
 
 export type AuditReasonCode = (typeof AUDIT_REASON_CODES)[number];

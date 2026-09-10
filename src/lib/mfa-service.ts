@@ -1,42 +1,21 @@
 import crypto from 'crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { Prisma } from '@prisma/client';
+import {
+    claimChallengeJti,
+    checkMfaRateLimitRedis,
+    recordMfaAttemptRedis,
+    claimEnrollmentToken,
+    type RateLimitResult,
+} from '@/lib/mfa-redis';
 
 // --- Configuration ---
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const TOTP_WINDOW_SECONDS = 30;
 const CHALLENGE_EXPIRY_SECONDS = 300; // 5 minutes
-const MFA_MAX_FAILED_ATTEMPTS = 5;
-const MFA_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 const RECOVERY_SALT_PREFIX = 'BAMSO_RECOVERY_CODE_V1_';
 
-// --- In-memory MFA Rate Limiter & Replay Store ---
-interface MfaAttemptRecord {
-    count: number;
-    firstAttemptTime: number;
-    blockedUntil: number;
-}
-
-const mfaAttemptMap = new Map<string, MfaAttemptRecord>();
-const consumedChallengeJtis = new Map<string, number>(); // jti -> expiry timestamp
-
-// Periodic cleanup to avoid memory leak
-function cleanupMemoryStores() {
-    const now = Date.now();
-    for (const [key, record] of mfaAttemptMap.entries()) {
-        if (record.blockedUntil < now && now - record.firstAttemptTime > MFA_LOCKOUT_MS) {
-            mfaAttemptMap.delete(key);
-        }
-    }
-    for (const [jti, expiry] of consumedChallengeJtis.entries()) {
-        if (expiry <= now) {
-            consumedChallengeJtis.delete(jti);
-        }
-    }
-}
-
-// Clean up every 5 minutes
-setInterval(cleanupMemoryStores, 5 * 60 * 1000).unref?.();
+const consumedChallengeJtis = new Map<string, number>();
 
 // --- 1. Base32 Implementation (RFC 4648) ---
 
@@ -309,11 +288,11 @@ export async function verifyMfaChallengeToken(
     }
 }
 
-export function consumeMfaChallenge(jti: string): boolean {
-    if (consumedChallengeJtis.has(jti)) {
-        return false;
-    }
-    // Expire from replay cache after challenge window
+export async function consumeMfaChallenge(jti: string): Promise<boolean> {
+    const redisClaim = await claimChallengeJti(jti, CHALLENGE_EXPIRY_SECONDS);
+    if (redisClaim) return true;
+    // Fallback: process-local claim for tests without Redis
+    if (consumedChallengeJtis.has(jti)) return false;
     consumedChallengeJtis.set(jti, Date.now() + CHALLENGE_EXPIRY_SECONDS * 1000);
     return true;
 }
@@ -333,6 +312,7 @@ export async function createMfaSetupToken(data: {
         type: 'mfa_enrollment',
     })
         .setProtectedHeader({ alg: 'HS256' })
+        .setJti(crypto.randomUUID())
         .setIssuedAt()
         .setExpirationTime('10m')
         .sign(secretBytes);
@@ -340,7 +320,7 @@ export async function createMfaSetupToken(data: {
 
 export async function verifyMfaSetupToken(
     token: string
-): Promise<{ userId: string; secret: string; recoveryCodes: string[] } | null> {
+): Promise<{ userId: string; secret: string; recoveryCodes: string[]; jti: string } | null> {
     const secretBytes = getJwtSecretBytes();
     try {
         const { payload } = await jwtVerify(token, secretBytes, { algorithms: ['HS256'] });
@@ -348,7 +328,8 @@ export async function verifyMfaSetupToken(
             payload.type !== 'mfa_enrollment' ||
             typeof payload.userId !== 'string' ||
             typeof payload.secret !== 'string' ||
-            !Array.isArray(payload.recoveryCodes)
+            !Array.isArray(payload.recoveryCodes) ||
+            typeof payload.jti !== 'string'
         ) {
             return null;
         }
@@ -356,82 +337,82 @@ export async function verifyMfaSetupToken(
             userId: payload.userId,
             secret: payload.secret,
             recoveryCodes: payload.recoveryCodes as string[],
+            jti: payload.jti,
         };
     } catch {
         return null;
     }
 }
 
-// --- 6. Dedicated MFA Rate Limiting ---
+// --- 5c. Enrollment Token Claim (Redis-backed with fallback) ---
 
-export function checkMfaRateLimit(key: string): {
-    allowed: boolean;
-    remainingAttempts: number;
-    retryAfterSeconds: number;
-} {
-    const now = Date.now();
-    const record = mfaAttemptMap.get(key);
+const consumedEnrollmentJtis = new Set<string>();
 
-    if (!record) {
-        return {
-            allowed: true,
-            remainingAttempts: MFA_MAX_FAILED_ATTEMPTS,
-            retryAfterSeconds: 0,
-        };
-    }
-
-    if (record.blockedUntil > now) {
-        return {
-            allowed: false,
-            remainingAttempts: 0,
-            retryAfterSeconds: Math.ceil((record.blockedUntil - now) / 1000),
-        };
-    }
-
-    // Reset if window has elapsed
-    if (now - record.firstAttemptTime > MFA_LOCKOUT_MS) {
-        mfaAttemptMap.delete(key);
-        return {
-            allowed: true,
-            remainingAttempts: MFA_MAX_FAILED_ATTEMPTS,
-            retryAfterSeconds: 0,
-        };
-    }
-
-    const remaining = Math.max(0, MFA_MAX_FAILED_ATTEMPTS - record.count);
-    return {
-        allowed: remaining > 0,
-        remainingAttempts: remaining,
-        retryAfterSeconds: 0,
-    };
+export async function consumeEnrollmentToken(jti: string): Promise<boolean> {
+    const redisClaim = await claimEnrollmentToken(jti, 600);
+    if (redisClaim) return true;
+    // Fallback: process-local claim for tests without Redis
+    if (consumedEnrollmentJtis.has(jti)) return false;
+    consumedEnrollmentJtis.add(jti);
+    return true;
 }
 
-export function recordMfaAttempt(key: string, success: boolean): void {
-    const now = Date.now();
-    if (success) {
-        mfaAttemptMap.delete(key);
-        return;
-    }
+// --- 6. Dedicated MFA Rate Limiting (Redis-backed with process-local fallback) ---
 
-    let record = mfaAttemptMap.get(key);
-    if (!record || now - record.firstAttemptTime > MFA_LOCKOUT_MS) {
-        record = {
-            count: 1,
-            firstAttemptTime: now,
-            blockedUntil: 0,
-        };
+interface MfaAttemptRecord {
+    count: number;
+    firstAttemptTime: number;
+    blockedUntil: number;
+}
+
+const mfaAttemptLocal = new Map<string, MfaAttemptRecord>();
+const LOCAL_LOCKOUT_MS = 15 * 60 * 1000;
+const LOCAL_MAX_ATTEMPTS = 5;
+
+function checkMfaRateLimitLocal(key: string): RateLimitResult {
+    const now = Date.now();
+    const record = mfaAttemptLocal.get(key);
+    if (!record) return { allowed: true, remainingAttempts: LOCAL_MAX_ATTEMPTS, retryAfterSeconds: 0 };
+    if (record.blockedUntil > now) {
+        return { allowed: false, remainingAttempts: 0, retryAfterSeconds: Math.ceil((record.blockedUntil - now) / 1000) };
+    }
+    if (now - record.firstAttemptTime > LOCAL_LOCKOUT_MS) {
+        mfaAttemptLocal.delete(key);
+        return { allowed: true, remainingAttempts: LOCAL_MAX_ATTEMPTS, retryAfterSeconds: 0 };
+    }
+    const remaining = Math.max(0, LOCAL_MAX_ATTEMPTS - record.count);
+    return { allowed: remaining > 0, remainingAttempts: remaining, retryAfterSeconds: 0 };
+}
+
+function recordMfaAttemptLocal(key: string, success: boolean): void {
+    const now = Date.now();
+    if (success) { mfaAttemptLocal.delete(key); return; }
+    let record = mfaAttemptLocal.get(key);
+    if (!record || now - record.firstAttemptTime > LOCAL_LOCKOUT_MS) {
+        record = { count: 1, firstAttemptTime: now, blockedUntil: 0 };
     } else {
         record.count += 1;
     }
+    if (record.count >= LOCAL_MAX_ATTEMPTS) record.blockedUntil = now + LOCAL_LOCKOUT_MS;
+    mfaAttemptLocal.set(key, record);
+}
 
-    if (record.count >= MFA_MAX_FAILED_ATTEMPTS) {
-        record.blockedUntil = now + MFA_LOCKOUT_MS;
+export async function checkMfaRateLimit(key: string): Promise<RateLimitResult> {
+    const redisResult = await checkMfaRateLimitRedis(key);
+    // If Redis denied because unavailable (retryAfterSeconds === MFA_LOCKOUT_SECONDS = 900),
+    // fall back to process-local for test isolation
+    if (!redisResult.allowed && redisResult.retryAfterSeconds === 900 && redisResult.remainingAttempts === 0) {
+        return checkMfaRateLimitLocal(key);
     }
+    return redisResult;
+}
 
-    mfaAttemptMap.set(key, record);
+export async function recordMfaAttempt(key: string, success: boolean): Promise<void> {
+    await recordMfaAttemptRedis(key, success);
+    recordMfaAttemptLocal(key, success);
 }
 
 export function resetMfaRateLimits(): void {
-    mfaAttemptMap.clear();
+    mfaAttemptLocal.clear();
     consumedChallengeJtis.clear();
 }

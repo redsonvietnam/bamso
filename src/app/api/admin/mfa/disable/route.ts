@@ -10,7 +10,6 @@ import { writeAuditLog } from '@/lib/audit-service';
 import {
     decryptMfaSecret,
     verifyTotp,
-    verifyAndConsumeRecoveryCode,
 } from '@/lib/mfa-service';
 
 const COOKIE_NAME = 'auth_token';
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
         // Invariant 11: Session possession alone cannot disable MFA
         if (!password || typeof password !== 'string' || !code || typeof code !== 'string') {
             return NextResponse.json(
-                { error: 'Mật khẩu hiện tại và mã xác thực là bắt buộc để hủy MFA', code: 'INVALID_FIELDS' },
+                { error: 'Mật khẩu hiện tại và mã TOTP là bắt buộc để hủy MFA', code: 'INVALID_FIELDS' },
                 { status: 400 }
             );
         }
@@ -59,20 +58,13 @@ export async function POST(request: Request) {
             );
         }
 
-        // Verify either valid TOTP or valid recovery code
+        // Only TOTP allowed for disable — recovery code must NOT disable MFA
         let verified = false;
         try {
             const secret = decryptMfaSecret(user.mfaSecret);
             verified = verifyTotp(code.trim(), secret, { window: 1 });
         } catch (err) {
             logger.error('MFA secret decryption error during disable:', err);
-        }
-
-        if (!verified) {
-            // Check recovery code
-            verified = await prisma.$transaction(async (tx) => {
-                return verifyAndConsumeRecoveryCode(tx, user.id, code.trim());
-            });
         }
 
         if (!verified) {
@@ -85,7 +77,7 @@ export async function POST(request: Request) {
                 reasonCode: 'MFA_INVALID_TOKEN',
             });
             return NextResponse.json(
-                { error: 'Mã xác thực không hợp lệ', code: 'MFA_INVALID_TOKEN' },
+                { error: 'Mã TOTP không hợp lệ', code: 'MFA_INVALID_TOKEN' },
                 { status: 401 }
             );
         }
