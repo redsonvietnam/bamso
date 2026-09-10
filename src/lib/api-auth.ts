@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyJWT } from '@/lib/auth';
 import { UserRole } from '@/lib/constants';
+import prisma from '@/lib/db';
 
 const COOKIE_NAME = 'auth_token';
 
@@ -44,7 +45,7 @@ export async function authenticate() {
  * anonymous callers should not see). Never returns an error — just null if
  * there's no valid session.
  */
-export async function authenticateOptional(): Promise<{ userId: string; role: string } | null> {
+export async function authenticateOptional(): Promise<{ userId: string; role: string; mfa?: boolean } | null> {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return null;
@@ -52,11 +53,22 @@ export async function authenticateOptional(): Promise<{ userId: string; role: st
     const payload = await verifyJWT(token);
     if (!payload || !payload.userId) return null;
 
+    if (payload.role === UserRole.ADMIN) {
+        const user = await prisma.user.findUnique({
+            where: { id: payload.userId },
+            select: { mfaEnabled: true },
+        });
+        if (user?.mfaEnabled && !payload.mfa) {
+            return null;
+        }
+    }
+
     return payload;
 }
 
 /**
  * Authenticate and verify the user has one of the allowed roles.
+ * Enforces MFA assurance for ADMIN accounts that have MFA enabled.
  */
 export async function requireRole(...allowedRoles: Role[]) {
     const result = await authenticate();
@@ -72,6 +84,24 @@ export async function requireRole(...allowedRoles: Role[]) {
                 { status: 403 }
             ),
         };
+    }
+
+    // If role is ADMIN, check MFA status in DB
+    if (result.payload.role === UserRole.ADMIN) {
+        const user = await prisma.user.findUnique({
+            where: { id: result.payload.userId },
+            select: { mfaEnabled: true },
+        });
+
+        // If MFA is enabled for this ADMIN account, token MUST carry signed MFA assurance
+        if (user?.mfaEnabled && !result.payload.mfa) {
+            return {
+                error: NextResponse.json(
+                    { error: 'Yêu cầu xác thực hai yếu tố (MFA)', code: 'MFA_REQUIRED' },
+                    { status: 403 }
+                ),
+            };
+        }
     }
 
     return result;

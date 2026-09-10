@@ -15,11 +15,30 @@ export default function LoginPage() {
     const { login, isLoading, fetchMe } = useAuthStore();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
+    const [mfaCode, setMfaCode] = useState('');
+    const [mfaFactor, setMfaFactor] = useState<'totp' | 'recovery'>('totp');
+    const [mfaLoading, setMfaLoading] = useState(false);
 
-    // Fetch user info when page mounts
+    // Fetch user info when page mounts — redirect if already authenticated
     useEffect(() => {
-        fetchMe();
-    }, [fetchMe]);
+        const checkAuth = async () => {
+            await fetchMe();
+            const currentUser = useAuthStore.getState().user;
+            if (currentUser) {
+                if (currentUser.role === 'ADMIN') {
+                    router.replace('/admin');
+                } else if (currentUser.role === 'STAFF') {
+                    router.replace('/canbo');
+                } else if (currentUser.role === 'KIOSK') {
+                    router.replace('/kiosk');
+                } else if (currentUser.role === 'DISPLAY') {
+                    router.replace('/display');
+                }
+            }
+        };
+        checkAuth();
+    }, [fetchMe, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,10 +48,12 @@ export default function LoginPage() {
         }
 
         const result = await login(username.trim(), password);
+        if (result.mfaRequired && result.challengeToken) {
+            setMfaChallengeToken(result.challengeToken);
+            return;
+        }
         if (result.ok) {
             toast.success('Đăng nhập thành công!');
-            // Lấy trực tiếp user state từ store (đã được cập nhật từ login payload)
-            // Bỏ qua việc gọi await fetchMe() để tránh lỗi delay cookie trên trình duyệt mobile
             const currentUser = useAuthStore.getState().user;
             if (currentUser) {
                 if (currentUser.role === 'ADMIN') {
@@ -45,13 +66,118 @@ export default function LoginPage() {
                     router.replace('/display');
                 }
             } else {
-                // Fallback nếu state chưa kịp cập nhật: giữ ở trang login và báo lỗi rõ ràng
                 toast.error('Không thể xác định quyền người dùng. Vui lòng thử đăng nhập lại.');
             }
         } else {
             toast.error(result.error || 'Đăng nhập thất bại.');
         }
     };
+
+    const handleMfaVerify = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!mfaCode.trim() || !mfaChallengeToken) return;
+
+        setMfaLoading(true);
+        try {
+            const res = await fetch('/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    challengeToken: mfaChallengeToken,
+                    code: mfaCode.trim(),
+                    factor: mfaFactor,
+                }),
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                toast.success('Xác thực MFA thành công!');
+                await fetchMe();
+                const currentUser = useAuthStore.getState().user;
+                if (currentUser?.role === 'ADMIN') {
+                    router.replace('/admin');
+                } else {
+                    router.replace('/canbo');
+                }
+            } else {
+                toast.error(data.error || 'Mã xác thực không đúng.');
+                setMfaCode('');
+            }
+        } catch {
+            toast.error('Lỗi kết nối. Vui lòng thử lại.');
+        } finally {
+            setMfaLoading(false);
+        }
+    };
+
+    if (mfaChallengeToken) {
+        return (
+            <div className="relative min-h-full bg-background font-sans overflow-hidden">
+                <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.10]" />
+                <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8">
+                    <Card className="w-full max-w-md sketch-radius riso-paper-card glass-card shadow-md">
+                        <CardHeader className="space-y-1 text-center">
+                            <CardTitle className="text-2xl font-bold tracking-tight">Xác thực hai yếu tố</CardTitle>
+                            <CardDescription>
+                                Nhập mã xác thực từ ứng dụng authenticator
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleMfaVerify} className="space-y-4">
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant={mfaFactor === 'totp' ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setMfaFactor('totp')}
+                                    >
+                                        TOTP
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant={mfaFactor === 'recovery' ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setMfaFactor('recovery')}
+                                    >
+                                        Mã khôi phục
+                                    </Button>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="mfa-code">
+                                        {mfaFactor === 'totp' ? 'Mã OTP' : 'Mã khôi phục'}
+                                    </Label>
+                                    <Input
+                                        id="mfa-code"
+                                        type="text"
+                                        placeholder={mfaFactor === 'totp' ? '000000' : 'XXXX-XXXX'}
+                                        value={mfaCode}
+                                        onChange={(e) => setMfaCode(e.target.value)}
+                                        disabled={mfaLoading}
+                                        className="h-10"
+                                        autoComplete="one-time-code"
+                                    />
+                                </div>
+                                <Button type="submit" className="w-full font-medium" disabled={mfaLoading || !mfaCode.trim()}>
+                                    {mfaLoading ? 'Đang xác thực...' : 'Xác thực'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setMfaChallengeToken(null);
+                                        setMfaCode('');
+                                    }}
+                                >
+                                    Quay lại đăng nhập
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-full bg-background font-sans overflow-hidden">

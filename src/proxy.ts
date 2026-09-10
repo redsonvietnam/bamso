@@ -3,8 +3,30 @@ import type { NextRequest } from 'next/server';
 import { verifyJWT } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { isSecureCookie } from '@/lib/cookie';
+import prisma from '@/lib/db';
 
 const COOKIE_NAME = 'auth_token';
+
+/**
+ * Shared ADMIN MFA predicate: if DB says mfaEnabled=true,
+ * the JWT must carry mfa=true. Stale password-only JWTs are rejected.
+ */
+async function enforceAdminMfa(payload: { userId: string; role: string; mfa?: boolean }): Promise<boolean> {
+    if (payload.role !== 'ADMIN') return true;
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: payload.userId },
+            select: { mfaEnabled: true },
+        });
+        if (user?.mfaEnabled && !payload.mfa) {
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logger.error('Proxy MFA check DB error:', error);
+        return false; // fail closed
+    }
+}
 
 export async function proxy(request: NextRequest) {
     logger.debug('[DEBUG] Proxy request:', request.nextUrl.pathname);
@@ -18,6 +40,15 @@ export async function proxy(request: NextRequest) {
         if (token) {
             const payload = await verifyJWT(token);
             if (payload) {
+                // MFA enforcement: ADMIN + DB mfaEnabled=true requires mfa claim
+                const mfaOk = await enforceAdminMfa(payload);
+                if (!mfaOk) {
+                    // ADMIN with MFA enabled but no MFA claim — stay on /login
+                    // Clear stale password-only cookie to prevent redirect loop
+                    const response = NextResponse.next();
+                    response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/', secure: isSecureCookie(request) });
+                    return response;
+                }
                 const roleRedirect: Record<string, string> = {
                     ADMIN: '/admin',
                     STAFF: '/canbo',
@@ -64,7 +95,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // =====================
-    // 2b. /api/settings: GET public, mọi method khác (vd PUT) yêu cầu ADMIN
+    // 2b. /api/settings: GET public, mọi method khác (vd PUT) yêu cầu ADMIN + MFA
     // =====================
     if (pathname.startsWith('/api/settings')) {
         if (request.method === 'GET') {
@@ -85,11 +116,16 @@ export async function proxy(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
         }
 
+        const mfaOk = await enforceAdminMfa(payload);
+        if (!mfaOk) {
+            return NextResponse.json({ error: 'Yêu cầu xác thực hai yếu tố (MFA)', code: 'MFA_REQUIRED' }, { status: 403 });
+        }
+
         return NextResponse.next();
     }
 
     // =====================
-    // 2c. /api/themes: GET public (list preset + custom), ghi dữ liệu yêu cầu ADMIN
+    // 2c. /api/themes: GET public (list preset + custom), ghi dữ liệu yêu cầu ADMIN + MFA
     // =====================
     if (pathname.startsWith('/api/themes')) {
         if (request.method === 'GET') {
@@ -108,6 +144,11 @@ export async function proxy(request: NextRequest) {
 
         if (payload.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Forbidden', code: 'FORBIDDEN' }, { status: 403 });
+        }
+
+        const mfaOk = await enforceAdminMfa(payload);
+        if (!mfaOk) {
+            return NextResponse.json({ error: 'Yêu cầu xác thực hai yếu tố (MFA)', code: 'MFA_REQUIRED' }, { status: 403 });
         }
 
         return NextResponse.next();
@@ -159,6 +200,15 @@ export async function proxy(request: NextRequest) {
             };
             const redirect = roleRedirect[payload.role] || '/login';
             return NextResponse.redirect(new URL(redirect, request.url));
+        }
+
+        // MFA enforcement: ADMIN + DB mfaEnabled=true requires mfa claim in JWT
+        const mfaOk = await enforceAdminMfa(payload);
+        if (!mfaOk) {
+            if (pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'Yêu cầu xác thực hai yếu tố (MFA)', code: 'MFA_REQUIRED' }, { status: 403 });
+            }
+            return NextResponse.redirect(new URL('/login', request.url));
         }
 
         return NextResponse.next();

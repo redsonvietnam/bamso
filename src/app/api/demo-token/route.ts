@@ -8,6 +8,14 @@ import type { UserRole } from '@/lib/constants';
 const DEMO_ALLOWED_ROLES = ['STAFF', 'KIOSK', 'DISPLAY', 'ADMIN'] as const;
 
 export async function GET(request: Request) {
+    // Production guard: even if DEMO_MODE_ENABLED=true, never issue privileged tokens in production
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+            { error: 'Demo tokens are disabled in production', code: 'FORBIDDEN' },
+            { status: 403 }
+        );
+    }
+
     // Block entirely unless DEMO_MODE_ENABLED=true
     if (process.env.DEMO_MODE_ENABLED !== 'true') {
         return NextResponse.json(

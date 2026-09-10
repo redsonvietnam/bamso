@@ -17,7 +17,11 @@ export function isUserRole(value: unknown): value is UserRoleType {
     return typeof value === 'string' && Object.values(UserRole).includes(value as UserRoleType);
 }
 
-export async function signJWT(payload: { userId: string, role: UserRoleType }): Promise<string> {
+export async function signJWT(payload: {
+    userId: string;
+    role: UserRoleType;
+    mfa?: boolean;
+}): Promise<string> {
     const JWT_SECRET_BYTES = getJwtSecret();
     return new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
@@ -26,14 +30,27 @@ export async function signJWT(payload: { userId: string, role: UserRoleType }): 
         .sign(JWT_SECRET_BYTES);
 }
 
-export async function verifyJWT(token: string): Promise<{ userId: string, role: UserRoleType } | null> {
+export async function verifyJWT(
+    token: string
+): Promise<{ userId: string; role: UserRoleType; mfa?: boolean } | null> {
     const JWT_SECRET_BYTES = getJwtSecret();
     try {
         const { payload } = await jwtVerify(token, JWT_SECRET_BYTES, { algorithms: ['HS256'] });
+        // Purpose-bound rejection: challenge tokens cannot be used as session tokens
+        if (payload.type === 'mfa_challenge') {
+            return null;
+        }
         if (typeof payload.userId !== 'string' || payload.userId.length === 0 || !isUserRole(payload.role)) {
             return null;
         }
-        return { userId: payload.userId, role: payload.role };
+        const result: { userId: string; role: UserRoleType; mfa?: boolean } = {
+            userId: payload.userId,
+            role: payload.role,
+        };
+        if (payload.mfa === true) {
+            result.mfa = true;
+        }
+        return result;
     } catch (error) {
         logger.error('JWT verification failed:', error);
         return null;

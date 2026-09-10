@@ -12,7 +12,7 @@ interface User {
 interface AuthState {
     user: User | null;
     isLoading: boolean;
-    login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+    login: (username: string, password: string) => Promise<{ ok: boolean; error?: string; mfaRequired?: boolean; challengeToken?: string }>;
     logout: () => Promise<void>;
     fetchMe: () => Promise<void>;
 }
@@ -23,7 +23,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     login: async (username, password) => {
         set({ isLoading: true });
         try {
-            const data = await apiClient.post<{ success: boolean; user?: { id: string; username: string; name: string; role: string }; error?: string }>('/api/auth', { username, password });
+            const data = await apiClient.post<{ success: boolean; user?: { id: string; username: string; name: string; role: string }; error?: string; mfaRequired?: boolean; challengeToken?: string }>('/api/auth', { username, password });
+
+            if (data.mfaRequired && data.challengeToken) {
+                set({ isLoading: false });
+                return { ok: false, mfaRequired: true, challengeToken: data.challengeToken };
+            }
 
             if (data.error || !data.user) {
                 set({ isLoading: false });
