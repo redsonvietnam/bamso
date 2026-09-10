@@ -69,7 +69,17 @@ export async function POST(request: Request) {
         const challenge = await verifyMfaChallengeToken(challengeToken);
         if (!challenge) {
             // Single authoritative failure record for invalid challenge
-            await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+            const rl = await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+            if (!rl.allowed) {
+                return NextResponse.json(
+                    {
+                        error: 'Quá nhiều lần thử MFA thất bại. Vui lòng thử lại sau',
+                        code: 'MFA_RATE_LIMITED',
+                        retryAfterSeconds: rl.retryAfterSeconds,
+                    },
+                    { status: 429 }
+                );
+            }
             await writeAuditLog(prisma, {
                 actor: { actorType: 'ANONYMOUS' },
                 action: 'MFA_VERIFY_FAILED',
@@ -132,8 +142,46 @@ export async function POST(request: Request) {
 
             if (!consumed) {
                 // Single authoritative failure record for bad recovery code
-                await recordMfaAttemptFailure(`mfa:user:${user.id}`);
-                await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+                const userRl = await recordMfaAttemptFailure(`mfa:user:${user.id}`);
+                if (!userRl.allowed) {
+                    await writeAuditLog(prisma, {
+                        actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                        action: 'MFA_RECOVERY_FAILED',
+                        entityType: 'MFA',
+                        entityId: user.id,
+                        success: false,
+                        reasonCode: 'MFA_RATE_LIMITED',
+                        metadata: { method: 'recovery_code' },
+                    });
+                    return NextResponse.json(
+                        {
+                            error: 'Tài khoản tạm thời bị khóa do thử sai MFA quá số lần quy định',
+                            code: 'MFA_RATE_LIMITED',
+                            retryAfterSeconds: userRl.retryAfterSeconds,
+                        },
+                        { status: 429 }
+                    );
+                }
+                const ipRl = await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+                if (!ipRl.allowed) {
+                    await writeAuditLog(prisma, {
+                        actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                        action: 'MFA_RECOVERY_FAILED',
+                        entityType: 'MFA',
+                        entityId: user.id,
+                        success: false,
+                        reasonCode: 'MFA_RATE_LIMITED',
+                        metadata: { method: 'recovery_code' },
+                    });
+                    return NextResponse.json(
+                        {
+                            error: 'Quá nhiều lần thử MFA thất bại. Vui lòng thử lại sau',
+                            code: 'MFA_RATE_LIMITED',
+                            retryAfterSeconds: ipRl.retryAfterSeconds,
+                        },
+                        { status: 429 }
+                    );
+                }
                 await writeAuditLog(prisma, {
                     actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                     action: 'MFA_RECOVERY_FAILED',
@@ -233,8 +281,46 @@ export async function POST(request: Request) {
         const validTotp = verifyTotp(code.trim(), secret, { window: 1 });
         if (!validTotp) {
             // Single authoritative failure record for bad TOTP
-            await recordMfaAttemptFailure(`mfa:user:${user.id}`);
-            await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+            const userRl = await recordMfaAttemptFailure(`mfa:user:${user.id}`);
+            if (!userRl.allowed) {
+                await writeAuditLog(prisma, {
+                    actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                    action: 'MFA_VERIFY_FAILED',
+                    entityType: 'MFA',
+                    entityId: user.id,
+                    success: false,
+                    reasonCode: 'MFA_RATE_LIMITED',
+                    metadata: { method: 'totp' },
+                });
+                return NextResponse.json(
+                    {
+                        error: 'Tài khoản tạm thời bị khóa do thử sai MFA quá số lần quy định',
+                        code: 'MFA_RATE_LIMITED',
+                        retryAfterSeconds: userRl.retryAfterSeconds,
+                    },
+                    { status: 429 }
+                );
+            }
+            const ipRl = await recordMfaAttemptFailure(`mfa:ip:${ip}`);
+            if (!ipRl.allowed) {
+                await writeAuditLog(prisma, {
+                    actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
+                    action: 'MFA_VERIFY_FAILED',
+                    entityType: 'MFA',
+                    entityId: user.id,
+                    success: false,
+                    reasonCode: 'MFA_RATE_LIMITED',
+                    metadata: { method: 'totp' },
+                });
+                return NextResponse.json(
+                    {
+                        error: 'Quá nhiều lần thử MFA thất bại. Vui lòng thử lại sau',
+                        code: 'MFA_RATE_LIMITED',
+                        retryAfterSeconds: ipRl.retryAfterSeconds,
+                    },
+                    { status: 429 }
+                );
+            }
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                 action: 'MFA_VERIFY_FAILED',

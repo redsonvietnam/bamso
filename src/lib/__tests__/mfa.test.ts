@@ -26,8 +26,10 @@ import {
     createMfaChallengeToken,
     verifyMfaChallengeToken,
     consumeMfaChallenge,
+    checkMfaRateLimit,
     recordMfaAttemptFailure,
 } from '@/lib/mfa-service';
+import { resetMfaRedisState } from '@/lib/mfa-redis';
 import { POST as loginPost } from '@/app/api/auth/route';
 import { POST as mfaVerifyPost } from '@/app/api/auth/mfa/verify/route';
 import { POST as enrollStartPost } from '@/app/api/admin/mfa/enroll/start/route';
@@ -606,5 +608,107 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
         expect(res2!.status).toBe(401);
         const data = await res2!.json();
         expect(data.code).toBe('MFA_ENROLLMENT_REPLAY');
+    });
+
+    it('MFA-RATELIMIT-01: POST /api/auth/mfa/verify enforces rate limit across both dimensions', async () => {
+        const secret = generateTotpSecret();
+        const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+        await prisma.user.update({
+            where: { id: testAdminUser.id },
+            data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+        });
+
+        const makeVerifyReq = (wrongCode: string, ip?: string) => {
+            const challengeToken = createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+            const headers: Record<string, string> = { 'content-type': 'application/json' };
+            if (ip) headers['x-forwarded-for'] = ip;
+            return challengeToken.then(ct => new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ challengeToken: ct, code: wrongCode, factor: 'totp' }),
+            }));
+        };
+
+        // --- User dimension: 5 failures from same user, different IPs → user locked ---
+        const userStatuses: number[] = [];
+        for (let i = 0; i < 4; i++) {
+            const req = await makeVerifyReq('000000', `10.0.0.${i + 1}`);
+            const res = await mfaVerifyPost(req);
+            userStatuses.push(res.status);
+            expect(res.status).toBe(401);
+        }
+        const fifthReq = await makeVerifyReq('000000', '10.0.0.100');
+        const fifthRes = await mfaVerifyPost(fifthReq);
+        expect(fifthRes.status).toBe(429);
+        const fifthBody = await fifthRes.json();
+        expect(fifthBody.code).toBe('MFA_RATE_LIMITED');
+
+        // 6th request → pre-flight IP check catches it (this IP was used in attempt 5)
+        const sixthReq = await makeVerifyReq('000000', '10.0.0.100');
+        const sixthRes = await mfaVerifyPost(sixthReq);
+        expect(sixthRes.status).toBe(429);
+
+        // Verify all 4 pre-5th were 401, 5th was 429
+        expect(userStatuses).toEqual([401, 401, 401, 401]);
+
+        // --- IP dimension: reset, then 5 failures from different users, same IP → IP locked ---
+        await resetMfaRedisState();
+
+        const ipKey = `mfa:ip:test_ratelimit_ip_${Date.now()}`;
+        const ipStatuses: number[] = [];
+        for (let i = 0; i < 4; i++) {
+            const rl = await recordMfaAttemptFailure(ipKey);
+            ipStatuses.push(rl.allowed ? 401 : 429);
+            expect(rl.allowed).toBe(true);
+        }
+        const fifthIpRl = await recordMfaAttemptFailure(ipKey);
+        expect(fifthIpRl.allowed).toBe(false);
+
+        // 6th check → blocked
+        const sixthIpRl = await checkMfaRateLimit(ipKey);
+        expect(sixthIpRl.allowed).toBe(false);
+        expect(sixthIpRl.retryAfterSeconds).toBeGreaterThan(0);
+    });
+
+    it('Concurrent rate-limit failures: threshold cannot be bypassed', async () => {
+        const key = `mfa:test:concurrent_${Date.now()}`;
+
+        const results = await Promise.all(
+            Array.from({ length: 6 }, () => recordMfaAttemptFailure(key))
+        );
+
+        const allowedCount = results.filter(r => r.allowed).length;
+        const deniedCount = results.filter(r => !r.allowed).length;
+
+        expect(allowedCount).toBe(4);
+        expect(deniedCount).toBe(2);
+    });
+
+    it('Redis error: rate-limit primitives fail closed', async () => {
+        vi.spyOn(mockRedis, 'get').mockRejectedValue(new Error('Connection refused'));
+        vi.spyOn(mockRedis, 'incr').mockRejectedValue(new Error('Connection refused'));
+        vi.spyOn(mockRedis, 'expire').mockRejectedValue(new Error('Connection refused'));
+        vi.spyOn(mockRedis, 'ttl').mockRejectedValue(new Error('Connection refused'));
+        vi.spyOn(mockRedis, 'del').mockRejectedValue(new Error('Connection refused'));
+
+        try {
+            // checkMfaRateLimit → denied when Redis throws
+            const checkResult = await checkMfaRateLimit('mfa:ip:test-redis-error');
+            expect(checkResult.allowed).toBe(false);
+            expect(checkResult.remainingAttempts).toBe(0);
+            expect(checkResult.retryAfterSeconds).toBeGreaterThan(0);
+
+            // recordMfaAttemptFailure → denied when Redis throws
+            const recordResult = await recordMfaAttemptFailure('mfa:ip:test-redis-error');
+            expect(recordResult.allowed).toBe(false);
+            expect(recordResult.remainingAttempts).toBe(0);
+            expect(recordResult.retryAfterSeconds).toBeGreaterThan(0);
+
+            // No local fallback — state was never stored
+            const fallbackCheck = await checkMfaRateLimit('mfa:ip:test-redis-error');
+            expect(fallbackCheck.allowed).toBe(false);
+        } finally {
+            vi.restoreAllMocks();
+        }
     });
 });

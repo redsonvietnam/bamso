@@ -141,7 +141,7 @@ export async function checkMfaRateLimitState(key: string): Promise<RateLimitResu
         const countStr = await redis.get(redisKey);
         const count = countStr ? parseInt(countStr, 10) : 0;
 
-        if (count > MFA_MAX_FAILED_ATTEMPTS) {
+        if (count >= MFA_MAX_FAILED_ATTEMPTS) {
             const ttl = await redis.ttl(redisKey);
             return {
                 allowed: false,
