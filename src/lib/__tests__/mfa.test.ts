@@ -988,13 +988,18 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
         function assertRequiresRoleInvocation(source: string, routePath: string, expectedRoles: string[]) {
             // Verify source has requireRole import
             expect(source).toMatch(/import\s*\{[^}]*requireRole[^}]*\}\s*from\s*['"]@\/lib\/api-auth['"]/);
-            // Verify source has actual requireRole(...) invocation (not just import)
-            // Matches: requireRole(, requireRole (, await requireRole(
-            expect(source).toMatch(/requireRole\s*\(/);
-            // Verify expected roles appear near requireRole calls
+            // Verify source has actual requireRole(...) invocation with expected roles as arguments.
+            // This proves the role is bound to the requireRole call, not just present elsewhere in source.
+            // Matches patterns like:
+            //   requireRole(ADMIN)
+            //   requireRole(UserRole.ADMIN)
+            //   requireRole('STAFF', 'ADMIN')
+            //   requireRole( "STAFF" , "ADMIN" )
+            //   await requireRole(ADMIN)
             for (const role of expectedRoles) {
-                // Role should appear in source — either as string literal or enum reference
-                expect(source).toContain(role);
+                // Match requireRole( ... role ... ) where role appears inside the parentheses
+                const callWithRole = new RegExp(`requireRole\\s*\\([^)]*${role}[^)]*\\)`);
+                expect(source).toMatch(callWithRole);
             }
         }
 
