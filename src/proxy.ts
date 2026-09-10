@@ -40,6 +40,15 @@ export async function proxy(request: NextRequest) {
         if (token) {
             const payload = await verifyJWT(token);
             if (payload) {
+                // MFA enforcement: ADMIN + DB mfaEnabled=true requires mfa claim
+                const mfaOk = await enforceAdminMfa(payload);
+                if (!mfaOk) {
+                    // ADMIN with MFA enabled but no MFA claim — stay on /login
+                    // Clear stale password-only cookie to prevent redirect loop
+                    const response = NextResponse.next();
+                    response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/', secure: isSecureCookie(request) });
+                    return response;
+                }
                 const roleRedirect: Record<string, string> = {
                     ADMIN: '/admin',
                     STAFF: '/canbo',

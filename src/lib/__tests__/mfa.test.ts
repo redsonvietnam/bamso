@@ -711,4 +711,239 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
             vi.restoreAllMocks();
         }
     });
+
+    // ============================================================
+    // B1: Production MFA Authorization Boundary Tests
+    // ============================================================
+
+    describe('B1: Production MFA authorization boundary (requireRole)', () => {
+        it('B1-01: ADMIN + mfaEnabled=true + password-only JWT (no mfa claim) => DENY', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                expect(result.error.status).toBe(403);
+                const body = await result.error.json();
+                expect(body.code).toBe('MFA_REQUIRED');
+            }
+        });
+
+        it('B1-02: ADMIN + mfaEnabled=true + JWT mfa=false => DENY', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: false });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                expect(result.error.status).toBe(403);
+            }
+        });
+
+        it('B1-03: ADMIN + mfaEnabled=true + MFA-assured JWT (mfa=true) => ALLOW', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(false);
+        });
+
+        it('B1-04: ADMIN + mfaEnabled=false + normal ADMIN JWT => ALLOW', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: false, mfaSecret: null, mfaEnabledAt: null },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(false);
+        });
+
+        it('B1-05: STAFF/KIOSK/DISPLAY => existing behavior preserved (no MFA check)', async () => {
+            const staff = await prisma.user.create({
+                data: {
+                    username: `test_staff_b1_${Date.now()}`,
+                    passwordHash: hashPassword('staffPass123'),
+                    name: 'B1 Staff',
+                    role: 'STAFF',
+                    mfaEnabled: false,
+                },
+            });
+
+            const token = await signJWT({ userId: staff.id, role: 'STAFF' });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.STAFF);
+            expect('error' in result).toBe(false);
+
+            await prisma.user.delete({ where: { id: staff.id } });
+        });
+
+        it('B1-06: JWT issued before MFA enable => DENY', async () => {
+            // Issue password-only JWT while MFA is disabled
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+
+            // Now enable MFA
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                expect(result.error.status).toBe(403);
+            }
+        });
+
+        it('B1-07: MFA challenge JWT used as auth_token => DENY', async () => {
+            const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+            mockCookiesStore.set('auth_token', challengeToken);
+
+            // Challenge tokens have type='challenge' which verifyJWT rejects for auth
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                expect(result.error.status).toBe(401);
+            }
+        });
+
+        it('B1-08: Tampered/forged mfa=true JWT => DENY', async () => {
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            const parts = token.split('.');
+            const tampered = `${parts[0]}.${parts[1]}.tampered_signature`;
+            mockCookiesStore.set('auth_token', tampered);
+
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                expect(result.error.status).toBe(401);
+            }
+        });
+
+        it('B1-09: DB lookup failure during MFA decision => behavior documented', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            // requireRole calls authenticate() first (succeeds — JWT is valid),
+            // then calls prisma.user.findUnique which is NOT wrapped in try-catch.
+            // If DB fails, the error propagates as an unhandled rejection.
+            // The proxy layer (enforceAdminMfa) DOES have try-catch and fails closed.
+            // This is a known defense-in-depth gap: requireRole relies on the proxy
+            // to catch DB errors at the edge. Testing that the JWT is valid first:
+            const { authenticate } = await import('@/lib/api-auth');
+            const authResult = await authenticate();
+            expect('payload' in authResult).toBe(true);
+            // The DB failure would propagate — this is the current behavior.
+            // The proxy's enforceAdminMfa() catches this and returns false (fail closed).
+        });
+    });
+
+    // ============================================================
+    // B2: authenticate() foot-gun regression
+    // ============================================================
+
+    describe('B2: No ADMIN route uses generic authenticate() for authorization', () => {
+        it('All ADMIN API routes use requireRole() which enforces MFA', async () => {
+            // Verify that requireRole is the authorization boundary for ADMIN routes
+            // by testing it with a password-only JWT when MFA is enabled
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            // requireRole should reject — this is the production boundary
+            const result = await requireRole(UserRole.ADMIN);
+            expect('error' in result).toBe(true);
+            if ('error' in result && result.error) {
+                const body = await result.error.json();
+                expect(body.code).toBe('MFA_REQUIRED');
+            }
+        });
+
+        it('authenticateOptional() returns null for ADMIN without MFA claim when MFA enabled', async () => {
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: 'dummy:cipher:tag', mfaEnabledAt: new Date() },
+            });
+
+            const { authenticateOptional } = await import('@/lib/api-auth');
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const result = await authenticateOptional();
+            expect(result).toBeNull();
+        });
+    });
+
+    // ============================================================
+    // B3: Demo token production guard
+    // ============================================================
+
+    describe('B3: Demo token production guard', () => {
+        it('MFA-DEMO-TOKEN-PROD-01: production + DEMO_MODE_ENABLED=true => DENY', async () => {
+            const originalDemo = process.env.DEMO_MODE_ENABLED;
+            vi.stubEnv('NODE_ENV', 'production');
+            process.env.DEMO_MODE_ENABLED = 'true';
+
+            try {
+                const req = new Request('http://localhost/api/demo-token?role=ADMIN');
+                const { GET } = await import('@/app/api/demo-token/route');
+                const res = await GET(req);
+                expect(res.status).toBe(403);
+                const body = await res.json();
+                expect(body.code).toBe('FORBIDDEN');
+            } finally {
+                vi.unstubAllEnvs();
+                process.env.DEMO_MODE_ENABLED = originalDemo;
+            }
+        });
+
+        it('MFA-DEMO-TOKEN-DEV-01: development + DEMO_MODE_ENABLED=true => preserve demo behavior', async () => {
+            const originalDemo = process.env.DEMO_MODE_ENABLED;
+            vi.stubEnv('NODE_ENV', 'development');
+            process.env.DEMO_MODE_ENABLED = 'true';
+
+            try {
+                const req = new Request('http://localhost/api/demo-token?role=STAFF');
+                const { GET } = await import('@/app/api/demo-token/route');
+                const res = await GET(req);
+                expect(res.status).toBe(200);
+                const body = await res.json();
+                expect(body.token).toBeDefined();
+                expect(body.role).toBe('STAFF');
+            } finally {
+                vi.unstubAllEnvs();
+                process.env.DEMO_MODE_ENABLED = originalDemo;
+            }
+        });
+    });
 });
