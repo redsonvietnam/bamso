@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { isSecureCookie } from '@/lib/cookie';
 import { writeAuditLog } from '@/lib/audit-service';
+import { createMfaChallengeToken } from '@/lib/mfa-service';
 
 const COOKIE_NAME = 'auth_token';
 const MAX_AGE = 60 * 60 * 24;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
         const user = await prisma.user.findUnique({
             where: { username },
-            select: { id: true, username: true, name: true, role: true, passwordHash: true },
+            select: { id: true, username: true, name: true, role: true, passwordHash: true, mfaEnabled: true },
         });
 
         if (!user || !verifyPassword(password, user.passwordHash)) {
@@ -86,6 +87,15 @@ export async function POST(request: Request) {
                 { error: 'Đã xảy ra lỗi trong quá trình đăng nhập', code: 'SERVER_ERROR' },
                 { status: 500 }
             );
+        }
+
+        // Invariant 1: MFA-enabled ADMIN must satisfy MFA challenge before receiving an authenticated session
+        if (user.role === 'ADMIN' && user.mfaEnabled) {
+            const challengeToken = await createMfaChallengeToken(user.id, user.role);
+            return NextResponse.json({
+                mfaRequired: true,
+                challengeToken,
+            });
         }
 
         await writeAuditLog(prisma, {

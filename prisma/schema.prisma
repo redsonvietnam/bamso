@@ -11,13 +11,29 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  username     String   @unique
-  passwordHash String
-  name         String
-  role         String   @default("STAFF")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String         @id @default(uuid())
+  username      String         @unique
+  passwordHash  String
+  name          String
+  role          String         @default("STAFF")
+  mfaEnabled    Boolean        @default(false)
+  mfaSecret     String?        // encrypted TOTP secret (iv:ciphertext:tag)
+  mfaKeyVersion String?        // version identifier for MFA_ENCRYPTION_KEY
+  mfaEnabledAt  DateTime?
+  recoveryCodes RecoveryCode[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
 }
 
 model Service {

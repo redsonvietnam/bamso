@@ -2,8 +2,24 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 
 export type AuditActorType = 'USER' | 'ANONYMOUS' | 'SYSTEM';
-export type AuditAction = 'LOGIN' | 'TICKET_CREATED' | 'CALL_NEXT' | 'SKIP' | 'COMPLETE' | 'RESTORE';
-export type AuditEntityType = 'AUTH' | 'TICKET';
+export type AuditAction =
+    | 'LOGIN'
+    | 'TICKET_CREATED'
+    | 'CALL_NEXT'
+    | 'SKIP'
+    | 'COMPLETE'
+    | 'RESTORE'
+    | 'MFA_ENROLL_STARTED'
+    | 'MFA_ENROLL_COMPLETED'
+    | 'MFA_VERIFY_SUCCESS'
+    | 'MFA_VERIFY_FAILED'
+    | 'MFA_RECOVERY_SUCCESS'
+    | 'MFA_RECOVERY_FAILED'
+    | 'MFA_DISABLED'
+    | 'MFA_RESET'
+    | 'MFA_BACKUP_CODES_REGENERATED';
+
+export type AuditEntityType = 'AUTH' | 'TICKET' | 'MFA' | 'USER';
 
 export const AUDIT_REASON_CODES = [
     'INVALID_CREDENTIALS',
@@ -22,6 +38,13 @@ export const AUDIT_REASON_CODES = [
     'FORBIDDEN',
     'CALL_FAILED',
     'CONCURRENCY_CONFLICT',
+    'MFA_REQUIRED',
+    'MFA_INVALID_TOKEN',
+    'MFA_RATE_LIMITED',
+    'MFA_NOT_ENABLED',
+    'MFA_ALREADY_ENABLED',
+    'MFA_INVALID_RECOVERY_CODE',
+    'MFA_DECRYPTION_FAILED',
 ] as const;
 
 export type AuditReasonCode = (typeof AUDIT_REASON_CODES)[number];
@@ -35,6 +58,7 @@ export interface AuditActor {
 export interface AuditMetadata {
     counter?: string;
     autoCompletedTicketId?: string;
+    method?: string;
 }
 
 export interface AuditLogInput {
@@ -49,7 +73,7 @@ export interface AuditLogInput {
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
-const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId']);
+const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId', 'method']);
 const MAX_METADATA_LENGTH = 500;
 const VALID_REASON_CODES = new Set<string>(AUDIT_REASON_CODES);
 
