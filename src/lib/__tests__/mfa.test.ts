@@ -2,6 +2,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MockRedis } from './mock-redis';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Mock Redis before any imports that use it
 const mockRedis = new MockRedis();
@@ -950,20 +952,46 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
     // ============================================================
 
     describe('B1-10: Protected ADMIN surfaces inventory', () => {
-        // This is a static inventory test that verifies the route structure.
-        // It does NOT execute each route — it proves the authorization boundary
-        // exists at two layers: proxy() + requireRole().
+        // Two-layer authorization model:
         //
-        // Layer 1: proxy() protects these route prefixes with role + MFA check:
-        //   /admin/*, /canbo/*, /api/admin/*, /api/queue/*, /api/staff/*, /api/stats/*
-        //   /api/settings (non-GET), /api/themes (non-GET)
+        // Layer 1 — proxy() outer boundary (src/proxy.ts lines 160-167):
+        //   /admin/*       → ADMIN
+        //   /canbo/*       → STAFF, ADMIN
+        //   /api/admin/*   → ADMIN
+        //   /api/queue/*   → STAFF, ADMIN
+        //   /api/staff/*   → ADMIN
+        //   /api/stats/*   → ADMIN
+        //   /api/settings  → ADMIN + MFA (non-GET)
+        //   /api/themes    → ADMIN + MFA (non-GET)
         //
-        // Layer 2: requireRole() provides defense-in-depth inside route handlers.
+        // Layer 2 — route-level requireRole() defense-in-depth:
+        //   Each privileged route handler calls requireRole() to enforce
+        //   authorization even if proxy() is bypassed (e.g. internal calls).
+        //
+        // This inventory uses filesystem source inspection to verify that
+        // each route file actually imports and calls requireRole().
 
-        it('All /api/admin/* routes import and call requireRole(ADMIN)', async () => {
-            // Static verification: these routes MUST use requireRole.
-            // If a new ADMIN route is added without requireRole, this inventory
-            // will need updating — which is the point of the test.
+        function getSourceFileContent(routePath: string): string {
+            // Convert '@/app/api/...' to absolute filesystem path
+            const relativePath = routePath.replace('@/', 'src/');
+            // Try with .ts extension first (route files), then without (directory routes)
+            let absolutePath = path.join(process.cwd(), relativePath + '.ts');
+            if (!fs.existsSync(absolutePath)) {
+                absolutePath = path.join(process.cwd(), relativePath);
+            }
+            return fs.readFileSync(absolutePath, 'utf-8');
+        }
+
+        function assertRequiresRole(source: string, routePath: string, expectedRoles: string[]) {
+            // Verify source imports requireRole
+            expect(source).toMatch(/import\s*\{[^}]*requireRole[^}]*\}\s*from\s*['"]@\/lib\/api-auth['"]/);
+            // Verify source calls requireRole with expected roles
+            for (const role of expectedRoles) {
+                expect(source).toContain(role);
+            }
+        }
+
+        it('All /api/admin/* routes import and call requireRole(ADMIN)', () => {
             const adminRoutes = [
                 '@/app/api/admin/mfa/status/route',
                 '@/app/api/admin/mfa/enroll/start/route',
@@ -973,19 +1001,14 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
             ];
 
             for (const routePath of adminRoutes) {
-                const routeModule = await import(routePath);
-                // Each route exports GET/POST/PUT/DELETE handlers
-                const handlers = Object.values(routeModule).filter(
-                    (v): v is (...args: unknown[]) => unknown => typeof v === 'function'
-                );
-                expect(handlers.length).toBeGreaterThan(0);
-                // The route file exists and exports handlers — requireRole is
-                // called inside each handler (verified by typecheck + proxy tests)
+                const source = getSourceFileContent(routePath);
+                assertRequiresRole(source, routePath, ['ADMIN']);
             }
         });
 
-        it('All /api/queue/* routes import and call requireRole(STAFF, ADMIN)', async () => {
-            const queueRoutes = [
+        it('All /api/queue/* mutation routes import and call requireRole(STAFF, ADMIN)', () => {
+            // Queue mutation routes (POST) require STAFF or ADMIN
+            const queueMutationRoutes = [
                 '@/app/api/queue/call-next/route',
                 '@/app/api/queue/complete/route',
                 '@/app/api/queue/skip/route',
@@ -993,43 +1016,45 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
                 '@/app/api/queue/recall/route',
             ];
 
-            for (const routePath of queueRoutes) {
-                const routeModule = await import(routePath);
-                const handlers = Object.values(routeModule).filter(
-                    (v): v is (...args: unknown[]) => unknown => typeof v === 'function'
-                );
-                expect(handlers.length).toBeGreaterThan(0);
+            for (const routePath of queueMutationRoutes) {
+                const source = getSourceFileContent(routePath);
+                assertRequiresRole(source, routePath, ['STAFF', 'ADMIN']);
             }
         });
 
-        it('/api/staff and /api/stats import and call requireRole(ADMIN)', async () => {
-            const staffRoute = await import('@/app/api/staff/route');
-            const statsRoute = await import('@/app/api/stats/route');
-
-            expect(Object.values(staffRoute).filter(v => typeof v === 'function').length).toBeGreaterThan(0);
-            expect(Object.values(statsRoute).filter(v => typeof v === 'function').length).toBeGreaterThan(0);
+        it('/api/queue/estimate (GET) is public — no requireRole expected', () => {
+            // estimate is a public GET endpoint for wait time estimation
+            // It is NOT protected by requireRole at route level
+            // proxy() still enforces /api/queue prefix for non-GET methods
+            const source = getSourceFileContent('@/app/api/queue/estimate/route');
+            expect(source).not.toMatch(/requireRole/);
         });
 
-        it('proxy() enforces role + MFA on all protected prefixes', async () => {
-            // This is the definitive test: proxy() is the outer boundary.
-            // If a request passes proxy() AND passes requireRole(), it's authorized.
-            // If either layer rejects, access is denied.
-            //
-            // The proxy protects these prefixes (from src/proxy.ts lines 160-167):
-            //   /admin → ADMIN only
-            //   /canbo → STAFF, ADMIN
-            //   /api/admin → ADMIN only
-            //   /api/queue → STAFF, ADMIN
-            //   /api/staff → ADMIN only
-            //   /api/stats → ADMIN only
-            //
-            // Additionally, proxy() handles:
-            //   /api/settings (non-GET) → ADMIN + MFA
-            //   /api/themes (non-GET) → ADMIN + MFA
-            //
-            // Any route outside these prefixes + public routes is denied by default (401).
-            //
-            // This test proves the deny-by-default behavior:
+        it('/api/staff routes import and call requireRole(ADMIN)', () => {
+            const source = getSourceFileContent('@/app/api/staff/route');
+            assertRequiresRole(source, '@/app/api/staff/route', ['ADMIN']);
+        });
+
+        it('/api/stats routes import and call requireRole(ADMIN)', () => {
+            const source = getSourceFileContent('@/app/api/stats/route');
+            assertRequiresRole(source, '@/app/api/stats/route', ['ADMIN']);
+        });
+
+        it('/api/settings (mutation) protected by proxy MFA boundary', () => {
+            // /api/settings PUT/DELETE handled by proxy (Layer 1)
+            // Route-level auth depends on handler — proxy is the primary boundary
+            const source = getSourceFileContent('@/app/api/settings/route');
+            // Settings may use requireRole or authenticate — both are valid
+            // The proxy enforces ADMIN + MFA for non-GET
+            expect(source).toMatch(/requireRole|authenticate/);
+        });
+
+        it('/api/themes (mutation) protected by proxy MFA boundary', () => {
+            const source = getSourceFileContent('@/app/api/themes/route');
+            expect(source).toMatch(/requireRole|authenticate/);
+        });
+
+        it('proxy() deny-by-default: unknown /api routes return 401', async () => {
             const { NextRequest } = await import('next/server');
             const unknownRequest = new NextRequest('http://localhost/api/unknown-privileged');
             const unknownResponse = await proxy(unknownRequest);

@@ -149,9 +149,9 @@ describe('B1-PROXY: proxy() MFA authorization boundary', () => {
     });
 
     // ================================================================
-    // B1-PROXY-02: ADMIN + MFA enabled + JWT mfa=false → DENY
+    // B1-PROXY-02: ADMIN + MFA enabled + password-only JWT → DENY
     // ================================================================
-    it('B1-PROXY-02: ADMIN + MFA enabled + JWT mfa=false => DENY', async () => {
+    it('B1-PROXY-02: ADMIN + MFA enabled + password-only JWT (no mfa claim) => DENY', async () => {
         const secret = generateTotpSecret();
         const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
         await prisma.user.update({
@@ -159,7 +159,7 @@ describe('B1-PROXY: proxy() MFA authorization boundary', () => {
             data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
         });
 
-        // JWT with explicit mfa=false (still a password-only JWT)
+        // Password-only JWT (no mfa claim) — MFA-enabled admin must not pass
         const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
         const request = makeRequest('/admin', token);
         const response = await proxy(request);
