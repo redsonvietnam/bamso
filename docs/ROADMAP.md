@@ -17,7 +17,8 @@
 - Call-next non-blocking fix (fire-and-forget broadcasts)
 - Mobile responsive pass (/kiosk, /test-mode, /get-ticket, /display, /canbo)
 - Domain audit logging (LOGIN, TICKET_CREATED, CALL_NEXT, SKIP, COMPLETE, RESTORE)
-- Test suite (394 passed, 2 skipped)
+- Deterministic QR Scanner automated tests (Vitest/jsdom)
+- Test suite (396 passed, 2 skipped)
 
 ## Current State
 
@@ -29,7 +30,6 @@
 - Redis production deployment (optional dependency)
 - DEMO_MODE_ENABLED production setting
 - MFA for admin accounts
-- QR Scanner automated tests
 - Browser integration tests (Playwright/Cypress)
 
 ## Historical Tooling Plans
