@@ -66,8 +66,8 @@ export async function POST(request: Request) {
         }
 
         // Atomic enrollment token claim (prevents replay)
-        const claimed = await consumeEnrollmentToken(setup.jti);
-        if (!claimed) {
+        const claimResult = await consumeEnrollmentToken(setup.jti);
+        if (claimResult !== 'CLAIMED') {
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
                 action: 'MFA_ENROLL_COMPLETED',

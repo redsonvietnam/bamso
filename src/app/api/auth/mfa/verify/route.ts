@@ -13,7 +13,8 @@ import {
     verifyTotp,
     verifyAndConsumeRecoveryCode,
     checkMfaRateLimit,
-    recordMfaAttempt,
+    recordMfaAttemptFailure,
+    recordMfaAttemptSuccess,
 } from '@/lib/mfa-service';
 
 const COOKIE_NAME = 'auth_token';
@@ -22,6 +23,8 @@ const MAX_AGE = 60 * 60 * 24;
 export async function POST(request: Request) {
     try {
         const ip = getClientIp(request);
+
+        // Pre-flight IP rate limit check (read-only, no mutation)
         const ipRateLimit = await checkMfaRateLimit(`mfa:ip:${ip}`);
         if (!ipRateLimit.allowed) {
             return NextResponse.json(
@@ -65,7 +68,8 @@ export async function POST(request: Request) {
 
         const challenge = await verifyMfaChallengeToken(challengeToken);
         if (!challenge) {
-            await recordMfaAttempt(`mfa:ip:${ip}`, false);
+            // Single authoritative failure record for invalid challenge
+            await recordMfaAttemptFailure(`mfa:ip:${ip}`);
             await writeAuditLog(prisma, {
                 actor: { actorType: 'ANONYMOUS' },
                 action: 'MFA_VERIFY_FAILED',
@@ -79,7 +83,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Account-level brute force check
+        // Account-level brute force check (read-only)
         const userRateLimit = await checkMfaRateLimit(`mfa:user:${challenge.userId}`);
         if (!userRateLimit.allowed) {
             await writeAuditLog(prisma, {
@@ -127,8 +131,9 @@ export async function POST(request: Request) {
             });
 
             if (!consumed) {
-                await recordMfaAttempt(`mfa:user:${user.id}`, false);
-                await recordMfaAttempt(`mfa:ip:${ip}`, false);
+                // Single authoritative failure record for bad recovery code
+                await recordMfaAttemptFailure(`mfa:user:${user.id}`);
+                await recordMfaAttemptFailure(`mfa:ip:${ip}`);
                 await writeAuditLog(prisma, {
                     actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                     action: 'MFA_RECOVERY_FAILED',
@@ -145,8 +150,8 @@ export async function POST(request: Request) {
             }
 
             // Atomic challenge claim: only winner issues MFA session
-            const claimed = await consumeMfaChallenge(challenge.jti);
-            if (!claimed) {
+            const claimResult = await consumeMfaChallenge(challenge.jti);
+            if (claimResult !== 'CLAIMED') {
                 await writeAuditLog(prisma, {
                     actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                     action: 'MFA_RECOVERY_FAILED',
@@ -161,8 +166,9 @@ export async function POST(request: Request) {
                 );
             }
 
-            await recordMfaAttempt(`mfa:user:${user.id}`, true);
-            await recordMfaAttempt(`mfa:ip:${ip}`, true);
+            // Success: reset rate limits
+            await recordMfaAttemptSuccess(`mfa:user:${user.id}`);
+            await recordMfaAttemptSuccess(`mfa:ip:${ip}`);
 
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
@@ -226,8 +232,9 @@ export async function POST(request: Request) {
 
         const validTotp = verifyTotp(code.trim(), secret, { window: 1 });
         if (!validTotp) {
-            await recordMfaAttempt(`mfa:user:${user.id}`, false);
-            await recordMfaAttempt(`mfa:ip:${ip}`, false);
+            // Single authoritative failure record for bad TOTP
+            await recordMfaAttemptFailure(`mfa:user:${user.id}`);
+            await recordMfaAttemptFailure(`mfa:ip:${ip}`);
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                 action: 'MFA_VERIFY_FAILED',
@@ -244,8 +251,8 @@ export async function POST(request: Request) {
         }
 
         // Atomic challenge claim: only winner issues MFA session
-        const claimed = await consumeMfaChallenge(challenge.jti);
-        if (!claimed) {
+        const claimResult = await consumeMfaChallenge(challenge.jti);
+        if (claimResult !== 'CLAIMED') {
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },
                 action: 'MFA_VERIFY_FAILED',
@@ -260,8 +267,9 @@ export async function POST(request: Request) {
             );
         }
 
-        await recordMfaAttempt(`mfa:user:${user.id}`, true);
-        await recordMfaAttempt(`mfa:ip:${ip}`, true);
+        // Success: reset rate limits
+        await recordMfaAttemptSuccess(`mfa:user:${user.id}`);
+        await recordMfaAttemptSuccess(`mfa:ip:${ip}`);
 
         await writeAuditLog(prisma, {
             actor: { actorType: 'USER', actorId: user.id, actorRole: user.role },

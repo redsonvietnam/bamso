@@ -1,6 +1,15 @@
 // @vitest-environment node
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { MockRedis } from './mock-redis';
+
+// Mock Redis before any imports that use it
+const mockRedis = new MockRedis();
+vi.mock('@/lib/redis', () => ({
+    getRedisClient: () => mockRedis,
+    getRedisPubSubClient: () => mockRedis,
+}));
+
 import prisma from '@/lib/db';
 import { hashPassword } from '@/lib/password';
 import { signJWT, verifyJWT } from '@/lib/auth';
@@ -17,9 +26,7 @@ import {
     createMfaChallengeToken,
     verifyMfaChallengeToken,
     consumeMfaChallenge,
-    checkMfaRateLimit,
-    recordMfaAttempt,
-    resetMfaRateLimits,
+    recordMfaAttemptFailure,
 } from '@/lib/mfa-service';
 import { POST as loginPost } from '@/app/api/auth/route';
 import { POST as mfaVerifyPost } from '@/app/api/auth/mfa/verify/route';
@@ -47,7 +54,7 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
     beforeEach(async () => {
         process.env.JWT_SECRET = 'test-jwt-secret-with-more-than-32-characters-for-testing';
         process.env.MFA_ENCRYPTION_KEY = TEST_MFA_KEY;
-        resetMfaRateLimits();
+        mockRedis['store'].clear();
         mockCookiesStore.clear();
 
         const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -193,24 +200,25 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
 
         const challenge1 = await verifyMfaChallengeToken(challengeToken);
         expect(challenge1).not.toBeNull();
-        expect(await consumeMfaChallenge(challenge1!.jti)).toBe(true);
+        expect(await consumeMfaChallenge(challenge1!.jti)).toBe('CLAIMED');
 
+        // Same challenge can be verified again (JWT is still valid),
+        // but claiming it again must fail — replay detection is at claim
         const challenge2 = await verifyMfaChallengeToken(challengeToken);
-        expect(challenge2).toBeNull();
+        expect(challenge2).not.toBeNull();
+        expect(await consumeMfaChallenge(challenge2!.jti)).toBe('ALREADY_CLAIMED');
     });
 
     it('AUTH-08: Dedicated MFA brute-force protection blocks after 5 failed attempts', async () => {
         const key = `mfa:test:user_${Date.now()}`;
 
         for (let i = 0; i < 4; i++) {
-            await recordMfaAttempt(key, false);
-            const check = await checkMfaRateLimit(key);
-            expect(check.allowed).toBe(true);
-            expect(check.remainingAttempts).toBe(5 - (i + 1));
+            const rl = await recordMfaAttemptFailure(key);
+            expect(rl.allowed).toBe(true);
+            expect(rl.remainingAttempts).toBe(5 - (i + 1));
         }
 
-        await recordMfaAttempt(key, false);
-        const checkBlocked = await checkMfaRateLimit(key);
+        const checkBlocked = await recordMfaAttemptFailure(key);
         expect(checkBlocked.allowed).toBe(false);
         expect(checkBlocked.remainingAttempts).toBe(0);
         expect(checkBlocked.retryAfterSeconds).toBeGreaterThan(0);

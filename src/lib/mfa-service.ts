@@ -3,19 +3,21 @@ import { SignJWT, jwtVerify } from 'jose';
 import { Prisma } from '@prisma/client';
 import {
     claimChallengeJti,
-    checkMfaRateLimitRedis,
-    recordMfaAttemptRedis,
     claimEnrollmentToken,
+    recordMfaAttemptFailure as redisRecordFailure,
+    recordMfaAttemptSuccess as redisRecordSuccess,
+    checkMfaRateLimitState,
+    type ClaimResult,
     type RateLimitResult,
 } from '@/lib/mfa-redis';
+
+export type { ClaimResult, RateLimitResult };
 
 // --- Configuration ---
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const TOTP_WINDOW_SECONDS = 30;
 const CHALLENGE_EXPIRY_SECONDS = 300; // 5 minutes
 const RECOVERY_SALT_PREFIX = 'BAMSO_RECOVERY_CODE_V1_';
-
-const consumedChallengeJtis = new Map<string, number>();
 
 // --- 1. Base32 Implementation (RFC 4648) ---
 
@@ -273,11 +275,6 @@ export async function verifyMfaChallengeToken(
             return null;
         }
 
-        // Replay check
-        if (consumedChallengeJtis.has(payload.jti)) {
-            return null;
-        }
-
         return {
             userId: payload.userId,
             role: payload.role,
@@ -288,13 +285,16 @@ export async function verifyMfaChallengeToken(
     }
 }
 
-export async function consumeMfaChallenge(jti: string): Promise<boolean> {
-    const redisClaim = await claimChallengeJti(jti, CHALLENGE_EXPIRY_SECONDS);
-    if (redisClaim) return true;
-    // Fallback: process-local claim for tests without Redis
-    if (consumedChallengeJtis.has(jti)) return false;
-    consumedChallengeJtis.set(jti, Date.now() + CHALLENGE_EXPIRY_SECONDS * 1000);
-    return true;
+/**
+ * Atomically claim a challenge JTI.
+ * Delegates to Redis — no process-local fallback.
+ *
+ * CLAIMED — caller wins
+ * ALREADY_CLAIMED — replay detected
+ * STORAGE_ERROR — Redis unavailable; fail closed
+ */
+export async function consumeMfaChallenge(jti: string): Promise<ClaimResult> {
+    return claimChallengeJti(jti, CHALLENGE_EXPIRY_SECONDS);
 }
 
 // --- 5b. MFA Setup Token (Temporary State during Enrollment) ---
@@ -344,75 +344,43 @@ export async function verifyMfaSetupToken(
     }
 }
 
-// --- 5c. Enrollment Token Claim (Redis-backed with fallback) ---
-
-const consumedEnrollmentJtis = new Set<string>();
-
-export async function consumeEnrollmentToken(jti: string): Promise<boolean> {
-    const redisClaim = await claimEnrollmentToken(jti, 600);
-    if (redisClaim) return true;
-    // Fallback: process-local claim for tests without Redis
-    if (consumedEnrollmentJtis.has(jti)) return false;
-    consumedEnrollmentJtis.add(jti);
-    return true;
+/**
+ * Atomically claim an enrollment token.
+ * Delegates to Redis — no process-local fallback.
+ */
+export async function consumeEnrollmentToken(jti: string): Promise<ClaimResult> {
+    return claimEnrollmentToken(jti);
 }
 
-// --- 6. Dedicated MFA Rate Limiting (Redis-backed with process-local fallback) ---
+// --- 6. MFA Rate Limiting (Redis-backed, no local fallback) ---
 
-interface MfaAttemptRecord {
-    count: number;
-    firstAttemptTime: number;
-    blockedUntil: number;
-}
-
-const mfaAttemptLocal = new Map<string, MfaAttemptRecord>();
-const LOCAL_LOCKOUT_MS = 15 * 60 * 1000;
-const LOCAL_MAX_ATTEMPTS = 5;
-
-function checkMfaRateLimitLocal(key: string): RateLimitResult {
-    const now = Date.now();
-    const record = mfaAttemptLocal.get(key);
-    if (!record) return { allowed: true, remainingAttempts: LOCAL_MAX_ATTEMPTS, retryAfterSeconds: 0 };
-    if (record.blockedUntil > now) {
-        return { allowed: false, remainingAttempts: 0, retryAfterSeconds: Math.ceil((record.blockedUntil - now) / 1000) };
-    }
-    if (now - record.firstAttemptTime > LOCAL_LOCKOUT_MS) {
-        mfaAttemptLocal.delete(key);
-        return { allowed: true, remainingAttempts: LOCAL_MAX_ATTEMPTS, retryAfterSeconds: 0 };
-    }
-    const remaining = Math.max(0, LOCAL_MAX_ATTEMPTS - record.count);
-    return { allowed: remaining > 0, remainingAttempts: remaining, retryAfterSeconds: 0 };
-}
-
-function recordMfaAttemptLocal(key: string, success: boolean): void {
-    const now = Date.now();
-    if (success) { mfaAttemptLocal.delete(key); return; }
-    let record = mfaAttemptLocal.get(key);
-    if (!record || now - record.firstAttemptTime > LOCAL_LOCKOUT_MS) {
-        record = { count: 1, firstAttemptTime: now, blockedUntil: 0 };
-    } else {
-        record.count += 1;
-    }
-    if (record.count >= LOCAL_MAX_ATTEMPTS) record.blockedUntil = now + LOCAL_LOCKOUT_MS;
-    mfaAttemptLocal.set(key, record);
-}
-
+/**
+ * Check rate limit state WITHOUT mutating. Pre-flight gate.
+ */
 export async function checkMfaRateLimit(key: string): Promise<RateLimitResult> {
-    const redisResult = await checkMfaRateLimitRedis(key);
-    // If Redis denied because unavailable (retryAfterSeconds === MFA_LOCKOUT_SECONDS = 900),
-    // fall back to process-local for test isolation
-    if (!redisResult.allowed && redisResult.retryAfterSeconds === 900 && redisResult.remainingAttempts === 0) {
-        return checkMfaRateLimitLocal(key);
-    }
-    return redisResult;
+    return checkMfaRateLimitState(key);
 }
 
-export async function recordMfaAttempt(key: string, success: boolean): Promise<void> {
-    await recordMfaAttemptRedis(key, success);
-    recordMfaAttemptLocal(key, success);
+/**
+ * Record a failed MFA attempt. Single authoritative INCR.
+ * Returns updated rate-limit state.
+ */
+export async function recordMfaAttemptFailure(key: string): Promise<RateLimitResult> {
+    return redisRecordFailure(key);
 }
 
-export function resetMfaRateLimits(): void {
-    mfaAttemptLocal.clear();
-    consumedChallengeJtis.clear();
+/**
+ * Record a successful MFA attempt. Resets the window.
+ */
+export async function recordMfaAttemptSuccess(key: string): Promise<void> {
+    return redisRecordSuccess(key);
+}
+
+/**
+ * Reset rate limits. No-op in production (Redis manages TTL).
+ * Exists for test teardown only.
+ */
+export async function resetMfaRateLimits(): Promise<void> {
+    // No process-local state to clear.
+    // Tests should use resetMfaRedisState() from mfa-redis.ts.
 }
