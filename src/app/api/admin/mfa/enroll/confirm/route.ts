@@ -78,6 +78,7 @@ export async function POST(request: Request) {
                 entityId: auth.payload.userId,
                 success: false,
                 reasonCode: 'MFA_ENROLLMENT_STALE',
+                metadata: { enrollmentJti: setup.jti },
             });
             return NextResponse.json(
                 { error: 'Token đăng ký MFA đã bị vô hiệu hóa bởi phiên đăng ký mới hơn', code: 'MFA_ENROLLMENT_STALE' },
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
             entityType: 'MFA',
             entityId: auth.payload.userId,
             success: true,
+            metadata: { enrollmentJti: setup.jti },
         });
 
         // Upgrade current session with signed MFA assurance claim

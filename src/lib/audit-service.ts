@@ -77,7 +77,7 @@ export interface AuditLogInput {
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
-const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId', 'method']);
+const ALLOWED_METADATA_KEYS = new Set(['counter', 'autoCompletedTicketId', 'method', 'enrollmentJti']);
 const MAX_METADATA_LENGTH = 500;
 const VALID_REASON_CODES = new Set<string>(AUDIT_REASON_CODES);
 

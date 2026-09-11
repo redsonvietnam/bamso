@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
         // Atomically disable MFA and delete all associated recovery codes
         // Conditional updateMany ensures only one concurrent disable wins
-        await prisma.$transaction(async (tx) => {
+        const disableResult = await prisma.$transaction(async (tx) => {
             await tx.recoveryCode.deleteMany({
                 where: { userId: user.id },
             });
@@ -98,10 +98,15 @@ export async function POST(request: Request) {
                     enrollmentJti: null,
                 },
             });
-            if (result.count === 0) {
-                throw new Error('MFA_DISABLED_CONCURRENT');
-            }
+            return { alreadyDisabled: result.count === 0 } as const;
         });
+
+        if (disableResult.alreadyDisabled) {
+            return NextResponse.json(
+                { error: 'MFA đã bị hủy bởi một yêu cầu khác', code: 'MFA_DISABLED_CONCURRENT' },
+                { status: 409 }
+            );
+        }
 
         await writeAuditLog(prisma, {
             actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
@@ -132,13 +137,6 @@ export async function POST(request: Request) {
 
         return response;
     } catch (error) {
-        if (error instanceof Error && error.message === 'MFA_DISABLED_CONCURRENT') {
-            return NextResponse.json({
-                success: true,
-                message: 'MFA đã bị hủy bởi yêu cầu khác',
-                code: 'MFA_DISABLED_CONCURRENT',
-            });
-        }
         logger.error('MFA disable error:', error);
         return NextResponse.json(
             { error: 'Đã xảy ra lỗi khi hủy kích hoạt MFA', code: 'SERVER_ERROR' },
