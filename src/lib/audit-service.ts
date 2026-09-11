@@ -47,6 +47,7 @@ export const AUDIT_REASON_CODES = [
     'MFA_DECRYPTION_FAILED',
     'MFA_CHALLENGE_REPLAY',
     'MFA_ENROLLMENT_REPLAY',
+    'MFA_ENROLLMENT_STALE',
 ] as const;
 
 export type AuditReasonCode = (typeof AUDIT_REASON_CODES)[number];
@@ -61,6 +62,7 @@ export interface AuditMetadata {
     counter?: string;
     autoCompletedTicketId?: string;
     method?: string;
+    enrollmentJti?: string;
 }
 
 export interface AuditLogInput {

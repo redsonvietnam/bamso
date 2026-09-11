@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import { UserRole } from '@/lib/constants';
@@ -62,10 +63,20 @@ export async function POST(request: Request) {
             issuer: 'BAMSO',
         });
 
+        // Generate enrollment JTI for single-generation binding
+        const enrollmentJti = crypto.randomUUID();
+
         const setupToken = await createMfaSetupToken({
             userId: user.id,
             secret,
             recoveryCodes,
+            jti: enrollmentJti,
+        });
+
+        // Store enrollment generation — new start invalidates any previous pending enrollment
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { enrollmentJti },
         });
 
         await writeAuditLog(prisma, {
@@ -74,6 +85,7 @@ export async function POST(request: Request) {
             entityType: 'MFA',
             entityId: user.id,
             success: true,
+            metadata: { enrollmentJti },
         });
 
         return NextResponse.json({

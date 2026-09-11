@@ -303,6 +303,7 @@ export async function createMfaSetupToken(data: {
     userId: string;
     secret: string;
     recoveryCodes: string[];
+    jti?: string;
 }): Promise<string> {
     const secretBytes = getJwtSecretBytes();
     return new SignJWT({
@@ -312,7 +313,7 @@ export async function createMfaSetupToken(data: {
         type: 'mfa_enrollment',
     })
         .setProtectedHeader({ alg: 'HS256' })
-        .setJti(crypto.randomUUID())
+        .setJti(data.jti ?? crypto.randomUUID())
         .setIssuedAt()
         .setExpirationTime('10m')
         .sign(secretBytes);

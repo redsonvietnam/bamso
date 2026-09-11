@@ -20,6 +20,7 @@ model User {
   mfaSecret     String?        // encrypted TOTP secret (iv:ciphertext:tag)
   mfaKeyVersion String?        // version identifier for MFA_ENCRYPTION_KEY
   mfaEnabledAt  DateTime?
+  enrollmentJti String?        // current enrollment generation JTI (single-enrollment invariant)
   recoveryCodes RecoveryCode[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

@@ -48,24 +48,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Validate TOTP BEFORE consuming enrollment token
-        const isValid = verifyTotp(code.trim(), setup.secret, { window: 1 });
-        if (!isValid) {
-            await writeAuditLog(prisma, {
-                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
-                action: 'MFA_ENROLL_COMPLETED',
-                entityType: 'MFA',
-                entityId: auth.payload.userId,
-                success: false,
-                reasonCode: 'MFA_INVALID_TOKEN',
-            });
-            return NextResponse.json(
-                { error: 'Mã OTP xác nhận không chính xác. Vui lòng thử lại', code: 'MFA_INVALID_TOKEN' },
-                { status: 400 }
-            );
-        }
-
-        // Atomic enrollment token claim (prevents replay)
+        // Atomic enrollment token claim (prevents replay — must run before generation check)
         const claimResult = await consumeEnrollmentToken(setup.jti);
         if (claimResult !== 'CLAIMED') {
             await writeAuditLog(prisma, {
@@ -79,6 +62,43 @@ export async function POST(request: Request) {
             return NextResponse.json(
                 { error: 'Token đăng ký MFA đã được sử dụng', code: 'MFA_ENROLLMENT_REPLAY' },
                 { status: 401 }
+            );
+        }
+
+        // Single-generation enrollment invariant: setup token JTI must match current enrollment generation
+        const user = await prisma.user.findUnique({
+            where: { id: auth.payload.userId },
+            select: { enrollmentJti: true },
+        });
+        if (!user || user.enrollmentJti !== setup.jti) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_ENROLL_COMPLETED',
+                entityType: 'MFA',
+                entityId: auth.payload.userId,
+                success: false,
+                reasonCode: 'MFA_ENROLLMENT_STALE',
+            });
+            return NextResponse.json(
+                { error: 'Token đăng ký MFA đã bị vô hiệu hóa bởi phiên đăng ký mới hơn', code: 'MFA_ENROLLMENT_STALE' },
+                { status: 409 }
+            );
+        }
+
+        // Validate TOTP
+        const isValid = verifyTotp(code.trim(), setup.secret, { window: 1 });
+        if (!isValid) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_ENROLL_COMPLETED',
+                entityType: 'MFA',
+                entityId: auth.payload.userId,
+                success: false,
+                reasonCode: 'MFA_INVALID_TOKEN',
+            });
+            return NextResponse.json(
+                { error: 'Mã OTP xác nhận không chính xác. Vui lòng thử lại', code: 'MFA_INVALID_TOKEN' },
+                { status: 400 }
             );
         }
 
@@ -108,6 +128,7 @@ export async function POST(request: Request) {
                     mfaSecret: encryptedSecret,
                     mfaKeyVersion: keyVersion,
                     mfaEnabledAt: new Date(),
+                    enrollmentJti: null,
                 },
             });
         });

@@ -11,6 +11,11 @@ interface MockRedisEntry {
 
 export class MockRedis {
     private store = new Map<string, MockRedisEntry>();
+    private failMode = false;
+
+    setFail(fail: boolean) {
+        this.failMode = fail;
+    }
 
     private isExpired(key: string): boolean {
         const entry = this.store.get(key);
@@ -27,6 +32,7 @@ export class MockRedis {
         value: string,
         ...args: (string | number)[]
     ): Promise<'OK' | null> {
+        if (this.failMode) throw new Error('Redis unavailable');
         const nx = args.includes('NX');
         const exIndex = args.indexOf('EX');
         const ttlSeconds = exIndex !== -1 ? (args[exIndex + 1] as number) : null;
@@ -41,11 +47,13 @@ export class MockRedis {
     }
 
     async get(key: string): Promise<string | null> {
+        if (this.failMode) throw new Error('Redis unavailable');
         if (this.isExpired(key)) return null;
         return this.store.get(key)?.value ?? null;
     }
 
     async incr(key: string): Promise<number> {
+        if (this.failMode) throw new Error('Redis unavailable');
         if (this.isExpired(key)) {
             this.store.set(key, { value: '1', expiresAt: null });
             return 1;
@@ -78,6 +86,7 @@ export class MockRedis {
     }
 
     async del(...keys: string[]): Promise<number> {
+        if (this.failMode) throw new Error('Redis unavailable');
         let count = 0;
         for (const key of keys) {
             if (this.store.delete(key)) count++;

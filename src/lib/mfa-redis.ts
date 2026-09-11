@@ -190,6 +190,50 @@ export async function claimEnrollmentToken(
     }
 }
 
+// --- 4. Recovery Code Regeneration Lock (Concurrency Guard) ---
+
+const REGEN_LOCK_PREFIX = `${KEY_PREFIX}regen:`;
+const REGEN_LOCK_TTL_SECONDS = 30;
+
+/**
+ * Acquire a short-lived Redis lock for recovery code regeneration.
+ * Ensures only one concurrent regeneration request wins.
+ *
+ * 'LOCKED' — caller wins
+ * 'ALREADY_LOCKED' — another regeneration is in progress
+ * 'STORAGE_ERROR' — Redis unavailable; fail closed
+ */
+export async function acquireRegenLock(userId: string): Promise<ClaimResult> {
+    const redis = getRedis();
+    if (!redis) {
+        logger.error('MFA regen lock: Redis unavailable, failing closed');
+        return 'STORAGE_ERROR';
+    }
+
+    try {
+        const key = `${REGEN_LOCK_PREFIX}${userId}`;
+        const result = await redis.set(key, '1', 'EX', REGEN_LOCK_TTL_SECONDS, 'NX');
+        return result === 'OK' ? 'CLAIMED' : 'ALREADY_CLAIMED';
+    } catch (error) {
+        logger.error('MFA regen lock Redis error:', error);
+        return 'STORAGE_ERROR';
+    }
+}
+
+/**
+ * Release the regeneration lock. Safe to call even if lock was not held.
+ */
+export async function releaseRegenLock(userId: string): Promise<void> {
+    const redis = getRedis();
+    if (!redis) return;
+
+    try {
+        await redis.del(`${REGEN_LOCK_PREFIX}${userId}`);
+    } catch (error) {
+        logger.error('MFA regen lock release Redis error:', error);
+    }
+}
+
 // --- 4. Cleanup (for tests) ---
 
 /**

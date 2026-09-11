@@ -11,6 +11,7 @@ import {
     generateRecoveryCodes,
     hashRecoveryCode,
 } from '@/lib/mfa-service';
+import { acquireRegenLock, releaseRegenLock } from '@/lib/mfa-redis';
 
 export async function POST(request: Request) {
     try {
@@ -71,36 +72,49 @@ export async function POST(request: Request) {
             );
         }
 
-        const newRecoveryCodes = generateRecoveryCodes(10);
+        // Concurrency guard: only one regeneration per user at a time
+        const lockResult = await acquireRegenLock(user.id);
+        if (lockResult !== 'CLAIMED') {
+            return NextResponse.json(
+                { error: 'Đang có yêu cầu tạo lại mã khôi phục khác', code: 'MFA_REGEN_CONCURRENT' },
+                { status: 409 }
+            );
+        }
 
-        // Transactionally replace all existing recovery codes with new hashed codes
-        await prisma.$transaction(async (tx) => {
-            await tx.recoveryCode.deleteMany({
-                where: { userId: user.id },
+        try {
+            const newRecoveryCodes = generateRecoveryCodes(10);
+
+            // Transactionally replace all existing recovery codes with new hashed codes
+            await prisma.$transaction(async (tx) => {
+                await tx.recoveryCode.deleteMany({
+                    where: { userId: user.id },
+                });
+
+                for (const plainCode of newRecoveryCodes) {
+                    const codeHash = hashRecoveryCode(plainCode);
+                    await tx.recoveryCode.create({
+                        data: {
+                            userId: user.id,
+                            codeHash,
+                        },
+                    });
+                }
             });
 
-            for (const plainCode of newRecoveryCodes) {
-                const codeHash = hashRecoveryCode(plainCode);
-                await tx.recoveryCode.create({
-                    data: {
-                        userId: user.id,
-                        codeHash,
-                    },
-                });
-            }
-        });
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_BACKUP_CODES_REGENERATED',
+                entityType: 'MFA',
+                entityId: user.id,
+                success: true,
+            });
 
-        await writeAuditLog(prisma, {
-            actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
-            action: 'MFA_BACKUP_CODES_REGENERATED',
-            entityType: 'MFA',
-            entityId: user.id,
-            success: true,
-        });
-
-        return NextResponse.json({
-            recoveryCodes: newRecoveryCodes,
-        });
+            return NextResponse.json({
+                recoveryCodes: newRecoveryCodes,
+            });
+        } finally {
+            await releaseRegenLock(user.id);
+        }
     } catch (error) {
         logger.error('MFA recovery codes regenerate error:', error);
         return NextResponse.json(
