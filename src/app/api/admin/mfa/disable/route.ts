@@ -102,6 +102,14 @@ export async function POST(request: Request) {
         });
 
         if (disableResult.alreadyDisabled) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_DISABLED',
+                entityType: 'MFA',
+                entityId: user.id,
+                success: false,
+                reasonCode: 'MFA_DISABLED_CONCURRENT',
+            });
             return NextResponse.json(
                 { error: 'MFA đã bị hủy bởi một yêu cầu khác', code: 'MFA_DISABLED_CONCURRENT' },
                 { status: 409 }
