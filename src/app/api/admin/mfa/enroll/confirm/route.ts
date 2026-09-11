@@ -65,6 +65,27 @@ export async function POST(request: Request) {
             );
         }
 
+        // Stale enrollment check: if MFA is already enabled, this enrollment generation is stale
+        const current_user = await prisma.user.findUnique({
+            where: { id: setup.userId },
+            select: { mfaEnabled: true },
+        });
+        if (current_user?.mfaEnabled) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
+                action: 'MFA_ENROLL_COMPLETED',
+                entityType: 'MFA',
+                entityId: auth.payload.userId,
+                success: false,
+                reasonCode: 'MFA_ENROLLMENT_STALE',
+                metadata: { enrollmentJti: setup.jti },
+            });
+            return NextResponse.json(
+                { error: 'Phiên đăng ký MFA đã lỗi thời. Vui lòng bắt đầu lại', code: 'MFA_ENROLLMENT_STALE' },
+                { status: 409 }
+            );
+        }
+
         // Atomic enrollment token claim (prevents replay)
         const claimResult = await consumeEnrollmentToken(setup.jti);
         if (claimResult !== 'CLAIMED') {
@@ -118,6 +139,7 @@ export async function POST(request: Request) {
             entityType: 'MFA',
             entityId: auth.payload.userId,
             success: true,
+            metadata: { enrollmentJti: setup.jti },
         });
 
         // Upgrade current session with signed MFA assurance claim

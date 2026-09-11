@@ -82,8 +82,19 @@ export async function POST(request: Request) {
             );
         }
 
-        // Atomically disable MFA and delete all associated recovery codes
-        await prisma.$transaction(async (tx) => {
+        // Atomically disable MFA: check mfaEnabled inside transaction to prevent
+        // concurrent disable from returning success for both requests.
+        const disableResult = await prisma.$transaction(async (tx) => {
+            // Re-read mfaEnabled inside the transaction for deterministic check
+            const current = await tx.user.findUnique({
+                where: { id: user.id },
+                select: { mfaEnabled: true },
+            });
+
+            if (!current?.mfaEnabled) {
+                return { alreadyDisabled: true } as const;
+            }
+
             await tx.recoveryCode.deleteMany({
                 where: { userId: user.id },
             });
@@ -96,7 +107,15 @@ export async function POST(request: Request) {
                     mfaEnabledAt: null,
                 },
             });
+            return { alreadyDisabled: false } as const;
         });
+
+        if (disableResult.alreadyDisabled) {
+            return NextResponse.json(
+                { error: 'MFA đã bị hủy bởi một yêu cầu khác', code: 'MFA_DISABLED_CONCURRENT' },
+                { status: 409 }
+            );
+        }
 
         await writeAuditLog(prisma, {
             actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
