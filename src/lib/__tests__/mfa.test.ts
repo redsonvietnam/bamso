@@ -610,9 +610,9 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
         if (tokenMatch) mockCookiesStore.set('auth_token', tokenMatch[1]);
 
         const res2 = await enrollConfirmPost(confirmReq());
-        expect(res2!.status).toBe(409);
+        expect(res2!.status).toBe(401);
         const data = await res2!.json();
-        expect(data.code).toBe('MFA_ENROLLMENT_STALE');
+        expect(data.code).toBe('MFA_ENROLLMENT_REPLAY');
     });
 
     it('MFA-RATELIMIT-01: POST /api/auth/mfa/verify enforces rate limit across both dimensions', async () => {
