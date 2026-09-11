@@ -13,7 +13,7 @@ import prisma from '@/lib/db';
 import { hashPassword } from '@/lib/password';
 import { signJWT } from '@/lib/auth';
 import { UserRole } from '@/lib/constants';
-import { generateTotp, createMfaSetupToken } from '@/lib/mfa-service';
+import { generateTotp } from '@/lib/mfa-service';
 import { acquireRegenLock, releaseRegenLock, resetMfaRedisState } from '@/lib/mfa-redis';
 import { POST as enrollStartPost } from '@/app/api/admin/mfa/enroll/start/route';
 import { POST as enrollConfirmPost } from '@/app/api/admin/mfa/enroll/confirm/route';
@@ -135,7 +135,6 @@ describe('MFA C.1 P2 concurrency proofs', () => {
         expect(finalUser).not.toBeNull();
 
         if (startB.status === 200) {
-            // New generation won the race: old generation cannot become enabled.
             expect(confirmA.status).toBe(409);
             expect(finalUser?.mfaEnabled).toBe(false);
             expect(finalUser?.enrollmentJti).not.toBeNull();
@@ -153,7 +152,6 @@ describe('MFA C.1 P2 concurrency proofs', () => {
             );
             expect(confirmB.status).toBe(200);
         } else {
-            // Old generation won before the newer START became authoritative.
             expect(confirmA.status).toBe(200);
             expect(finalUser?.mfaEnabled).toBe(true);
             expect(finalUser?.enrollmentJti).toBeNull();
