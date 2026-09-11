@@ -123,7 +123,7 @@ export async function POST(request: Request) {
             await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: auth.payload.userId, actorRole: auth.payload.role },
                 action: 'MFA_BACKUP_CODES_REGENERATED', entityType: 'MFA', entityId: user.id,
-                success: true, metadata: { fenceToken: lock.fenceToken },
+                success: true, metadata: { fenceToken: String(lock.fenceToken) },
             });
 
             return NextResponse.json({ recoveryCodes: newRecoveryCodes });
