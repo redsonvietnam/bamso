@@ -83,6 +83,7 @@ A fresh session must reconstruct context from durable repository evidence:
 4. **Read decisions.md** — architectural decisions
 5. **Check git log** — canonical state, recent work
 6. **Read HANDOFF.md** — operational continuity (if needed)
+7. **For C1 resumption** — read `docs/conventions/c1-resumption-v1.md` + R1 brief
 
 Do NOT:
 - Rely on conversation memory
@@ -121,6 +122,7 @@ HANDOFF is an **operational continuity artifact**, NOT authority:
 | Concept | Location | Purpose |
 |---------|----------|---------|
 | Continuity contract | `docs/continuity-contract.md` | This file |
+| C1 resumption convention | `docs/conventions/c1-resumption-v1.md` | C1 session resumption protocol |
 | Bootstrap context | `CONTEXT.md` | Quick orientation |
 | Workflow authority | `AGENTS.md` | Agent coding discipline |
 | Technical conventions | `CLAUDE.md` | Technical patterns |
