@@ -116,13 +116,15 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                 {pos} - Đang phục vụ
                             </CardTitle>
                             <div className="flex items-center gap-2">
-                                <button
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => setSoundEnabled(!soundEnabled)}
-                                    className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+                                    className={`rounded-full ${soundEnabled ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                                     title={soundEnabled ? 'Tắt âm thanh thông báo' : 'Bật âm thanh thông báo'}
                                 >
-                                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                                </button>
+                                    {soundEnabled ? <Volume2 /> : <VolumeX />}
+                                </Button>
                                 <Badge variant={isConnected ? "secondary" : "destructive"}>
                                     {isConnected ? 'Real-time On' : 'Disconnected'}
                                 </Badge>
