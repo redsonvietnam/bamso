@@ -282,7 +282,7 @@ const handleScanSuccess = (decodedText: string) => {
                         )}
 
                         {(modes.includes('manual') || modes.includes('qr')) && (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {modes.includes('manual') && (
                                     <Button
                                         variant="outline"

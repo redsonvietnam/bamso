@@ -130,6 +130,7 @@ export default function ServicesPanel() {
             )}
 
             <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-muted">
                         <tr>
@@ -175,6 +176,7 @@ export default function ServicesPanel() {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {editingService && (
@@ -245,7 +247,7 @@ function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
     };
 
     return (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <Label>Mã dịch vụ *</Label>
                 <Input value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} placeholder="A" />
