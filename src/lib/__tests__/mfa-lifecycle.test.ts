@@ -69,6 +69,7 @@ describe('MFA Lifecycle Integrity (Task C)', () => {
             await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
             await prisma.user.deleteMany({ where: { id: testAdminUser.id } });
         }
+        mockRedis['store'].clear();
         process.env = { ...originalEnv };
     });
 
@@ -308,9 +309,9 @@ describe('MFA Lifecycle Integrity (Task C)', () => {
             const { secret } = await decodeSetupToken(data1.setupToken);
             const code = generateTotp(secret);
             const confirmRes = (await enrollConfirmPost(confirmReq(data1.setupToken, code)))!;
-            expect(confirmRes.status).toBe(401);
+            expect(confirmRes.status).toBe(503);
             const confirmData = await confirmRes.json();
-            expect(confirmData.code).toBe('MFA_ENROLLMENT_REPLAY');
+            expect(confirmData.code).toBe('MFA_ENROLLMENT_STORAGE_ERROR');
 
             mockRedis.setFail(false);
         });
@@ -322,9 +323,9 @@ describe('MFA Lifecycle Integrity (Task C)', () => {
 
             const code = generateTotp(secret);
             const res = (await regenerateCodesPost(regenReq('adminPassword123', code)))!;
-            expect(res.status).toBe(409);
+            expect(res.status).toBe(503);
             const data = await res.json();
-            expect(data.code).toBe('MFA_REGEN_CONCURRENT');
+            expect(data.code).toBe('MFA_REGEN_STORAGE_ERROR');
 
             mockRedis.setFail(false);
         });

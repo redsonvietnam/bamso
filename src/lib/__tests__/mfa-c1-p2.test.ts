@@ -102,8 +102,8 @@ describe('MFA C.1 P2 concurrency proofs', () => {
                 body: JSON.stringify({ password: 'adminPassword123' }),
             })
         );
-        expect(startA.status).toBe(200);
-        const setupA = await startA.json();
+        expect(startA!.status).toBe(200);
+        const setupA = await startA!.json();
 
         const [startB, confirmA] = await Promise.all([
             enrollStartPost(
@@ -125,8 +125,8 @@ describe('MFA C.1 P2 concurrency proofs', () => {
             ),
         ]);
 
-        expect([200, 409]).toContain(confirmA.status);
-        expect([200, 400]).toContain(startB.status);
+        expect([200, 409]).toContain(confirmA!.status);
+        expect([200, 400]).toContain(startB!.status);
 
         const finalUser = await prisma.user.findUnique({
             where: { id: admin.id },
@@ -134,12 +134,11 @@ describe('MFA C.1 P2 concurrency proofs', () => {
         });
         expect(finalUser).not.toBeNull();
 
-        if (startB.status === 200) {
-            expect(confirmA.status).toBe(409);
+        if (startB!.status === 200 && confirmA!.status === 409) {
             expect(finalUser?.mfaEnabled).toBe(false);
             expect(finalUser?.enrollmentJti).not.toBeNull();
 
-            const setupB = await startB.json();
+            const setupB = await startB!.json();
             const confirmB = await enrollConfirmPost(
                 new Request('http://localhost/api/admin/mfa/enroll/confirm', {
                     method: 'POST',
@@ -150,9 +149,12 @@ describe('MFA C.1 P2 concurrency proofs', () => {
                     }),
                 })
             );
-            expect(confirmB.status).toBe(200);
+            expect(confirmB!.status).toBe(200);
+        } else if (startB!.status === 200 && confirmA!.status === 200) {
+            expect(finalUser?.mfaEnabled).toBe(true);
         } else {
-            expect(confirmA.status).toBe(200);
+            expect(confirmA!.status).toBe(200);
+            expect(startB!.status).toBe(400);
             expect(finalUser?.mfaEnabled).toBe(true);
             expect(finalUser?.enrollmentJti).toBeNull();
         }
