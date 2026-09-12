@@ -1,7 +1,7 @@
 # ROADMAP.md — Current Roadmap
 
 > This is the single source of truth for current roadmap information.
-> Updated: 2026-09-10
+> Updated: 2026-09-12
 
 ## Completed Work
 
@@ -18,7 +18,9 @@
 - Mobile responsive pass (/kiosk, /test-mode, /get-ticket, /display, /canbo)
 - Domain audit logging (LOGIN, TICKET_CREATED, CALL_NEXT, SKIP, COMPLETE, RESTORE)
 - Deterministic QR Scanner automated tests (Vitest/jsdom)
-- Test suite (396 passed, 2 skipped)
+- Test suite hardening and MFA evidence closure
+- MFA for ADMIN accounts: authorization boundary, TOTP/recovery flow, enrollment generation binding, concurrent disable handling, recovery regeneration fencing, Redis fail-closed semantics, and exact audit evidence
+- Final validation baseline: 520 tests passed, 3 skipped; typecheck, lint, and build passed
 
 ## Current State
 
@@ -29,7 +31,6 @@
 
 - Redis production deployment (optional dependency)
 - DEMO_MODE_ENABLED production setting
-- MFA for admin accounts
 - Browser integration tests (Playwright/Cypress)
 
 ## Historical Tooling Plans
