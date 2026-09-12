@@ -1,7 +1,8 @@
 /**
  * In-memory Redis mock for MFA primitive tests.
- * Simulates SET NX EX, INCR, EXPIRE, TTL, DEL, KEYS — with correct atomic semantics.
- * NOT a process-local security fallback — it's a test double for Redis operations.
+ * Simulates SET NX EX, INCR, EXPIRE, TTL, DEL, KEYS and the small Lua
+ * compare-and-delete / fenced-acquire scripts used by MFA locks.
+ * NOT a process-local security fallback — it is a test double for Redis.
  */
 
 interface MockRedisEntry {
@@ -11,6 +12,9 @@ interface MockRedisEntry {
 
 export class MockRedis {
     private store = new Map<string, MockRedisEntry>();
+    private failMode = false;
+
+    setFail(fail: boolean) { this.failMode = fail; }
 
     private isExpired(key: string): boolean {
         const entry = this.store.get(key);
@@ -22,30 +26,25 @@ export class MockRedis {
         return false;
     }
 
-    async set(
-        key: string,
-        value: string,
-        ...args: (string | number)[]
-    ): Promise<'OK' | null> {
+    async set(key: string, value: string, ...args: (string | number)[]): Promise<'OK' | null> {
+        if (this.failMode) throw new Error('Redis unavailable');
         const nx = args.includes('NX');
         const exIndex = args.indexOf('EX');
         const ttlSeconds = exIndex !== -1 ? (args[exIndex + 1] as number) : null;
-
-        if (nx && this.store.has(key) && !this.isExpired(key)) {
-            return null; // NX fails if key exists
-        }
-
+        if (nx && this.store.has(key) && !this.isExpired(key)) return null;
         const expiresAt = ttlSeconds !== null ? Date.now() + ttlSeconds * 1000 : null;
         this.store.set(key, { value, expiresAt });
         return 'OK';
     }
 
     async get(key: string): Promise<string | null> {
+        if (this.failMode) throw new Error('Redis unavailable');
         if (this.isExpired(key)) return null;
         return this.store.get(key)?.value ?? null;
     }
 
     async incr(key: string): Promise<number> {
+        if (this.failMode) throw new Error('Redis unavailable');
         if (this.isExpired(key)) {
             this.store.set(key, { value: '1', expiresAt: null });
             return 1;
@@ -78,10 +77,9 @@ export class MockRedis {
     }
 
     async del(...keys: string[]): Promise<number> {
+        if (this.failMode) throw new Error('Redis unavailable');
         let count = 0;
-        for (const key of keys) {
-            if (this.store.delete(key)) count++;
-        }
+        for (const key of keys) if (this.store.delete(key)) count++;
         return count;
     }
 
@@ -93,5 +91,28 @@ export class MockRedis {
             if (key.startsWith(prefix)) results.push(key);
         }
         return results;
+    }
+
+    async eval(script: string, _numKeys: number, ...args: (string | number)[]): Promise<number> {
+        if (this.failMode) throw new Error('Redis unavailable');
+
+        if (script.includes("redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[3])")) {
+            const lockKey = String(args[0]);
+            const fenceKey = String(args[1]);
+            const ownerToken = String(args[2]);
+            const ttlSeconds = Number(args[3]);
+            if (this.store.has(lockKey) && !this.isExpired(lockKey)) return 0;
+            this.store.set(lockKey, { value: ownerToken, expiresAt: Date.now() + ttlSeconds * 1000 });
+            return await this.incr(fenceKey);
+        }
+
+        if (script.includes("redis.call('GET', KEYS[1]) == ARGV[1]")) {
+            const key = String(args[0]);
+            const ownerToken = String(args[1]);
+            if (await this.get(key) !== ownerToken) return 0;
+            return (await this.del(key)) === 1 ? 1 : 0;
+        }
+
+        return 0;
     }
 }

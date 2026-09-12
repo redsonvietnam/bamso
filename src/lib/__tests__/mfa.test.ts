@@ -511,17 +511,19 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
             data: { userId: testAdminUser.id, codeHash: hashRecoveryCode(recoveryCode) },
         });
 
-        const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+        // Each concurrent request needs its own challenge token
+        const challenge1 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+        const challenge2 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
 
-        const makeReq = () => new Request('http://localhost/api/auth/mfa/verify', {
+        const makeReq = (ct: string) => new Request('http://localhost/api/auth/mfa/verify', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ challengeToken, code: recoveryCode, factor: 'recovery' }),
+            body: JSON.stringify({ challengeToken: ct, code: recoveryCode, factor: 'recovery' }),
         });
 
         const [res1, res2] = await Promise.all([
-            mfaVerifyPost(makeReq()),
-            mfaVerifyPost(makeReq()),
+            mfaVerifyPost(makeReq(challenge1)),
+            mfaVerifyPost(makeReq(challenge2)),
         ]);
 
         const statuses = [res1.status, res2.status];
@@ -713,6 +715,731 @@ describe('MFA Security Invariants (AUTH-01 to AUTH-15)', () => {
         } finally {
             vi.restoreAllMocks();
         }
+    });
+
+    // ============================================================
+    // C.1: Lifecycle concurrency and audit gaps
+    // ============================================================
+
+    describe('C.1: Lifecycle concurrency and audit', () => {
+        it('C-DISABLE-CONCURRENT: Two concurrent disable requests → exactly one success', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const mfaToken = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', mfaToken);
+
+            const currentTotp = generateTotp(secret);
+            const makeDisableReq = () => new Request('http://localhost/api/admin/mfa/disable', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123', code: currentTotp }),
+            });
+
+            const [res1, res2] = await Promise.all([
+                disableMfaPost(makeDisableReq()),
+                disableMfaPost(makeDisableReq()),
+            ]);
+
+            const statuses = [res1!.status, res2!.status];
+            const successCount = statuses.filter(s => s === 200).length;
+            const conflictCount = statuses.filter(s => s === 409).length;
+
+            expect(successCount).toBe(1);
+            expect(conflictCount).toBe(1);
+
+            // DB ends disabled
+            const user = await prisma.user.findUnique({ where: { id: testAdminUser.id } });
+            expect(user?.mfaEnabled).toBe(false);
+
+            // Only one successful audit transition
+            const successLogs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_DISABLED', success: true },
+            });
+            expect(successLogs).toHaveLength(1);
+        });
+
+        it('C-RECOVERY-CONCURRENT-POST: Same recovery code via actual POST route → exactly one success', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const codes = generateRecoveryCodes(1);
+            const recoveryCode = codes[0];
+            await prisma.recoveryCode.create({
+                data: { userId: testAdminUser.id, codeHash: hashRecoveryCode(recoveryCode) },
+            });
+
+            // Each concurrent request needs its own challenge token
+            const challenge1 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+            const challenge2 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+
+            const makeReq = (ct: string) => new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken: ct, code: recoveryCode, factor: 'recovery' }),
+            });
+
+            const [res1, res2] = await Promise.all([
+                mfaVerifyPost(makeReq(challenge1)),
+                mfaVerifyPost(makeReq(challenge2)),
+            ]);
+
+            const statuses = [res1.status, res2.status];
+            const successCount = statuses.filter(s => s === 200).length;
+            expect(successCount).toBe(1);
+
+            // Only one recovery code consumed
+            const usedCodes = await prisma.recoveryCode.findMany({
+                where: { userId: testAdminUser.id, usedAt: { not: null } },
+            });
+            expect(usedCodes).toHaveLength(1);
+
+            // Only one MFA session issued
+            const mfaSuccessLogs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_RECOVERY_SUCCESS', success: true },
+            });
+            expect(mfaSuccessLogs).toHaveLength(1);
+        });
+
+        it('C-ENROLL-CONCURRENT-SAME-TOKEN: Concurrent confirm with same setup token → exactly one success', async () => {
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startReq = new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            });
+            const startRes = await enrollStartPost(startReq);
+            const startData = await startRes!.json();
+
+            const currentTotp = generateTotp(startData.secret);
+
+            const makeConfirmReq = () => new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: startData.setupToken, code: currentTotp }),
+            });
+
+            const [res1, res2, res3] = await Promise.all([
+                enrollConfirmPost(makeConfirmReq()),
+                enrollConfirmPost(makeConfirmReq()),
+                enrollConfirmPost(makeConfirmReq()),
+            ]);
+
+            const statuses = [res1!.status, res2!.status, res3!.status];
+            const successCount = statuses.filter(s => s === 200).length;
+            expect(successCount).toBe(1);
+
+            // All others are non-success (401 replay or 409 stale)
+            const nonSuccessCount = statuses.filter(s => s !== 200).length;
+            expect(nonSuccessCount).toBe(2);
+
+            // DB ends with MFA enabled exactly once
+            const user = await prisma.user.findUnique({ where: { id: testAdminUser.id } });
+            expect(user?.mfaEnabled).toBe(true);
+
+            // One active recovery-code set
+            const storedCodes = await prisma.recoveryCode.findMany({ where: { userId: testAdminUser.id } });
+            expect(storedCodes.length).toBeGreaterThan(0);
+        });
+
+        it('C-04-EXACT: Concurrency winner=SUCCESS, loser=deterministic non-success', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const codes = generateRecoveryCodes(1);
+            const recoveryCode = codes[0];
+            await prisma.recoveryCode.create({
+                data: { userId: testAdminUser.id, codeHash: hashRecoveryCode(recoveryCode) },
+            });
+
+            const challenge1 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+            const challenge2 = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+
+            const makeReq = (ct: string) => new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken: ct, code: recoveryCode, factor: 'recovery' }),
+            });
+
+            const [res1, res2] = await Promise.all([
+                mfaVerifyPost(makeReq(challenge1)),
+                mfaVerifyPost(makeReq(challenge2)),
+            ]);
+
+            // Winner: 200
+            const successRes = [res1, res2].find(r => r.status === 200);
+            expect(successRes).toBeDefined();
+            const successBody = await successRes!.json();
+            expect(successBody.success).toBe(true);
+
+            // Loser: deterministic non-success (401 challenge replay or 401 invalid recovery)
+            const loserRes = [res1, res2].find(r => r.status !== 200);
+            expect(loserRes).toBeDefined();
+            expect(loserRes!.status).toBe(401);
+        });
+
+        it('AUTH-14-EXACT: MFA lifecycle events are audited with exact fields', async () => {
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            // 1. Login (no MFA) → AUDIT: LOGIN success
+            const loginReq = new Request('http://localhost/api/auth', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ username: testAdminUser.username, password: 'adminPassword123' }),
+            });
+            await loginPost(loginReq);
+
+            // 2. Enroll start → AUDIT: MFA_ENROLL_STARTED
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startReq = new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            });
+            const startRes = await enrollStartPost(startReq);
+            const startData = await startRes!.json();
+
+            // 3. Enroll confirm → AUDIT: MFA_ENROLL_COMPLETED success
+            const currentTotp = generateTotp(startData.secret);
+            const confirmReq = new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: startData.setupToken, code: currentTotp }),
+            });
+            const confirmRes = await enrollConfirmPost(confirmReq);
+            expect(confirmRes!.status).toBe(200);
+
+            const confirmCookie = confirmRes!.headers.get('set-cookie');
+            const tokenMatch = confirmCookie?.match(/auth_token=([^;]+)/);
+            if (tokenMatch) mockCookiesStore.set('auth_token', tokenMatch[1]);
+
+            // 4. Verify all audit events exist
+            const allLogs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id },
+                orderBy: { createdAt: 'asc' },
+            });
+
+            // LOGIN event
+            const loginLog = allLogs.find(l => l.action === 'LOGIN' && l.entityType === 'AUTH');
+            expect(loginLog).toBeDefined();
+            expect(loginLog!.success).toBe(true);
+
+            // MFA_ENROLL_STARTED event
+            const enrollStartLog = allLogs.find(l => l.action === 'MFA_ENROLL_STARTED');
+            expect(enrollStartLog).toBeDefined();
+            expect(enrollStartLog!.success).toBe(true);
+
+            // MFA_ENROLL_COMPLETED event
+            const enrollCompleteLog = allLogs.find(l => l.action === 'MFA_ENROLL_COMPLETED' && l.success === true);
+            expect(enrollCompleteLog).toBeDefined();
+            expect(enrollCompleteLog!.entityType).toBe('MFA');
+
+            // 5. Verify no secrets in audit logs
+            const serialized = JSON.stringify(allLogs);
+            expect(serialized).not.toContain('adminPassword123');
+            expect(serialized).not.toContain(TEST_MFA_KEY);
+        });
+
+        it('C-STALE-ENROLLMENT: Stale enrollment → 409 + MFA_ENROLLMENT_STALE audit + enrollmentJti', async () => {
+            // Generation A: start enrollment
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startAReq = new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            });
+            const startARes = await enrollStartPost(startAReq);
+            const dataA = await startARes!.json();
+
+            // Generation B: start another enrollment
+            const startBReq = new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            });
+            const startBRes = await enrollStartPost(startBReq);
+            const dataB = await startBRes!.json();
+
+            // Complete generation B first → MFA enabled
+            const totpB = generateTotp(dataB.secret);
+            const confirmBReq = new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: dataB.setupToken, code: totpB }),
+            });
+            const confirmBRes = await enrollConfirmPost(confirmBReq);
+            expect(confirmBRes!.status).toBe(200);
+
+            const confirmCookie = confirmBRes!.headers.get('set-cookie');
+            const tokenMatch = confirmCookie?.match(/auth_token=([^;]+)/);
+            if (tokenMatch) mockCookiesStore.set('auth_token', tokenMatch[1]);
+
+            // Now confirm generation A → should be stale (409)
+            const totpA = generateTotp(dataA.secret);
+            const confirmAReq = new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: dataA.setupToken, code: totpA }),
+            });
+            const confirmARes = await enrollConfirmPost(confirmAReq);
+            expect(confirmARes!.status).toBe(409);
+            const bodyA = await confirmARes!.json();
+            expect(bodyA.code).toBe('MFA_ENROLLMENT_STALE');
+
+            // Audit row contains enrollmentJti
+            const staleLog = await prisma.auditLog.findFirst({
+                where: {
+                    actorId: testAdminUser.id,
+                    action: 'MFA_ENROLL_COMPLETED',
+                    reasonCode: 'MFA_ENROLLMENT_STALE',
+                },
+            });
+            expect(staleLog).toBeDefined();
+            expect(staleLog!.metadata).toContain('enrollmentJti');
+
+            // MFA state not corrupted — still enabled from generation B
+            const user = await prisma.user.findUnique({ where: { id: testAdminUser.id } });
+            expect(user?.mfaEnabled).toBe(true);
+        });
+
+        it('C-REDIS-ENROLL-FAIL: Redis unavailable during enrollment claim → MFA remains disabled', async () => {
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startReq = new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            });
+            const startRes = await enrollStartPost(startReq);
+            const startData = await startRes!.json();
+
+            // Break Redis
+            vi.spyOn(mockRedis, 'set').mockRejectedValue(new Error('Connection refused'));
+
+            try {
+                const currentTotp = generateTotp(startData.secret);
+                const confirmReq = new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ setupToken: startData.setupToken, code: currentTotp }),
+                });
+                const confirmRes = await enrollConfirmPost(confirmReq);
+                // Fail closed: non-success (401 or 500)
+                expect(confirmRes!.status).not.toBe(200);
+
+                // MFA remains disabled
+                const user = await prisma.user.findUnique({ where: { id: testAdminUser.id } });
+                expect(user?.mfaEnabled).toBe(false);
+            } finally {
+                vi.restoreAllMocks();
+            }
+        });
+
+        it('C-REDIS-CHALLENGE-FAIL: Redis unavailable during challenge claim → no MFA JWT/session', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+            const currentTotp = generateTotp(secret);
+
+            // Break Redis
+            vi.spyOn(mockRedis, 'set').mockRejectedValue(new Error('Connection refused'));
+
+            try {
+                const verifyReq = new Request('http://localhost/api/auth/mfa/verify', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ challengeToken, code: currentTotp, factor: 'totp' }),
+                });
+                const verifyRes = await mfaVerifyPost(verifyReq);
+                // Fail closed: non-success
+                expect(verifyRes.status).not.toBe(200);
+
+                // No auth cookie set
+                const cookieHeader = verifyRes.headers.get('set-cookie') || '';
+                expect(cookieHeader).not.toContain('auth_token=');
+            } finally {
+                vi.restoreAllMocks();
+            }
+        });
+    });
+
+    // ============================================================
+    // EXACT AUDIT ASSERTIONS — Task C/C.1 Final Evidence
+    // ============================================================
+
+    describe('Exact audit assertions', () => {
+        it('MFA_DISABLED audit: winner success, exact action/entityType/entityId, no secrets', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const mfaToken = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', mfaToken);
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            const currentTotp = generateTotp(secret);
+            const res = await disableMfaPost(new Request('http://localhost/api/admin/mfa/disable', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123', code: currentTotp }),
+            }));
+
+            expect(res!.status).toBe(200);
+            const data = await res!.json();
+            expect(data.success).toBe(true);
+
+            const logs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_DISABLED' },
+            });
+            expect(logs).toHaveLength(1);
+            expect(logs[0].success).toBe(true);
+            expect(logs[0].entityType).toBe('MFA');
+            expect(logs[0].entityId).toBe(testAdminUser.id);
+            expect(logs[0].reasonCode).toBeNull();
+
+            const serialized = JSON.stringify(logs);
+            expect(serialized).not.toContain('adminPassword123');
+            expect(serialized).not.toContain(currentTotp);
+            expect(serialized).not.toContain(secret);
+            expect(serialized).not.toContain(TEST_MFA_KEY);
+        });
+
+        it('MFA_DISABLED concurrent loser: HTTP 409 + MFA_DISABLED_CONCURRENT audit', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const mfaToken = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', mfaToken);
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            const currentTotp = generateTotp(secret);
+            const makeReq = () => new Request('http://localhost/api/admin/mfa/disable', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123', code: currentTotp }),
+            });
+
+            const [res1, res2] = await Promise.all([disableMfaPost(makeReq()), disableMfaPost(makeReq())]);
+
+            const statuses = [res1!.status, res2!.status];
+            expect(statuses.filter(s => s === 200).length).toBe(1);
+            const loser = [res1, res2].find(r => r!.status === 409);
+            expect(loser).toBeDefined();
+            const loserBody = await loser!.json();
+            expect(loserBody.code).toBe('MFA_DISABLED_CONCURRENT');
+
+            const concurrentLogs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_DISABLED', success: false, reasonCode: 'MFA_DISABLED_CONCURRENT' },
+            });
+            expect(concurrentLogs.length).toBeGreaterThanOrEqual(1);
+
+            const serialized = JSON.stringify(concurrentLogs);
+            expect(serialized).not.toContain('adminPassword123');
+        });
+
+        it('MFA_BACKUP_CODES_REGENERATED audit: success, exact action/entityType, no plaintext codes', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const mfaToken = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', mfaToken);
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            const currentTotp = generateTotp(secret);
+            const res = await regenerateCodesPost(new Request('http://localhost/api/admin/mfa/recovery-codes/regenerate', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123', code: currentTotp }),
+            }));
+
+            expect(res!.status).toBe(200);
+            const data = await res!.json();
+            expect(data.recoveryCodes).toBeDefined();
+            expect(data.recoveryCodes.length).toBe(10);
+
+            const logs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_BACKUP_CODES_REGENERATED' },
+            });
+            expect(logs).toHaveLength(1);
+            expect(logs[0].success).toBe(true);
+            expect(logs[0].entityType).toBe('MFA');
+            expect(logs[0].entityId).toBe(testAdminUser.id);
+
+            const serialized = JSON.stringify(logs);
+            expect(serialized).not.toContain('adminPassword123');
+            for (const code of data.recoveryCodes) {
+                expect(serialized).not.toContain(code);
+            }
+        });
+
+        it('MFA_RECOVERY_SUCCESS audit: exact action/success/method, no plaintext recovery code', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const codes = generateRecoveryCodes(1);
+            const recoveryCode = codes[0];
+            await prisma.recoveryCode.create({
+                data: { userId: testAdminUser.id, codeHash: hashRecoveryCode(recoveryCode) },
+            });
+
+            const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            const res = await mfaVerifyPost(new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken, code: recoveryCode, factor: 'recovery' }),
+            }));
+
+            expect(res.status).toBe(200);
+
+            const logs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_RECOVERY_SUCCESS' },
+            });
+            expect(logs).toHaveLength(1);
+            expect(logs[0].success).toBe(true);
+            expect(logs[0].entityType).toBe('MFA');
+
+            const serialized = JSON.stringify(logs);
+            expect(serialized).not.toContain(recoveryCode);
+        });
+
+        it('MFA_RECOVERY_FAILED audit: invalid recovery code → exact action/reasonCode, no secret', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            const res = await mfaVerifyPost(new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken, code: 'WRONG-CODE-12345', factor: 'recovery' }),
+            }));
+
+            expect(res.status).toBe(401);
+            const body = await res.json();
+            expect(body.code).toBe('MFA_INVALID_RECOVERY_CODE');
+
+            const logs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_RECOVERY_FAILED' },
+            });
+            expect(logs.length).toBeGreaterThanOrEqual(1);
+            expect(logs[0].success).toBe(false);
+            expect(logs[0].reasonCode).toBe('MFA_INVALID_RECOVERY_CODE');
+
+            const serialized = JSON.stringify(logs);
+            expect(serialized).not.toContain('WRONG-CODE-12345');
+            expect(serialized).not.toContain(secret);
+        });
+
+        it('MFA_RECOVERY_FAILED audit: challenge replay → exact action/reasonCode', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const codes = generateRecoveryCodes(2);
+            const [code1, code2] = codes;
+            await prisma.recoveryCode.createMany({
+                data: [
+                    { userId: testAdminUser.id, codeHash: hashRecoveryCode(code1) },
+                    { userId: testAdminUser.id, codeHash: hashRecoveryCode(code2) },
+                ],
+            });
+
+            const challengeToken = await createMfaChallengeToken(testAdminUser.id, 'ADMIN');
+
+            // First use succeeds (valid recovery code + valid challenge)
+            const firstRes = await mfaVerifyPost(new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken, code: code1, factor: 'recovery' }),
+            }));
+            expect(firstRes.status).toBe(200);
+
+            await prisma.auditLog.deleteMany({ where: { actorId: testAdminUser.id } });
+
+            // Second use with same challenge + different valid recovery code → replay
+            const res = await mfaVerifyPost(new Request('http://localhost/api/auth/mfa/verify', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ challengeToken, code: code2, factor: 'recovery' }),
+            }));
+
+            expect(res.status).toBe(401);
+            const body = await res.json();
+            expect(body.code).toBe('MFA_CHALLENGE_REPLAY');
+
+            const logs = await prisma.auditLog.findMany({
+                where: { actorId: testAdminUser.id, action: 'MFA_RECOVERY_FAILED', reasonCode: 'MFA_CHALLENGE_REPLAY' },
+            });
+            expect(logs.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('Regeneration contention loser: HTTP 409 + MFA_REGEN_CONCURRENT', async () => {
+            const secret = generateTotpSecret();
+            const { encryptedSecret, keyVersion } = encryptMfaSecret(secret);
+            await prisma.user.update({
+                where: { id: testAdminUser.id },
+                data: { mfaEnabled: true, mfaSecret: encryptedSecret, mfaKeyVersion: keyVersion, mfaEnabledAt: new Date() },
+            });
+
+            const mfaToken = await signJWT({ userId: testAdminUser.id, role: 'ADMIN', mfa: true });
+            mockCookiesStore.set('auth_token', mfaToken);
+
+            const currentTotp = generateTotp(secret);
+            const makeReq = () => new Request('http://localhost/api/admin/mfa/recovery-codes/regenerate', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123', code: currentTotp }),
+            });
+
+            const [res1, res2] = await Promise.all([regenerateCodesPost(makeReq()), regenerateCodesPost(makeReq())]);
+
+            const statuses = [res1!.status, res2!.status];
+            const conflictCount = statuses.filter(s => s === 409).length;
+            expect(conflictCount).toBe(1);
+
+            const loser = [res1, res2].find(r => r!.status === 409);
+            expect(loser).toBeDefined();
+            const loserBody = await loser!.json();
+            expect(loserBody.code).toBe('MFA_REGEN_CONCURRENT');
+        });
+
+        it('Stale enrollment: generation A superseded by B → 409 + MFA_ENROLLMENT_STALE + enrollmentJti audit', async () => {
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startA = await enrollStartPost(new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            }));
+            const dataA = await startA!.json();
+
+            const startB = await enrollStartPost(new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            }));
+            const dataB = await startB!.json();
+
+            // Complete B first
+            const confirmB = await enrollConfirmPost(new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: dataB.setupToken, code: generateTotp(dataB.secret) }),
+            }));
+            expect(confirmB!.status).toBe(200);
+
+            // Extract mfa:true JWT from confirmB response
+            const confirmBCookie = confirmB!.headers.get('set-cookie');
+            const bTokenMatch = confirmBCookie?.match(/auth_token=([^;]+)/);
+            if (bTokenMatch) mockCookiesStore.set('auth_token', bTokenMatch[1]);
+
+            // A is now stale
+            const confirmA = await enrollConfirmPost(new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: dataA.setupToken, code: generateTotp(dataA.secret) }),
+            }));
+            expect(confirmA!.status).toBe(409);
+            const bodyA = await confirmA!.json();
+            expect(bodyA.code).toBe('MFA_ENROLLMENT_STALE');
+
+            const staleLog = await prisma.auditLog.findFirst({
+                where: { actorId: testAdminUser.id, action: 'MFA_ENROLL_COMPLETED', reasonCode: 'MFA_ENROLLMENT_STALE' },
+            });
+            expect(staleLog).toBeDefined();
+            expect(staleLog!.metadata).toContain('enrollmentJti');
+        });
+
+        it('Enrollment replay: same setup token used twice → 401 + MFA_ENROLLMENT_REPLAY', async () => {
+            const token = await signJWT({ userId: testAdminUser.id, role: 'ADMIN' });
+            mockCookiesStore.set('auth_token', token);
+
+            const startRes = await enrollStartPost(new Request('http://localhost/api/admin/mfa/enroll/start', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ password: 'adminPassword123' }),
+            }));
+            const startData = await startRes!.json();
+            const currentTotp = generateTotp(startData.secret);
+
+            // First confirm succeeds
+            const confirm1 = await enrollConfirmPost(new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: startData.setupToken, code: currentTotp }),
+            }));
+            expect(confirm1!.status).toBe(200);
+
+            // Extract mfa:true JWT from confirm1 response
+            const confirm1Cookie = confirm1!.headers.get('set-cookie');
+            const tokenMatch = confirm1Cookie?.match(/auth_token=([^;]+)/);
+            if (tokenMatch) mockCookiesStore.set('auth_token', tokenMatch[1]);
+
+            // Second confirm with same token → replay
+            const confirm2 = await enrollConfirmPost(new Request('http://localhost/api/admin/mfa/enroll/confirm', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ setupToken: startData.setupToken, code: currentTotp }),
+            }));
+            expect(confirm2!.status).toBe(401);
+            const body = await confirm2!.json();
+            expect(body.code).toBe('MFA_ENROLLMENT_REPLAY');
+        });
     });
 
     // ============================================================
