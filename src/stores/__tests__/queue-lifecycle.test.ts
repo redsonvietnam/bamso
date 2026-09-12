@@ -223,4 +223,118 @@ describe("queue realtime lifecycle (WP-02B)", () => {
         expect(state.serviceId).toBeNull();
         expect(state.loadError).toBeNull();
     });
+
+    it("late REST success after disconnect creates no EventSource and keeps reset state", async () => {
+        const gate = deferred<unknown[]>();
+        mockGet.mockReturnValueOnce(gate.promise);
+
+        const pending = useQueueStore.getState().connectSSE("svc-a");
+        expect(useQueueStore.getState().status).toBe("initial-loading");
+
+        // Generation superseded while REST A is still in flight.
+        useQueueStore.getState().disconnectSSE();
+        expect(useQueueStore.getState().status).toBe("disconnected");
+        expect(useQueueStore.getState().serviceId).toBeNull();
+
+        gate.resolve([pendingTicket("stale-1")]);
+        await pending;
+
+        const state = useQueueStore.getState();
+        expect(state.tickets).toEqual([]);
+        expect(state.snapshot).toBeNull();
+        expect(state.status).toBe("disconnected");
+        expect(state.serviceId).toBeNull();
+        expect(state.loadError).toBeNull();
+        expect(state.isConnected).toBe(false);
+        expect(MockEventSource.instances).toHaveLength(0);
+    });
+
+    it("late REST failure after disconnect cannot resurrect an error state", async () => {
+        const gate = deferred<unknown[]>();
+        mockGet.mockReturnValueOnce(gate.promise);
+
+        const pending = useQueueStore.getState().connectSSE("svc-a");
+        useQueueStore.getState().disconnectSSE();
+
+        gate.reject(new Error("stale-boom"));
+        await pending;
+
+        const state = useQueueStore.getState();
+        expect(state.status).toBe("disconnected");
+        expect(state.loadError).toBeNull();
+        expect(state.tickets).toEqual([]);
+        expect(state.serviceId).toBeNull();
+        expect(MockEventSource.instances).toHaveLength(0);
+    });
+
+    it("stale SSE callbacks cannot overwrite current tickets, service, status, or loadError", async () => {
+        // Generation 1 fails REST: explicit load-error, its EventSource exists.
+        mockGet.mockRejectedValueOnce(new Error("boom-A"));
+        await useQueueStore.getState().connectSSE("svc-a");
+        const staleSource = lastSource();
+        expect(useQueueStore.getState().status).toBe("load-error");
+
+        // Generation 2 supersedes it with its own load-error.
+        mockGet.mockRejectedValueOnce(new Error("boom-B"));
+        await useQueueStore.getState().connectSSE("svc-b");
+        expect(useQueueStore.getState().loadError).toBe("boom-B");
+        expect(staleSource.closed).toBe(true);
+
+        // Every late callback from the superseded generation is ignored.
+        staleSource.onopen?.();
+        staleSource.onmessage?.({
+            data: JSON.stringify({ type: "QUEUE_UPDATE", tickets: [pendingTicket("stale-1")] }),
+        });
+        staleSource.onerror?.();
+
+        const state = useQueueStore.getState();
+        expect(state.serviceId).toBe("svc-b");
+        expect(state.status).toBe("load-error");
+        expect(state.loadError).toBe("boom-B");
+        expect(state.tickets).toEqual([]);
+        expect(state.snapshot).toBeNull();
+        expect(state.isConnected).toBe(false);
+        // No EventSource created or replaced by the stale generation.
+        expect(MockEventSource.instances).toHaveLength(2);
+        expect(lastSource().closed).toBe(false);
+    });
+
+    it("stale SSE open/message after disconnect cannot mark connected or restore tickets", async () => {
+        mockGet.mockResolvedValue([pendingTicket("t1")]);
+        await useQueueStore.getState().connectSSE("svc-a");
+        const staleSource = lastSource();
+
+        useQueueStore.getState().disconnectSSE();
+
+        staleSource.onopen?.();
+        staleSource.onmessage?.({
+            data: JSON.stringify({ type: "QUEUE_UPDATE", tickets: [pendingTicket("stale-1")] }),
+        });
+
+        const state = useQueueStore.getState();
+        expect(state.status).toBe("disconnected");
+        expect(state.isConnected).toBe(false);
+        expect(state.tickets).toEqual([]);
+        expect(state.snapshot).toBeNull();
+        expect(state.serviceId).toBeNull();
+    });
+
+    it("stale SSE error cannot downgrade a healthy current generation", async () => {
+        mockGet.mockResolvedValue([pendingTicket("t1")]);
+        await useQueueStore.getState().connectSSE("svc-a");
+        const staleSource = lastSource();
+
+        mockGet.mockResolvedValue([pendingTicket("t2")]);
+        await useQueueStore.getState().connectSSE("svc-b");
+        lastSource().onopen?.();
+        expect(useQueueStore.getState().status).toBe("connected");
+
+        staleSource.onerror?.();
+
+        const state = useQueueStore.getState();
+        expect(state.status).toBe("connected");
+        expect(state.isConnected).toBe(true);
+        expect(state.serviceId).toBe("svc-b");
+        expect(state.tickets.map((t) => t.id)).toEqual(["t2"]);
+    });
 });
