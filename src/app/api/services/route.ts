@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
-import { validateAllowedModes } from '@/lib/api-validation';
+import { isBlankString, validateAllowedModes } from '@/lib/api-validation';
 
 export async function GET(request: Request) {
     try {
@@ -81,6 +81,16 @@ export async function PUT(request: Request) {
                 { error: 'id là bắt buộc', code: 'MISSING_ID' },
                 { status: 400 }
             );
+        }
+
+        for (const field of ['code', 'name', 'color', 'prefix'] as const) {
+            const value = body[field];
+            if (value !== undefined && isBlankString(value)) {
+                return NextResponse.json(
+                    { error: `${field} không được để trống`, code: 'INVALID_FIELDS' },
+                    { status: 400 }
+                );
+            }
         }
 
         const updateData: Record<string, unknown> = {};

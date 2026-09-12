@@ -37,6 +37,10 @@ export function requiredPositiveInteger(value: unknown): boolean {
     return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
+export function isBlankString(value: unknown): boolean {
+    return typeof value !== 'string' || value.trim() === '';
+}
+
 const SAFE_ERROR_MESSAGES: Record<string, string> = {
     'Không còn số thứ tự': 'Không còn số thứ tự nào đang chờ.',
     'Không thể gọi vé': 'Không thể gọi vé — vui lòng thử lại.',
