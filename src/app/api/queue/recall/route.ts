@@ -54,9 +54,10 @@ export async function POST(request: Request) {
         });
 
         await broadcastDisplayCall(
+            crypto.randomUUID(),
             currentTicket.ticketNumber,
             pos as string,
-            currentTicket.customerName,
+            currentTicket.customerName ?? undefined,
             nextPending?.ticketNumber
         );
 

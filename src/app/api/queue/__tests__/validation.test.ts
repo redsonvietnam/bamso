@@ -124,7 +124,7 @@ describe('call-next route pos contract', () => {
                 idempotencyKey: undefined,
             });
             expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
-            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
+            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('test-event-1', 'A001', 'Q1', 'Nguyễn Văn A', undefined);
         } finally {
             global.setImmediate = originalSetImmediate;
         }

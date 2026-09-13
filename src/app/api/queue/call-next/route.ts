@@ -92,8 +92,11 @@ export async function POST(request: Request) {
         //
         // CORE-06: The durable DisplayCallEvent was already created atomically
         // inside the transaction. Transport delivery is best-effort; the event
-        // remains recoverable via display reconnect or server restart until
-        // marked DELIVERED.
+        // remains PENDING (recoverable via display reconnect) until the SSE
+        // display endpoint marks it DELIVERED after successful server-side
+        // enqueue. We do NOT mark DELIVERED here because broadcastDisplayCall
+        // swallows transport failures via Promise.allSettled — marking
+        // DELIVERED here would destroy recoverability.
 
         if (replayed || !displayEvent) {
             return NextResponse.json(ticket);
@@ -104,20 +107,17 @@ export async function POST(request: Request) {
                 await Promise.allSettled([
                     broadcastQueueUpdate(displayEvent.serviceId),
                     broadcastDisplayCall(
+                        displayEvent.eventId,
                         displayEvent.ticketNumber,
                         displayEvent.pos,
                         displayEvent.customerName,
                         displayEvent.nextTicketNumber ?? undefined,
                     ),
                 ]);
-
-                // Mark DELIVERED after transport attempt completes.
-                // If process crashes before this line, the event stays PENDING
-                // and will be recovered on display reconnect / server restart.
-                await prisma.displayCallEvent.update({
-                    where: { eventId: displayEvent.eventId },
-                    data: { status: 'DELIVERED' },
-                });
+                // Do NOT mark DELIVERED here. The event stays PENDING until
+                // the SSE display endpoint successfully enqueues it during
+                // reconnect or live subscription. This ensures transport
+                // failures never destroy recoverability.
             } catch (err) {
                 logger.error('Post-call-next broadcast failed:', err);
             }

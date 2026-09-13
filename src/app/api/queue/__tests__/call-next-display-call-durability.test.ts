@@ -359,9 +359,12 @@ describe('POST /api/queue/call-next display call durability (WP-CORE-06)', () =>
                 expect(vi.mocked(broadcastDisplayCall)).toHaveBeenCalledTimes(1);
             });
 
+            const events = await displayEvents(svc.id);
+            expect(events).toHaveLength(1);
             const callArgs = vi.mocked(broadcastDisplayCall).mock.calls[0];
-            expect(callArgs[0]).toBe(res.body.ticketNumber);
-            expect(callArgs[1]).toBe(SERVICE_POS);
+            expect(callArgs[0]).toBe(events[0].eventId);
+            expect(callArgs[1]).toBe(res.body.ticketNumber);
+            expect(callArgs[2]).toBe(SERVICE_POS);
         } finally {
             global.setImmediate = originalSetImmediate;
         }
@@ -384,5 +387,137 @@ describe('POST /api/queue/call-next display call durability (WP-CORE-06)', () =>
 
         const events = await displayEvents(svc.id);
         expect(events).toHaveLength(1);
+    });
+
+    it('process boundary: event persists across process boundaries (Part 9/11)', async () => {
+        const { execSync } = await import('child_process');
+        const path = await import('path');
+
+        const helperPath = path.resolve(__dirname, 'process-boundary-helper.ts');
+        const output = execSync(`npx tsx --tsconfig tsconfig.json ${helperPath}`, {
+            cwd: process.cwd(),
+            timeout: 30000,
+            encoding: 'utf-8',
+            env: { ...process.env },
+        });
+
+        const result = JSON.parse(output.trim());
+        expect(result.error).toBeUndefined();
+        expect(result.eventId).toBeTruthy();
+        expect(result.eventStatus).toBe('PENDING');
+        expect(result.eventCount).toBe(1);
+
+        // Prove persistence: query the database directly from this process
+        const events = await prisma.displayCallEvent.findMany({
+            where: { serviceId: result.serviceId },
+        });
+        expect(events).toHaveLength(1);
+        expect(events[0].eventId).toBe(result.eventId);
+        expect(events[0].status).toBe('PENDING');
+        expect(events[0].ticketId).toBe(result.ticketId);
+
+        // Cleanup
+        await prisma.auditLog.deleteMany({ where: { actorId: 'core6-proc-user' } });
+        await prisma.displayCallEvent.deleteMany({ where: { serviceId: result.serviceId } });
+        await prisma.ticket.deleteMany({ where: { serviceId: result.serviceId } });
+        await prisma.service.delete({ where: { id: result.serviceId } });
+    });
+
+    it('Redis failure: event remains PENDING and recoverable (Part 10)', async () => {
+        const svc = await setupServiceWithPending(2);
+
+        // Mock getRedisClient to return a client that throws on publish.
+        // This proves that Redis failure does NOT destroy event recoverability.
+        vi.doMock('@/lib/redis', () => ({
+            getRedisClient: () => ({
+                publish: vi.fn().mockRejectedValue(new Error('Redis connection refused')),
+            }),
+            getRedisPubSubClient: () => null,
+        }));
+
+        // Re-import to pick up the mock
+        vi.resetModules();
+        void (await import('@/lib/sse-broker'));
+
+        const res = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}redis-fail-real`);
+        expect(res.status).toBe(200);
+
+        // Event exists and is PENDING — transport failure did not destroy recoverability
+        const events = await displayEvents(svc.id);
+        expect(events).toHaveLength(1);
+        expect(events[0].status).toBe('PENDING');
+        expect(events[0].eventId).toBeTruthy();
+
+        vi.doUnmock('@/lib/redis');
+        vi.resetModules();
+    });
+
+    it('eventId is stable: persisted eventId === transported eventId === replayed eventId (Part 2)', async () => {
+        const svc = await setupServiceWithPending(3);
+        const { broadcastDisplayCall } = await import('@/lib/sse-broker');
+
+        const originalSetImmediate = global.setImmediate;
+        global.setImmediate = ((fn: () => void) => fn()) as unknown as typeof setImmediate;
+        try {
+            const res = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}stable-eid`);
+            expect(res.status).toBe(200);
+
+            await vi.waitFor(() => {
+                expect(vi.mocked(broadcastDisplayCall)).toHaveBeenCalledTimes(1);
+            });
+
+            const events = await displayEvents(svc.id);
+            expect(events).toHaveLength(1);
+            const persistedEventId = events[0].eventId;
+
+            // Transported eventId matches persisted eventId
+            const callArgs = vi.mocked(broadcastDisplayCall).mock.calls[0];
+            expect(callArgs[0]).toBe(persistedEventId);
+
+            // Replay (same key) returns the same eventId
+            const retry = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}stable-eid`);
+            expect(retry.status).toBe(200);
+            const eventsAfterRetry = await displayEvents(svc.id);
+            expect(eventsAfterRetry).toHaveLength(1);
+            expect(eventsAfterRetry[0].eventId).toBe(persistedEventId);
+        } finally {
+            global.setImmediate = originalSetImmediate;
+        }
+    });
+
+    it('ordering is deterministic under concurrent calls to different counters (Part 8)', async () => {
+        const svc = await setupServiceWithPending(6);
+
+        // Concurrent calls to different counters — sequence allocation may race
+        const [r1, r2, r3] = await Promise.all([
+            postCallNext(svc.id, 'Quầy 1', `${KEY_PREFIX}order-conc-1`),
+            postCallNext(svc.id, 'Quầy 2', `${KEY_PREFIX}order-conc-2`),
+            postCallNext(svc.id, 'Quầy 1', `${KEY_PREFIX}order-conc-3`),
+        ]);
+
+        expect(r1.status).toBe(200);
+        expect(r2.status).toBe(200);
+        expect(r3.status).toBe(200);
+
+        const events = await displayEvents(svc.id);
+        expect(events).toHaveLength(3);
+
+        // Ordering by createdAt + id is deterministic regardless of sequence values
+        // All events must have unique eventIds
+        const eventIds = events.map((e) => e.eventId);
+        expect(new Set(eventIds).size).toBe(3);
+
+        // Events must be ordered by createdAt (all within same second, so id breaks ties)
+        for (let i = 1; i < events.length; i++) {
+            const prev = events[i - 1];
+            const curr = events[i];
+            const prevTime = prev.createdAt.getTime();
+            const currTime = curr.createdAt.getTime();
+            if (prevTime === currTime) {
+                expect(prev.id.localeCompare(curr.id)).toBeLessThan(0);
+            } else {
+                expect(prevTime).toBeLessThanOrEqual(currTime);
+            }
+        }
     });
 });

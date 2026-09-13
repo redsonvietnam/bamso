@@ -14,19 +14,21 @@ export async function GET() {
             // - process crash after CALL-NEXT commit but before transport
             // - display disconnect while event was created
             // - server restart with undelivered events
-            // Events are ordered by sequence for deterministic replay.
+            // Events are ordered by createdAt + id for deterministic replay
+            // regardless of sequence allocation races.
             const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
             const pendingEvents = await prisma.displayCallEvent.findMany({
                 where: {
                     status: 'PENDING',
                     createdAt: { gte: startOfDay, lte: endOfDay },
                 },
-                orderBy: { sequence: 'asc' },
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
             });
 
             for (const event of pendingEvents) {
                 const payload = JSON.stringify({
                     type: 'DISPLAY_CALL',
+                    eventId: event.eventId,
                     ticketNumber: event.ticketNumber,
                     pos: event.pos,
                     customerName: event.customerName || null,
