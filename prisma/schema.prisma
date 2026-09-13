@@ -87,6 +87,13 @@ model CallNextIdempotency {
   updatedAt    DateTime @updatedAt
 }
 
+model CreateTicketIdempotency {
+  key         String   @id // client-supplied Idempotency-Key: one logical CREATE-TICKET operation
+  fingerprint String   // JSON of serviceId + customerName + phone; key reuse with a different fingerprint is rejected
+  ticketJson  String   // canonical JSON of the original ticket creation result for replay
+  createdAt   DateTime @default(now())
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorType  String   // USER | ANONYMOUS | SYSTEM

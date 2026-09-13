@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createTicket } from '@/lib/ticket-service';
+import { createTicketIdempotent, IdempotencyConflictError } from '@/lib/ticket-service';
 import { TicketStatus, UserRole } from '@/lib/constants';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
@@ -118,18 +118,36 @@ export async function POST(request: Request) {
             );
         }
 
-        const ticket = await createTicket({
-            serviceId,
-            customerName: customerName as string | undefined,
-            phone: phone as string | undefined,
-        });
+        const ticket = await createTicketIdempotent(
+            {
+                serviceId,
+                customerName: customerName as string | undefined,
+                phone: phone as string | undefined,
+            },
+            request.headers.get('Idempotency-Key')
+        );
 
-        void broadcastQueueUpdate(ticket.serviceId).catch((err) => {
-            logger.error('Ticket queue broadcast failed:', err);
-        });
+        if (!ticket.replayed) {
+            void broadcastQueueUpdate(ticket.ticket.serviceId).catch((err) => {
+                logger.error('Ticket queue broadcast failed:', err);
+            });
+        }
 
-        return NextResponse.json(ticket, { status: 201 });
+        return NextResponse.json(ticket.ticket, { status: ticket.replayed ? 200 : 201 });
     } catch (error) {
+        if (error instanceof IdempotencyConflictError) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'IDEMPOTENCY_CONFLICT',
+            });
+            return NextResponse.json(
+                { error: error.message, code: error.code },
+                { status: error.status }
+            );
+        }
         logger.error('Ticket creation error:', error);
         const { message, isClientError } = sanitizeApiError(error);
         const isInactive = message.includes('ngừng hoạt động') || message.includes('không tồn tại');

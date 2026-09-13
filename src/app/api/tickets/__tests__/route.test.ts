@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST } from '@/app/api/tickets/route';
-import { createTicket } from '@/lib/ticket-service';
+import { createTicketIdempotent } from '@/lib/ticket-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
@@ -16,6 +16,14 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/ticket-service', () => ({
     createTicket: vi.fn(),
+    createTicketIdempotent: vi.fn(),
+    IdempotencyConflictError: class IdempotencyConflictError extends Error {
+        code = 'IDEMPOTENCY_CONFLICT';
+        status = 409;
+        constructor() {
+            super('Idempotency-Key đã được sử dụng cho một thao tác khác.');
+        }
+    },
 }));
 
 vi.mock('@/lib/sse-broker', () => ({
@@ -43,7 +51,7 @@ vi.mock('@/lib/logger', () => ({
     },
 }));
 
-const mockedCreateTicket = createTicket as ReturnType<typeof vi.fn>;
+const mockedCreateTicketIdempotent = createTicketIdempotent as ReturnType<typeof vi.fn>;
 const mockedBroadcastQueueUpdate = broadcastQueueUpdate as ReturnType<typeof vi.fn>;
 const mockedCheckRateLimit = checkRateLimit as ReturnType<typeof vi.fn>;
 const mockedGetClientIp = getClientIp as ReturnType<typeof vi.fn>;
@@ -86,10 +94,13 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockedGetClientIp.mockReturnValue('127.0.0.1');
     mockedCheckRateLimit.mockResolvedValue({ allowed: true });
-    mockedCreateTicket.mockResolvedValue({
-        id: 'ticket-1',
-        serviceId: 'svc-1',
-        ticketNumber: 'A001',
+    mockedCreateTicketIdempotent.mockResolvedValue({
+        ticket: {
+            id: 'ticket-1',
+            serviceId: 'svc-1',
+            ticketNumber: 'A001',
+        },
+        replayed: false,
     });
     mockedBroadcastQueueUpdate.mockResolvedValue(undefined);
 });
@@ -127,7 +138,7 @@ describe('POST /api/tickets', () => {
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_FIELDS' });
-        expect(mockedCreateTicket).not.toHaveBeenCalled();
+        expect(mockedCreateTicketIdempotent).not.toHaveBeenCalled();
     });
 
     it('returns 201 even when queue broadcast rejects', async () => {
