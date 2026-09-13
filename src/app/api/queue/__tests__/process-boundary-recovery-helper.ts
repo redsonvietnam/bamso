@@ -1,11 +1,10 @@
 // CORE-06 process-boundary recovery helper: called via child_process.fork()
-// Performs the actual display recovery path (what /api/sse/display does on reconnect):
-//   1. Read all PENDING DisplayCallEvents for today
-//   2. "Deliver" them (simulate SSE controller.enqueue)
-//   3. Mark DELIVERED
+// Invokes the PRODUCTION recovery function (display-recovery.ts) to prove
+// that recovery works across process boundaries through real production code.
 // Prints the result as JSON for the parent process to assert.
 
 import { PrismaClient } from '@prisma/client';
+import { recoverPendingDisplayEvents } from '@/lib/display-recovery';
 
 const prisma = new PrismaClient();
 
@@ -17,37 +16,20 @@ async function main() {
         process.exit(1);
     }
 
-    // This is the EXACT recovery path from /api/sse/display/route.ts:
-    // findMany PENDING → emit → updateMany DELIVERED
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-
-    const pendingEvents = await prisma.displayCallEvent.findMany({
-        where: {
-            status: 'PENDING',
-            serviceId,
-            createdAt: { gte: startOfDay, lte: endOfDay },
-        },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+    // Invoke the PRODUCTION recovery function — same code path as /api/sse/display
+    const { events, markDelivered } = await recoverPendingDisplayEvents(serviceId);
 
     // "Deliver" each event (in production: controller.enqueue SSE payload)
-    const delivered = pendingEvents.map((event) => ({
-        eventId: event.eventId,
-        ticketNumber: event.ticketNumber,
-        pos: event.pos,
-        customerName: event.customerName,
-        nextTicketNumber: event.nextTicketNumber,
+    const delivered = events.map((e) => ({
+        eventId: e.eventId,
+        ticketNumber: e.ticketNumber,
+        pos: e.pos,
+        customerName: e.customerName,
+        nextTicketNumber: e.nextTicketNumber,
     }));
 
-    // Mark DELIVERED (what SSE display endpoint does after enqueue)
-    if (pendingEvents.length > 0) {
-        await prisma.displayCallEvent.updateMany({
-            where: { id: { in: pendingEvents.map((e) => e.id) } },
-            data: { status: 'DELIVERED' },
-        });
-    }
+    // Mark DELIVERED (production delivery semantics)
+    await markDelivered();
 
     // Verify final state
     const afterRecovery = await prisma.displayCallEvent.findMany({
@@ -60,7 +42,7 @@ async function main() {
 
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({
-        pendingCount: pendingEvents.length,
+        pendingCount: events.length,
         delivered,
         afterRecovery: afterRecovery.map((e) => ({
             eventId: e.eventId,

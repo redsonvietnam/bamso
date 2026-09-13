@@ -514,22 +514,16 @@ describe('POST /api/queue/call-next display call durability (WP-CORE-06)', () =>
     });
 
     it('ordering contract: DETERMINISTIC recovery ordering under concurrent CALL-NEXT (Part 8)', async () => {
-        // ORDERING CONTRACT:
-        // Display recovery promises DETERMINISTIC ordering, not necessarily
-        // exact sub-millisecond causal ordering. Two concurrent CALL-NEXT
-        // operations to different counters are independent business actions;
-        // the display shows all calls in a stable, predictable order.
+        // ORDERING CONTRACT (canonicalized in display-recovery.ts):
+        // Recovery guarantees DETERMINISTIC, STABLE presentation order.
+        // It does NOT claim causal ordering between concurrent CALL-NEXT
+        // operations across counters.
         //
-        // Ordering is: createdAt ASC, id ASC
-        // - createdAt captures the wall-clock time of the CALL-NEXT transaction
-        // - id (UUID) breaks ties when createdAt is identical
-        // - This ordering is DETERMINISTIC: same events always produce same order
-        // - This ordering is STABLE: repeated recovery yields same result
+        // Order: createdAt ASC, then id ASC.
         //
-        // This is sufficient because:
-        // 1. All calls are shown (no missing events)
-        // 2. Order is consistent across reconnects
-        // 3. Concurrent calls to different counters are independent
+        // This is presentation order, not "canonical CALL-NEXT order".
+        // The business requires all calls shown and consistent order across
+        // reconnects, not exact causal sequence for concurrent cross-counter calls.
         const svc = await setupServiceWithPending(6);
 
         // Concurrent calls to different counters — sequence allocation may race

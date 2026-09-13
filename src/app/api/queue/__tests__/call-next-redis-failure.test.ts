@@ -1,6 +1,7 @@
 // @vitest-environment node
 // CORE-06: Redis-failure test exercising the REAL production dependency graph.
 // Does NOT mock @/lib/sse-broker — only injects a failing Redis publish.
+// Uses the PRODUCTION recovery function (display-recovery.ts).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +28,7 @@ vi.mock('@/lib/redis', () => ({
 import prisma from '@/lib/db';
 import { createTicket } from '@/lib/ticket-service';
 import { POST } from '@/app/api/queue/call-next/route';
+import { recoverPendingDisplayEvents } from '@/lib/display-recovery';
 
 const SERVICE_CODE = 'CORE6REDIS';
 const SERVICE_POS = 'Quầy 1';
@@ -100,63 +102,54 @@ afterEach(async () => {
 });
 
 describe('CORE-06: Redis failure — real production path', () => {
-    it('TEST A: CALL-NEXT commits event, broadcastDisplayCall fails at Redis, event stays PENDING, recovery delivers same eventId', async () => {
+    it('TEST A: CALL-NEXT commits event, broadcastDisplayCall fails at Redis, recovery discovers same eventId, event resolves', async () => {
         const svc = await setupServiceWithPending(3);
 
-        // 1. Fresh CALL-NEXT commits — event exists as PENDING
+        // 1. Fresh CALL-NEXT — real production route executes
         const res = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}redis-real-1`);
         expect(res.status).toBe(200);
 
+        // 2. DisplayCallEvent exists as PENDING
         const events = await displayEvents(svc.id);
         expect(events).toHaveLength(1);
         expect(events[0].status).toBe('PENDING');
         const originalEventId = events[0].eventId;
         expect(originalEventId).toBeTruthy();
 
-        // 2. broadcastDisplayCall WAS called (real production path exercised)
-        //    The mock Redis publish failed, but the route completed successfully.
+        // 3. broadcastDisplayCall() executed (real production path)
+        //    Redis publish failed (mocked to throw), but the route completed.
         //    The event stays PENDING because only the SSE display endpoint
         //    marks DELIVERED after successful server-side enqueue.
-        //
-        //    We prove the broadcast was attempted by checking that the Redis
-        //    mock's publish was called (it was mocked to fail).
-        //    The real sse-broker called getRedisClient().publish() which threw.
-        //    broadcastDisplayCall swallows this via Promise.allSettled.
 
-        // 3. Simulate recovery: what the SSE display endpoint does on reconnect.
-        //    Read PENDING events, "deliver" them, mark DELIVERED.
-        const pendingEvents = await prisma.displayCallEvent.findMany({
-            where: { serviceId: svc.id, status: 'PENDING' },
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        });
-        expect(pendingEvents).toHaveLength(1);
-        expect(pendingEvents[0].eventId).toBe(originalEventId);
+        // 4. Invoke PRODUCTION recovery function
+        const { events: recovered, markDelivered } = await recoverPendingDisplayEvents(svc.id);
 
-        // Recovery "delivers" the event (simulates SSE controller.enqueue + updateMany)
-        await prisma.displayCallEvent.updateMany({
-            where: { id: { in: pendingEvents.map((e) => e.id) } },
-            data: { status: 'DELIVERED' },
-        });
+        // 5. Same eventId is emitted
+        expect(recovered).toHaveLength(1);
+        expect(recovered[0].eventId).toBe(originalEventId);
 
-        // 4. After recovery: same eventId, status is DELIVERED
+        // 6. Event resolves according to production delivery semantics
+        await markDelivered();
+
+        // 7. Final state: DELIVERED
         const afterRecovery = await displayEvents(svc.id);
         expect(afterRecovery).toHaveLength(1);
         expect(afterRecovery[0].eventId).toBe(originalEventId);
         expect(afterRecovery[0].status).toBe('DELIVERED');
 
-        // 5. No second Ticket mutation — only one CALLED ticket
+        // 8. Exactly one Ticket
         const called = await prisma.ticket.findMany({
             where: { serviceId: svc.id, status: 'CALLED' },
         });
         expect(called).toHaveLength(1);
         expect(called[0].id).toBe(res.body.id);
 
-        // 6. No second DisplayCallEvent — exactly one event for this CALL-NEXT
+        // 9. Exactly one DisplayCallEvent
         const allEvents = await displayEvents(svc.id);
         expect(allEvents).toHaveLength(1);
     });
 
-    it('TEST B: after Redis restoration, recovery delivers the event', async () => {
+    it('TEST B: after Redis restoration, production recovery delivers the event', async () => {
         const svc = await setupServiceWithPending(3);
 
         // CALL-NEXT with failing Redis
@@ -168,27 +161,17 @@ describe('CORE-06: Redis failure — real production path', () => {
         expect(events[0].status).toBe('PENDING');
         const eventId = events[0].eventId;
 
-        // Simulate: Redis is now restored. Recovery path (SSE display reconnect)
-        // discovers PENDING events and delivers them.
-        const pendingEvents = await prisma.displayCallEvent.findMany({
-            where: { serviceId: svc.id, status: 'PENDING' },
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        });
+        // Invoke PRODUCTION recovery function (simulates SSE display reconnect)
+        const { events: recovered, markDelivered } = await recoverPendingDisplayEvents(svc.id);
 
-        // Recovery emits the event to connected display clients
-        // (in production this is controller.enqueue in the SSE display endpoint)
-        for (const event of pendingEvents) {
-            // Verify the event payload is complete and correct
-            expect(event.eventId).toBe(eventId);
-            expect(event.ticketNumber).toBeTruthy();
-            expect(event.pos).toBe(SERVICE_POS);
-        }
+        // Verify payload completeness
+        expect(recovered).toHaveLength(1);
+        expect(recovered[0].eventId).toBe(eventId);
+        expect(recovered[0].ticketNumber).toBeTruthy();
+        expect(recovered[0].pos).toBe(SERVICE_POS);
 
-        // Mark DELIVERED (what SSE display endpoint does after enqueue)
-        await prisma.displayCallEvent.updateMany({
-            where: { id: { in: pendingEvents.map((e) => e.id) } },
-            data: { status: 'DELIVERED' },
-        });
+        // Mark DELIVERED (production delivery semantics)
+        await markDelivered();
 
         // Verify: event resolved, no duplicates
         const final = await displayEvents(svc.id);
