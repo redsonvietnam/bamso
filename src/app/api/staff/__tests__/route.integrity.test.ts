@@ -1,6 +1,8 @@
 // @vitest-environment node
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import path from 'path';
+import fs from 'fs';
 
 vi.mock('@/lib/api-auth', () => ({
     requireRole: vi.fn(async () => ({ payload: { userId: 'test-admin', role: 'ADMIN' } })),
@@ -10,39 +12,56 @@ vi.mock('@/lib/logger', () => ({
     logger: { error: vi.fn(), warn: vi.fn(), log: vi.fn(), debug: vi.fn() },
 }));
 
-import prisma from '@/lib/db';
-import { hashPassword } from '@/lib/password';
-import { DELETE, PUT } from '@/app/api/staff/route';
+import type { PrismaClient } from '@prisma/client';
 
-const PREFIX = 'core1_';
-const SEED_ADMIN = { username: 'admin', name: 'Admin User', password: 'admin@2026' };
+// Isolated SQLite file for the last-admin race: the singleton prisma client
+// and the route handlers are imported dynamically AFTER DATABASE_URL points
+// here, so this file never touches the shared dev database and can own the
+// entire admin set deterministically. Production code is unchanged.
+const ORIGINAL_DATABASE_URL = process.env.DATABASE_URL;
+const TEST_DB_PATH = path.resolve(process.cwd(), 'prisma', 'test-core1-race.db');
+const TEST_DATABASE_URL = `file:${TEST_DB_PATH.replace(/\\/g, '/')}?socket_timeout=5&connection_limit=1`;
 
-async function cleanupTestUsers() {
-    await prisma.user.deleteMany({ where: { username: { startsWith: PREFIX } } });
+// Mirrors the User model columns used by the staff routes. Fails loudly on
+// drift; intentionally scoped to what these tests exercise.
+const USER_DDL = `
+CREATE TABLE IF NOT EXISTS "User" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "username" TEXT NOT NULL,
+  "passwordHash" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "role" TEXT NOT NULL DEFAULT 'STAFF',
+  "mfaEnabled" INTEGER NOT NULL DEFAULT 0,
+  "mfaSecret" TEXT,
+  "mfaKeyVersion" TEXT,
+  "mfaEnabledAt" DATETIME,
+  "enrollmentJti" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username");
+`;
+
+function removeTestDbFiles() {
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+        try {
+            fs.unlinkSync(`${TEST_DB_PATH}${suffix}`);
+        } catch {
+            // Missing file is the expected case.
+        }
+    }
 }
 
-async function ensureSeedAdmin() {
-    await prisma.user.upsert({
-        where: { username: SEED_ADMIN.username },
-        update: {
-            passwordHash: hashPassword(SEED_ADMIN.password),
-            name: SEED_ADMIN.name,
-            role: 'ADMIN',
-        },
-        create: {
-            username: SEED_ADMIN.username,
-            passwordHash: hashPassword(SEED_ADMIN.password),
-            name: SEED_ADMIN.name,
-            role: 'ADMIN',
-        },
-    });
-}
+let prisma!: PrismaClient;
+let DELETE!: typeof import('@/app/api/staff/route').DELETE;
+let PUT!: typeof import('@/app/api/staff/route').PUT;
 
 async function createAdmin(username: string) {
     return prisma.user.create({
         data: {
+            // Dummy hash: requireRole is mocked, so no password is verified.
             username,
-            passwordHash: hashPassword('TestPassword123'),
+            passwordHash: 'test-hash-not-verified',
             name: username,
             role: 'ADMIN',
         },
@@ -54,7 +73,7 @@ async function createStaff(username: string) {
     return prisma.user.create({
         data: {
             username,
-            passwordHash: hashPassword('TestPassword123'),
+            passwordHash: 'test-hash-not-verified',
             name: 'Original Name',
             role: 'STAFF',
         },
@@ -78,77 +97,88 @@ async function putRequest(payload: Record<string, unknown>) {
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }
 
+beforeAll(async () => {
+    removeTestDbFiles();
+    process.env.DATABASE_URL = TEST_DATABASE_URL;
+    vi.resetModules();
+    prisma = (await import('@/lib/db')).default;
+    const route = await import('@/app/api/staff/route');
+    DELETE = route.DELETE;
+    PUT = route.PUT;
+    await prisma.$executeRawUnsafe(USER_DDL);
+}, 120000);
+
 beforeEach(async () => {
     vi.clearAllMocks();
-    await cleanupTestUsers();
-    await ensureSeedAdmin();
+    await prisma.user.deleteMany({});
 });
 
 afterEach(async () => {
-    await cleanupTestUsers();
-    await ensureSeedAdmin();
+    await prisma.user.deleteMany({});
+});
+
+afterAll(async () => {
+    await prisma.$disconnect().catch(() => undefined);
+    process.env.DATABASE_URL = ORIGINAL_DATABASE_URL;
+    removeTestDbFiles();
 });
 
 describe('DELETE /api/staff last-admin invariant (CORE-01)', () => {
-    it('concurrent delete of all admins leaves exactly one ADMIN with a deterministic rejection', async () => {
-        const adminA = await createAdmin(`${PREFIX}admin_a`);
-        const adminB = await createAdmin(`${PREFIX}admin_b`);
-        const seed = await prisma.user.findUnique({
-            where: { username: SEED_ADMIN.username },
-            select: { id: true },
-        });
-        expect(seed).not.toBeNull();
+    it('concurrent delete of the only three admins leaves exactly one survivor', async () => {
+        const t1 = await createAdmin('race_1');
+        const t2 = await createAdmin('race_2');
+        const t3 = await createAdmin('race_3');
 
-        const foreignAdmins = await prisma.user.findMany({
-            where: { role: 'ADMIN' },
-            select: { id: true, username: true },
-        });
-        const foreign = foreignAdmins.filter(
-            (u) => u.username !== SEED_ADMIN.username && !u.username.startsWith(PREFIX)
-        );
+        // Precondition: the test scope owns the entire admin universe —
+        // isolated database, no seed, no foreign rows.
+        expect(await prisma.user.count({ where: { role: 'ADMIN' } })).toBe(3);
 
         const results = await Promise.all([
-            deleteRequest(seed!.id),
-            deleteRequest(adminA.id),
-            deleteRequest(adminB.id),
+            deleteRequest(t1.id),
+            deleteRequest(t2.id),
+            deleteRequest(t3.id),
         ]);
 
         const successes = results.filter((r) => r.status === 200);
         const rejections = results.filter((r) => r.status === 400 && r.body.code === 'LAST_ADMIN');
 
-        // No storage errors: every operation resolves to success or the stable business error.
-        expect(successes.length + rejections.length).toBe(3);
+        // Exactly one winner, exactly one deterministic loser, no storage errors.
+        expect(successes).toHaveLength(2);
+        expect(rejections).toHaveLength(1);
 
-        const remainingAdmins = await prisma.user.count({ where: { role: 'ADMIN' } });
-        expect(remainingAdmins).toBeGreaterThanOrEqual(1);
-
-        if (foreign.length === 0) {
-            // Self-contained race: exactly one loser, exactly one survivor.
-            expect(successes).toHaveLength(2);
-            expect(rejections).toHaveLength(1);
-            expect(remainingAdmins).toBe(1);
-        }
+        const remaining = await prisma.user.findMany({
+            where: { role: 'ADMIN' },
+            select: { id: true },
+        });
+        expect(remaining).toHaveLength(1);
+        expect([t1.id, t2.id, t3.id]).toContain(remaining[0]!.id);
     });
 
-    it('sequential delete succeeds while other admins remain and removes the row', async () => {
-        const adminA = await createAdmin(`${PREFIX}admin_seq`);
-        // Seed is guaranteed present by beforeEach; other suites may hold
-        // transient admins in parallel workers, so this test asserts only
-        // what is deterministic regardless of foreign rows.
+    it('sequential delete of the second-to-last admin succeeds, the last is rejected', async () => {
+        const adminA = await createAdmin('seq_a');
+        const adminB = await createAdmin('seq_b');
+
         const first = await deleteRequest(adminA.id);
         expect(first.status).toBe(200);
         expect(first.body.success).toBe(true);
-
         expect(await prisma.user.findUnique({ where: { id: adminA.id } })).toBeNull();
-        expect(await prisma.user.count({ where: { role: 'ADMIN' } })).toBeGreaterThanOrEqual(1);
-        const seedStillThere = await prisma.user.findUnique({ where: { username: SEED_ADMIN.username } });
-        expect(seedStillThere).not.toBeNull();
+
+        const last = await deleteRequest(adminB.id);
+        expect(last.status).toBe(400);
+        expect(last.body.code).toBe('LAST_ADMIN');
+
+        const remaining = await prisma.user.findMany({
+            where: { role: 'ADMIN' },
+            select: { id: true },
+        });
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0]!.id).toBe(adminB.id);
     });
 });
 
 describe('PUT /api/staff name validation (CORE-02)', () => {
     it('rejects blank name', async () => {
-        const staff = await createStaff(`${PREFIX}staff_blank`);
+        const staff = await createStaff('staff_blank');
         const res = await putRequest({ id: staff.id, name: '' });
         expect(res.status).toBe(400);
         expect(res.body.code).toBe('INVALID_FIELDS');
@@ -158,7 +188,7 @@ describe('PUT /api/staff name validation (CORE-02)', () => {
     });
 
     it('rejects whitespace-only name', async () => {
-        const staff = await createStaff(`${PREFIX}staff_ws`);
+        const staff = await createStaff('staff_ws');
         const res = await putRequest({ id: staff.id, name: '   ' });
         expect(res.status).toBe(400);
         expect(res.body.code).toBe('INVALID_FIELDS');
@@ -168,13 +198,13 @@ describe('PUT /api/staff name validation (CORE-02)', () => {
     });
 
     it('preserves valid partial update', async () => {
-        const staff = await createStaff(`${PREFIX}staff_partial`);
+        const staff = await createStaff('staff_partial');
         const res = await putRequest({ id: staff.id, name: 'New Name' });
         expect(res.status).toBe(200);
 
         const updated = await prisma.user.findUnique({ where: { id: staff.id } });
         expect(updated?.name).toBe('New Name');
-        expect(updated?.username).toBe(`${PREFIX}staff_partial`);
+        expect(updated?.username).toBe('staff_partial');
         expect(updated?.role).toBe('STAFF');
     });
 });
