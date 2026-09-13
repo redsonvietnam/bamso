@@ -114,13 +114,27 @@ export async function PUT(request: Request): Promise<NextResponse> {
         }
 
         const body = await request.json();
-        const { id, name, role, password } = body;
+        const { id, name, role, password, expectedUpdatedAt } = body;
 
         if (!id) {
             return NextResponse.json(
                 { error: 'id là bắt buộc', code: 'MISSING_ID' },
                 { status: 400 }
             );
+        }
+
+        // Optimistic stale-write guard, same model as Service PUT. MFA
+        // fields are never part of the update payload, so this protection
+        // stays independent of MFA state.
+        let expectedRevision: Date | null = null;
+        if (expectedUpdatedAt !== undefined) {
+            expectedRevision = new Date(expectedUpdatedAt as string);
+            if (Number.isNaN(expectedRevision.getTime())) {
+                return NextResponse.json(
+                    { error: 'expectedUpdatedAt không hợp lệ', code: 'INVALID_FIELDS' },
+                    { status: 400 }
+                );
+            }
         }
 
         if (name !== undefined && isBlankString(name)) {
@@ -150,6 +164,67 @@ export async function PUT(request: Request): Promise<NextResponse> {
                 );
             }
             updateData.passwordHash = hashPassword(password);
+        }
+
+        if (expectedRevision) {
+            if (Object.keys(updateData).length === 0) {
+                const current = await prisma.user.findUnique({
+                    where: { id },
+                    select: { id: true, username: true, name: true, role: true, updatedAt: true },
+                });
+                if (!current) {
+                    return NextResponse.json(
+                        { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
+                        { status: 404 }
+                    );
+                }
+                if (current.updatedAt.getTime() !== expectedRevision.getTime()) {
+                    return NextResponse.json(
+                        {
+                            error: 'Nhân viên đã được thay đổi bởi người khác. Vui lòng tải lại.',
+                            code: 'STALE_RESOURCE',
+                            currentUpdatedAt: current.updatedAt,
+                        },
+                        { status: 409 }
+                    );
+                }
+                return NextResponse.json(current);
+            }
+            // Atomic compare-and-swap on the revision: a stale snapshot
+            // (name, role, or password) can never silently overwrite newer
+            // state, and MFA fields are untouched by this payload either way.
+            const result = await prisma.user.updateMany({
+                where: { id, updatedAt: expectedRevision },
+                data: updateData,
+            });
+            if (result.count === 0) {
+                const current = await prisma.user.findUnique({ where: { id }, select: { updatedAt: true } });
+                if (!current) {
+                    return NextResponse.json(
+                        { error: 'Không tìm thấy nhân viên', code: 'NOT_FOUND' },
+                        { status: 404 }
+                    );
+                }
+                return NextResponse.json(
+                    {
+                        error: 'Nhân viên đã được thay đổi bởi người khác. Vui lòng tải lại.',
+                        code: 'STALE_RESOURCE',
+                        currentUpdatedAt: current.updatedAt,
+                    },
+                    { status: 409 }
+                );
+            }
+            const user = await prisma.user.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    role: true,
+                    updatedAt: true,
+                },
+            });
+            return NextResponse.json(user);
         }
 
         const user = await prisma.user.update({

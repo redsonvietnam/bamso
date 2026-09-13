@@ -74,13 +74,27 @@ export async function PUT(request: Request) {
         if ('error' in auth) return auth.error;
 
         const body = await request.json();
-        const { id, code, name, description, color, prefix, order, allowedModes } = body;
+        const { id, code, name, description, color, prefix, order, allowedModes, expectedUpdatedAt } = body;
 
         if (!id) {
             return NextResponse.json(
                 { error: 'id là bắt buộc', code: 'MISSING_ID' },
                 { status: 400 }
             );
+        }
+
+        // Optimistic stale-write guard: when the caller carries the revision
+        // its snapshot was loaded with, the write below is conditional on
+        // that revision still being current. Absent token = legacy path.
+        let expectedRevision: Date | null = null;
+        if (expectedUpdatedAt !== undefined) {
+            expectedRevision = new Date(expectedUpdatedAt as string);
+            if (Number.isNaN(expectedRevision.getTime())) {
+                return NextResponse.json(
+                    { error: 'expectedUpdatedAt không hợp lệ', code: 'INVALID_FIELDS' },
+                    { status: 400 }
+                );
+            }
         }
 
         for (const field of ['code', 'name', 'color', 'prefix'] as const) {
@@ -109,6 +123,54 @@ export async function PUT(request: Request) {
                 );
             }
             updateData.allowedModes = modesValidation.normalized;
+        }
+
+        if (expectedRevision) {
+            if (Object.keys(updateData).length === 0) {
+                const current = await prisma.service.findUnique({ where: { id } });
+                if (!current) {
+                    return NextResponse.json(
+                        { error: 'Không tìm thấy dịch vụ', code: 'NOT_FOUND' },
+                        { status: 404 }
+                    );
+                }
+                if (current.updatedAt.getTime() !== expectedRevision.getTime()) {
+                    return NextResponse.json(
+                        {
+                            error: 'Dịch vụ đã được thay đổi bởi người khác. Vui lòng tải lại.',
+                            code: 'STALE_RESOURCE',
+                            currentUpdatedAt: current.updatedAt,
+                        },
+                        { status: 409 }
+                    );
+                }
+                return NextResponse.json(current);
+            }
+            // Atomic compare-and-swap on the revision: concurrent PUTs
+            // serialize, exactly one observes the expected revision.
+            const result = await prisma.service.updateMany({
+                where: { id, updatedAt: expectedRevision },
+                data: updateData,
+            });
+            if (result.count === 0) {
+                const current = await prisma.service.findUnique({ where: { id } });
+                if (!current) {
+                    return NextResponse.json(
+                        { error: 'Không tìm thấy dịch vụ', code: 'NOT_FOUND' },
+                        { status: 404 }
+                    );
+                }
+                return NextResponse.json(
+                    {
+                        error: 'Dịch vụ đã được thay đổi bởi người khác. Vui lòng tải lại.',
+                        code: 'STALE_RESOURCE',
+                        currentUpdatedAt: current.updatedAt,
+                    },
+                    { status: 409 }
+                );
+            }
+            const service = await prisma.service.findUnique({ where: { id } });
+            return NextResponse.json(service);
         }
 
         const service = await prisma.service.update({

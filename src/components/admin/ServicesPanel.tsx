@@ -15,7 +15,7 @@ export default function ServicesPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [editingService, setEditingService] = useState<Service | null>(null);
     const [isCreating, setIsCreating] = useState(false);
-    const [formData, setFormData] = useState({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] as string[] });
+    const [formData, setFormData] = useState({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] as string[], expectedUpdatedAt: null as string | null });
 
     const fetchServices = async () => {
         try {
@@ -50,7 +50,7 @@ export default function ServicesPanel() {
             await apiClient.post('/api/services', { ...formData, allowedModes: JSON.stringify(formData.allowedModes) });
             toast.success('Tạo dịch vụ thành công!');
             setIsCreating(false);
-            setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] });
+            setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'], expectedUpdatedAt: null });
             fetchServices();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo dịch vụ.');
@@ -61,11 +61,18 @@ export default function ServicesPanel() {
         if (!editingService) return;
 
         try {
-            await apiClient.put('/api/services', { id: editingService.id, ...formData, allowedModes: JSON.stringify(formData.allowedModes) });
+            await apiClient.put('/api/services', { id: editingService.id, ...formData, expectedUpdatedAt: formData.expectedUpdatedAt ?? undefined, allowedModes: JSON.stringify(formData.allowedModes) });
             toast.success('Cập nhật thành công!');
             setEditingService(null);
             fetchServices();
         } catch (error) {
+            if (error instanceof Error && (error as { status?: number }).status === 409) {
+                // Stale snapshot: surface the conflict, refresh the list,
+                // keep the operator's form untouched (no blind overwrite).
+                toast.error(error.message);
+                fetchServices();
+                return;
+            }
             toast.error(error instanceof Error ? error.message : 'Lỗi cập nhật.');
         }
     };
@@ -93,12 +100,13 @@ export default function ServicesPanel() {
             prefix: service.prefix,
             order: service.order,
             allowedModes: Array.isArray(modes) ? modes : ['quick', 'manual', 'qr'],
+            expectedUpdatedAt: new Date(service.updatedAt).toISOString(),
         });
     };
 
     const cancelEdit = () => {
         setEditingService(null);
-        setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] });
+        setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'], expectedUpdatedAt: null });
     };
 
     if (isLoading) return <p className="text-muted-foreground">Đang tải...</p>;
@@ -122,7 +130,7 @@ export default function ServicesPanel() {
                             formData={formData}
                             setFormData={setFormData}
                             onSave={handleCreate}
-                            onCancel={() => { setIsCreating(false); setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'] }); }}
+                            onCancel={() => { setIsCreating(false); setFormData({ code: '', name: '', description: '', color: '#3B82F6', prefix: '', order: 0, allowedModes: ['quick', 'manual', 'qr'], expectedUpdatedAt: null }); }}
                             saveLabel="Tạo"
                         />
                     </CardContent>
@@ -231,8 +239,8 @@ function ModeBadges({ modes }: { modes: string | string[] | null | undefined }) 
 }
 
 function ServiceForm({ formData, setFormData, onSave, onCancel, saveLabel }: {
-    formData: { code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[] };
-    setFormData: React.Dispatch<React.SetStateAction<{ code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[] }>>;
+    formData: { code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[]; expectedUpdatedAt: string | null };
+    setFormData: React.Dispatch<React.SetStateAction<{ code: string; name: string; description: string; color: string; prefix: string; order: number; allowedModes: string[]; expectedUpdatedAt: string | null }>>;
     onSave: () => void;
     onCancel: () => void;
     saveLabel: string;

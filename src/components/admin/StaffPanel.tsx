@@ -24,7 +24,7 @@ export default function StaffPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
     const [isCreating, setIsCreating] = useState(false);
-    const [formData, setFormData] = useState({ username: '', password: '', name: '', role: 'STAFF' });
+    const [formData, setFormData] = useState({ username: '', password: '', name: '', role: 'STAFF', expectedUpdatedAt: null as string | null });
 
     const fetchStaff = async () => {
         try {
@@ -54,7 +54,7 @@ export default function StaffPanel() {
 
             toast.success('Tạo nhân viên thành công!');
             setIsCreating(false);
-            setFormData({ username: '', password: '', name: '', role: 'STAFF' });
+            setFormData({ username: '', password: '', name: '', role: 'STAFF', expectedUpdatedAt: null });
             fetchStaff();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo nhân viên.');
@@ -69,15 +69,25 @@ export default function StaffPanel() {
             if (formData.password) {
                 body.password = formData.password;
             }
+            if (formData.expectedUpdatedAt) {
+                body.expectedUpdatedAt = formData.expectedUpdatedAt;
+            }
 
             const data = await apiClient.put<{ error?: string }>('/api/staff', body);
             if (data.error) throw new Error(data.error);
 
             toast.success('Cập nhật thành công!');
             setEditingStaff(null);
-            setFormData({ username: '', password: '', name: '', role: 'STAFF' });
+            setFormData({ username: '', password: '', name: '', role: 'STAFF', expectedUpdatedAt: null });
             fetchStaff();
         } catch (error) {
+            if (error instanceof Error && (error as { status?: number }).status === 409) {
+                // Stale snapshot: surface the conflict, refresh the list,
+                // keep the operator's form untouched (no blind overwrite).
+                toast.error(error.message);
+                fetchStaff();
+                return;
+            }
             toast.error(error instanceof Error ? error.message : 'Lỗi cập nhật.');
         }
     };
@@ -96,12 +106,12 @@ export default function StaffPanel() {
 
     const startEdit = (member: StaffMember) => {
         setEditingStaff(member);
-        setFormData({ username: member.username, password: '', name: member.name, role: member.role });
+        setFormData({ username: member.username, password: '', name: member.name, role: member.role, expectedUpdatedAt: member.updatedAt ? new Date(member.updatedAt).toISOString() : null });
     };
 
     const cancelEdit = () => {
         setEditingStaff(null);
-        setFormData({ username: '', password: '', name: '', role: 'STAFF' });
+        setFormData({ username: '', password: '', name: '', role: 'STAFF', expectedUpdatedAt: null });
     };
 
     if (isLoading) return <p className="text-muted-foreground">Đang tải...</p>;
@@ -134,7 +144,7 @@ export default function StaffPanel() {
                             formData={formData}
                             setFormData={setFormData}
                             onSave={handleCreate}
-                            onCancel={() => { setIsCreating(false); setFormData({ username: '', password: '', name: '', role: 'STAFF' }); }}
+                            onCancel={() => { setIsCreating(false); setFormData({ username: '', password: '', name: '', role: 'STAFF', expectedUpdatedAt: null }); }}
                             saveLabel="Tạo"
                             isNew
                         />
@@ -204,8 +214,8 @@ export default function StaffPanel() {
 }
 
 function StaffForm({ formData, setFormData, onSave, onCancel, saveLabel, isNew }: {
-    formData: { username: string; password: string; name: string; role: string };
-    setFormData: React.Dispatch<React.SetStateAction<{ username: string; password: string; name: string; role: string }>>;
+    formData: { username: string; password: string; name: string; role: string; expectedUpdatedAt: string | null };
+    setFormData: React.Dispatch<React.SetStateAction<{ username: string; password: string; name: string; role: string; expectedUpdatedAt: string | null }>>;
     onSave: () => void;
     onCancel: () => void;
     saveLabel: string;
