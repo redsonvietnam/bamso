@@ -56,3 +56,14 @@ export function getBusinessDayBounds(date: Date = new Date()): { startOfDay: Dat
     const { year, month, day } = businessWallYMD(date);
     return getBusinessDayBoundsForYMD(year, month, day);
 }
+
+const businessHourFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: 'numeric',
+    hourCycle: 'h23',
+});
+
+/** Vietnam wall-clock hour (0-23) of an instant. */
+export function getBusinessHour(date: Date): number {
+    return Number(businessHourFormatter.format(date));
+}

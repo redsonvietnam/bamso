@@ -4,6 +4,7 @@ import {
     getBusinessDayBounds,
     getBusinessDayBoundsForYMD,
     getBusinessDayKey,
+    getBusinessHour,
 } from '@/lib/business-day';
 
 const VN_135959 = new Date('2026-09-13T16:59:00.000Z'); // 23:59 Vietnam, Sep 13
@@ -39,6 +40,19 @@ describe('canonical business timezone', () => {
         const { startOfDay, endOfDay } = getBusinessDayBoundsForYMD(2026, 9, 14);
         expect(startOfDay.toISOString()).toBe('2026-09-13T17:00:00.000Z');
         expect(endOfDay.toISOString()).toBe('2026-09-14T16:59:59.999Z');
+    });
+});
+
+describe('Vietnam wall-clock hour extraction (stats hourly buckets)', () => {
+    it.each([
+        ['VN midnight Sep 14', '2026-09-13T17:00:00.000Z', 0],
+        ['23:59 Vietnam Sep 13', '2026-09-13T16:59:00.000Z', 23],
+        ['09:00 Vietnam Sep 13', '2026-09-13T02:00:00.000Z', 9],
+        ['17:00 Vietnam Sep 13', '2026-09-13T10:00:00.000Z', 17],
+        ['07:30 Vietnam Sep 14', '2026-09-14T00:30:00.000Z', 7],
+        ['12:00 Vietnam Sep 14', '2026-09-14T05:00:00.000Z', 12],
+    ])('%s extracts hour %i', (_label, iso, expected) => {
+        expect(getBusinessHour(new Date(iso))).toBe(expected);
     });
 });
 

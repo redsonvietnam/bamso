@@ -180,6 +180,22 @@ describe('GET /api/stats', () => {
     });
 
     describe('Vietnam date boundaries (WP-CORE-03)', () => {
+        it('buckets hourly counts by Vietnam wall-clock hour', async () => {
+            mockedTicketGroupBy.mockResolvedValue([
+                { createdAt: new Date('2026-09-13T17:00:00.000Z'), _count: { id: 2 } },
+                { createdAt: new Date('2026-09-13T16:59:00.000Z'), _count: { id: 1 } },
+            ]);
+
+            const res = await callGet('/api/stats?from=2026-09-14&to=2026-09-14');
+            expect(res.status).toBe(200);
+            const data = (await res.json()) as {
+                hourly: { hour: string; count: number }[];
+            };
+            const bucket = (hour: string) => data.hourly.find((h) => h.hour === hour)?.count;
+            expect(bucket('00:00')).toBe(2);
+            expect(bucket('23:00')).toBe(1);
+        });
+
         it('resolves an explicit day to Vietnam-midnight instants', async () => {
             const res = await callGet('/api/stats?from=2026-09-14&to=2026-09-14');
             expect(res.status).toBe(200);

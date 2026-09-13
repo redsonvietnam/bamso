@@ -3,7 +3,7 @@ import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
-import { getBusinessDayBounds, getBusinessDayBoundsForYMD } from '@/lib/business-day';
+import { getBusinessDayBounds, getBusinessDayBoundsForYMD, getBusinessHour } from '@/lib/business-day';
 
 function parseDateParam(value: string): Date | null {
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
             hourMap[h] = 0;
         }
         for (const t of ticketsPerHour) {
-            const hour = t.createdAt.getHours();
+            const hour = getBusinessHour(t.createdAt);
             hourMap[hour] = (hourMap[hour] || 0) + t._count.id;
         }
 
