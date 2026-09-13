@@ -1,6 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
 
+const { txFindUnique, txDelete, txCount, txTransaction } = vi.hoisted(() => ({
+    txFindUnique: vi.fn(),
+    txDelete: vi.fn(),
+    txCount: vi.fn(),
+    txTransaction: vi.fn(),
+}));
+
 vi.mock('@/lib/db', () => ({
     default: {
         user: {
@@ -9,7 +16,9 @@ vi.mock('@/lib/db', () => ({
             update: vi.fn(),
             delete: vi.fn(),
             findUnique: vi.fn(),
+            count: vi.fn(),
         },
+        $transaction: txTransaction,
     },
 }));
 
@@ -32,7 +41,6 @@ import { requireRole } from '@/lib/api-auth';
 
 const mockedFindMany = prisma.user.findMany as unknown as ReturnType<typeof vi.fn>;
 const mockedCreate = prisma.user.create as unknown as ReturnType<typeof vi.fn>;
-const mockedDelete = prisma.user.delete as unknown as ReturnType<typeof vi.fn>;
 const mockedFindUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const mockedRequireRole = requireRole as unknown as ReturnType<typeof vi.fn>;
 
@@ -59,6 +67,10 @@ function unauthorizedAuth() {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    (txTransaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async (cb: (tx: unknown) => unknown) =>
+            cb({ user: { findUnique: txFindUnique, delete: txDelete, count: txCount } })
+    );
 });
 
 describe('GET /api/staff', () => {
@@ -153,12 +165,24 @@ describe('DELETE /api/staff', () => {
 
     it('deletes staff for ADMIN', async () => {
         adminAuth();
-        mockedFindUnique.mockResolvedValue({ role: 'STAFF' });
-        mockedDelete.mockResolvedValue({});
+        (txFindUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ role: 'STAFF' });
+        (txDelete as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({});
         const req = new Request('http://localhost/api/staff?id=1');
         const res = await DELETE(req);
         const body = await res.json();
         expect(res.status).toBe(200);
         expect(body.success).toBe(true);
+    });
+
+    it('rejects deleting the last ADMIN', async () => {
+        adminAuth();
+        (txFindUnique as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ role: 'ADMIN' });
+        (txDelete as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({});
+        (txCount as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+        const req = new Request('http://localhost/api/staff?id=1');
+        const res = await DELETE(req);
+        const body = await res.json();
+        expect(res.status).toBe(400);
+        expect(body.code).toBe('LAST_ADMIN');
     });
 });

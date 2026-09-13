@@ -19,7 +19,7 @@ import {
     VolumeX
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQueueStore } from '@/stores/queue.store';
+import { useQueueStore, type QueueLifecycleStatus } from '@/stores/queue.store';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 
@@ -28,8 +28,33 @@ interface QueuePanelProps {
     pos: string;
 }
 
+// Queue actions are REST-based and stay available when the SSE channel is
+// down. Gating depends only on the in-flight action request and queue
+// content — never on realtime connection status.
+export function isCallNextDisabled(isActionLoading: boolean, pendingCount: number): boolean {
+    return isActionLoading || pendingCount === 0;
+}
+
+function statusBadge(status: QueueLifecycleStatus): { text: string; variant: 'secondary' | 'destructive' | 'outline' } {
+    switch (status) {
+        case 'connected':
+            return { text: 'Real-time On', variant: 'secondary' };
+        case 'initial-loading':
+            return { text: 'Đang tải...', variant: 'outline' };
+        case 'connecting':
+            return { text: 'Đang kết nối...', variant: 'outline' };
+        case 'reconnecting':
+            return { text: 'Mất kết nối — dữ liệu cũ', variant: 'destructive' };
+        case 'load-error':
+            return { text: 'Lỗi tải dữ liệu', variant: 'destructive' };
+        case 'disconnected':
+        default:
+            return { text: 'Disconnected', variant: 'destructive' };
+    }
+}
+
 export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
-    const { tickets, isConnected, connectSSE, disconnectSSE } = useQueueStore();
+    const { tickets, status, loadError, connectSSE, disconnectSSE } = useQueueStore();
     const [isLoading, setIsLoading] = useState(false);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const { speak } = useSpeech();
@@ -116,21 +141,51 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                 {pos} - Đang phục vụ
                             </CardTitle>
                             <div className="flex items-center gap-2">
-                                <button
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => setSoundEnabled(!soundEnabled)}
-                                    className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+                                    className={`rounded-full ${soundEnabled ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                                     title={soundEnabled ? 'Tắt âm thanh thông báo' : 'Bật âm thanh thông báo'}
                                 >
-                                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                                </button>
-                                <Badge variant={isConnected ? "secondary" : "destructive"}>
-                                    {isConnected ? 'Real-time On' : 'Disconnected'}
+                                    {soundEnabled ? <Volume2 /> : <VolumeX />}
+                                </Button>
+                                <Badge variant={statusBadge(status).variant}>
+                                    {statusBadge(status).text}
                                 </Badge>
                             </div>
                         </div>
                     </CardHeader>
+                    {(status === 'reconnecting' || status === 'disconnected') && tickets.length > 0 && (
+                        <div className="bg-destructive/10 text-destructive text-xs sm:text-sm font-medium px-4 py-2 text-center">
+                            Mất kết nối realtime — đang hiển thị dữ liệu cũ. Các thao tác vẫn khả dụng.
+                        </div>
+                    )}
                     <CardContent className="pt-6 pb-6 sm:pt-8 sm:pb-8 text-center">
-                        {currentTicket ? (
+                        {status === 'initial-loading' ? (
+                            <div className="py-8 sm:py-12 space-y-4 animate-pulse">
+                                <div className="bg-muted w-16 h-16 rounded-full mx-auto" />
+                                <p className="text-muted-foreground font-medium italic text-sm sm:text-base">Đang tải hàng đợi...</p>
+                            </div>
+                        ) : status === 'load-error' ? (
+                            <div className="py-8 sm:py-12 space-y-4">
+                                <div className="bg-destructive/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                                    <AlertCircle className="w-8 h-8 text-destructive" />
+                                </div>
+                                <p className="text-destructive font-medium text-sm sm:text-base">Không thể tải hàng đợi.</p>
+                                {loadError && (
+                                    <p className="text-muted-foreground text-xs sm:text-sm">{loadError}</p>
+                                )}
+                                <Button
+                                    size="lg"
+                                    variant="outline"
+                                    onClick={() => connectSSE(serviceId)}
+                                    className="mt-4 font-bold"
+                                >
+                                    <RotateCcw className="mr-2 w-5 h-5" /> Thử lại
+                                </Button>
+                            </div>
+                        ) : currentTicket ? (
                             <div className="space-y-5 sm:space-y-6">
                                 <div>
                                     <h2 className="text-6xl sm:text-7xl font-black text-primary tracking-tighter">
@@ -180,7 +235,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                 <Button
                                     size="lg"
                                     onClick={callNext}
-                                    disabled={isLoading || pendingTickets.length === 0}
+                                    disabled={isCallNextDisabled(isLoading, pendingTickets.length)}
                                     className="mt-4 font-bold h-12 sm:h-14 px-8 sm:px-10 text-base sm:text-lg"
                                 >
                                     <UserPlus className="mr-2 w-5 h-5" /> Gọi số tiếp theo

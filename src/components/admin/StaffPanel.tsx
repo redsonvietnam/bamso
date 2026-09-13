@@ -143,6 +143,7 @@ export default function StaffPanel() {
             )}
 
             <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-muted">
                         <tr>
@@ -178,6 +179,7 @@ export default function StaffPanel() {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {editingStaff && (
@@ -210,7 +212,7 @@ function StaffForm({ formData, setFormData, onSave, onCancel, saveLabel, isNew }
     isNew: boolean;
 }) {
     return (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <Label>Username *</Label>
                 <Input
