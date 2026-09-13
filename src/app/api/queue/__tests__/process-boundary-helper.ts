@@ -41,6 +41,8 @@ async function main() {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
 
+    const ticketCount = await prisma.ticket.count({ where: { serviceId: svc.id } });
+
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({
         serviceId: svc.id,
@@ -49,6 +51,7 @@ async function main() {
         eventId: events[0]?.eventId,
         eventStatus: events[0]?.status,
         eventCount: events.length,
+        ticketCount,
     }));
 
     await prisma.$disconnect();

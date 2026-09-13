@@ -14,8 +14,15 @@ export async function GET() {
             // - process crash after CALL-NEXT commit but before transport
             // - display disconnect while event was created
             // - server restart with undelivered events
-            // Events are ordered by createdAt + id for deterministic replay
-            // regardless of sequence allocation races.
+            //
+            // ORDERING CONTRACT (DETERMINISTIC):
+            // Events are ordered by createdAt ASC, id ASC.
+            // - createdAt captures wall-clock time of the CALL-NEXT transaction
+            // - id (UUID) breaks ties when createdAt is identical
+            // - This ordering is DETERMINISTIC: same events always produce same order
+            // - This ordering is STABLE: repeated recovery yields same result
+            // - Concurrent calls to different counters are independent business actions;
+            //   the display shows all calls in a stable, predictable order.
             const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
             const pendingEvents = await prisma.displayCallEvent.findMany({
                 where: {
