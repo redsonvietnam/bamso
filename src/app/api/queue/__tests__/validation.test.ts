@@ -5,6 +5,10 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 vi.mock('@/lib/queue-service', () => ({
+    IdempotencyConflictError: class IdempotencyConflictError extends Error {
+        code = 'IDEMPOTENCY_CONFLICT';
+        status = 409;
+    },
     callNextTicket: vi.fn(),
     restoreTicket: vi.fn(),
     skipTicket: vi.fn(),
@@ -102,7 +106,9 @@ describe('call-next route pos contract', () => {
             if (!response) throw new Error('expected a response');
 
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, {
+                idempotencyKey: undefined,
+            });
             expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
             expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
         } finally {
@@ -152,7 +158,9 @@ describe('call-next route pos contract', () => {
 
             // ASSERTION 1: HTTP response returned successfully
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, {
+                idempotencyKey: undefined,
+            });
 
             // ASSERTION 2: setImmediate callback captured but NOT executed yet
             expect(capturedCallback).not.toBeNull();

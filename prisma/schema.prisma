@@ -78,6 +78,15 @@ model Settings {
   value String
 }
 
+model CallNextIdempotency {
+  key          String   @id // client-supplied Idempotency-Key: one logical CALL-NEXT operation
+  fingerprint  String   // JSON of serviceId + pos + actor; key reuse with a different fingerprint is rejected
+  ticketId     String?  // claimed ticket once the operation commits; row is created atomically with the mutation
+  ticketNumber String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorType  String   // USER | ANONYMOUS | SYSTEM

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { callNextTicket } from '@/lib/queue-service';
+import { callNextTicket, IdempotencyConflictError } from '@/lib/queue-service';
 import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
@@ -63,9 +63,13 @@ export async function POST(request: Request) {
             );
         }
 
+        // One Idempotency-Key value represents one logical CALL-NEXT
+        // operation. Blank header = legacy path with no idempotency record.
+        const idempotencyKey = request.headers.get('idempotency-key')?.trim() || undefined;
+
         const ticket = actor?.actorId
-            ? await callNextTicket(serviceId as string, pos as string, actor)
-            : await callNextTicket(serviceId as string, pos as string);
+            ? await callNextTicket(serviceId as string, pos as string, actor, { idempotencyKey })
+            : await callNextTicket(serviceId as string, pos as string, undefined, { idempotencyKey });
         if (!ticket) {
             await writeAuditLog(prisma, {
                 actor,
@@ -114,6 +118,21 @@ export async function POST(request: Request) {
 
         return NextResponse.json(ticket);
     } catch (error) {
+        if (error instanceof IdempotencyConflictError) {
+            logger.warn('Call next idempotency conflict:', error);
+            await writeAuditLog(prisma, {
+                actor: actor ?? { actorType: 'ANONYMOUS' },
+                action: 'CALL_NEXT',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'IDEMPOTENCY_CONFLICT',
+                metadata: targetPos ? { counter: targetPos } : null,
+            });
+            return NextResponse.json(
+                { error: error.message, code: error.code },
+                { status: error.status }
+            );
+        }
         logger.error('Call next error:', error);
         const { message, isClientError } = sanitizeQueueError(error);
         const isNoPending = message.includes('Không còn số thứ tự nào đang chờ');

@@ -47,17 +47,76 @@ function getDayKey(date: Date): string {
     return getBusinessDayKey(date);
 }
 
+export class IdempotencyConflictError extends Error {
+    readonly code = 'IDEMPOTENCY_CONFLICT';
+    readonly status = 409;
+
+    constructor() {
+        super('Idempotency-Key đã được sử dụng cho một thao tác khác.');
+    }
+}
+
+export interface CallNextOptions {
+    // Client-supplied key for one logical CALL-NEXT operation. Absent key =
+    // legacy path with no idempotency record. Present key = the key row is
+    // reserved atomically inside the same transaction as the queue mutation.
+    idempotencyKey?: string;
+}
+
+function callNextFingerprint(serviceId: string, pos: string, actor?: AuditActor): string {
+    return JSON.stringify({
+        serviceId,
+        pos,
+        actorId: actor?.actorId ?? null,
+        actorRole: actor?.actorRole ?? null,
+    });
+}
+
 /**
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
+ *
+ * Idempotency (WP-CORE-04): when options.idempotencyKey is present, the key
+ * row is created in the same transaction as the claim. A retry carrying the
+ * same key and fingerprint replays the original claimed ticket without a
+ * second mutation or audit; the same key with a different fingerprint is
+ * rejected with IdempotencyConflictError and zero mutation.
  */
-export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor) {
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor, options?: CallNextOptions) {
+    const idempotencyKey = options?.idempotencyKey;
+    const fingerprint = idempotencyKey ? callNextFingerprint(serviceId, pos, actor) : null;
     return withPosLock(pos, async () => {
         const { startOfDay, endOfDay } = getTodayBounds();
         const dayKey = getDayKey(new Date());
 
         for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
             const result = await prisma.$transaction(async (tx) => {
+                if (idempotencyKey && fingerprint) {
+                    const existing =
+                        typeof tx.callNextIdempotency?.findUnique === 'function'
+                            ? await tx.callNextIdempotency.findUnique({ where: { key: idempotencyKey } })
+                            : null;
+                    if (existing) {
+                        if (existing.fingerprint !== fingerprint) {
+                            throw new IdempotencyConflictError();
+                        }
+                        if (!existing.ticketId) {
+                            throw new Error('Bản ghi idempotency không nhất quán.');
+                        }
+                        const replayed = await tx.ticket.findUnique({
+                            where: { id: existing.ticketId },
+                            include: { service: true },
+                        });
+                        if (!replayed) {
+                            throw new Error('Bản ghi idempotency không nhất quán.');
+                        }
+                        return { claimed: true as const, ticket: replayed };
+                    }
+                    await tx.callNextIdempotency.create({
+                        data: { key: idempotencyKey, fingerprint },
+                    });
+                }
+
                 const autoCompleted = typeof tx.ticket.findMany === 'function'
                     ? await tx.ticket.findMany({
                           where: {
@@ -110,6 +169,12 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                 });
 
                 if (claimResult.count === 0) {
+                    if (idempotencyKey) {
+                        // Release this attempt's key reservation so the retry
+                        // starts clean; the committed transaction carries no
+                        // trace of the unclaimed attempt.
+                        await tx.callNextIdempotency.deleteMany({ where: { key: idempotencyKey } });
+                    }
                     return { claimed: false as const };
                 }
 
@@ -128,12 +193,22 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                     },
                 });
 
+                const claimedTicket = await tx.ticket.findUnique({
+                    where: { id: nextTicket.id },
+                    include: { service: true },
+                });
+                if (idempotencyKey) {
+                    // Seal the reservation with the canonical outcome inside
+                    // the same transaction as the claim and its audit record.
+                    await tx.callNextIdempotency.update({
+                        where: { key: idempotencyKey },
+                        data: { ticketId: nextTicket.id, ticketNumber: nextTicket.ticketNumber },
+                    });
+                }
+
                 return {
                     claimed: true as const,
-                    ticket: await tx.ticket.findUnique({
-                        where: { id: nextTicket.id },
-                        include: { service: true },
-                    }),
+                    ticket: claimedTicket,
                 };
             }, { timeout: 15000 });
 

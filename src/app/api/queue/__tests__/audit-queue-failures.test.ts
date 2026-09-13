@@ -11,6 +11,10 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 vi.mock('@/lib/queue-service', () => ({
+    IdempotencyConflictError: class IdempotencyConflictError extends Error {
+        code = 'IDEMPOTENCY_CONFLICT';
+        status = 409;
+    },
     callNextTicket: vi.fn(),
     restoreTicket: vi.fn(),
     skipTicket: vi.fn(),
