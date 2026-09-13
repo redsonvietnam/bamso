@@ -99,6 +99,29 @@ describe('PUT /api/staff stale-write protection (WP-CORE-02)', () => {
         expect(row?.role).toBe('KIOSK');
     });
 
+    it.each([
+        ['null', null],
+        ['number', 42],
+        ['malformed string', 'not-a-timestamp'],
+    ])('malformed token (%s) returns 400 INVALID_FIELDS', async (_label, token) => {
+        const staff = await createStaff(`${PREFIX}malformed`);
+        const res = await putRequest({ id: staff.id, name: 'Anything', expectedUpdatedAt: token });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('INVALID_FIELDS');
+    });
+
+    it('malformed token leaves the DB unchanged', async () => {
+        const staff = await createStaff(`${PREFIX}malformed_db`);
+        const before = await prisma.user.findUnique({ where: { id: staff.id } });
+
+        const res = await putRequest({ id: staff.id, name: 'Anything', expectedUpdatedAt: 0 });
+        expect(res.status).toBe(400);
+
+        const after = await prisma.user.findUnique({ where: { id: staff.id } });
+        expect(after?.name).toBe(before?.name);
+        expect(after?.updatedAt.getTime()).toBe(before?.updatedAt.getTime());
+    });
+
     it('concurrent name/role updates: exactly one wins, no silent overwrite', async () => {
         const staff = await createStaff(`${PREFIX}race`);
         const token = await revisionOf(staff.id);

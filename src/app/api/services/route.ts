@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
-import { isBlankString, validateAllowedModes } from '@/lib/api-validation';
+import { isBlankString, parseRevisionTimestamp, validateAllowedModes } from '@/lib/api-validation';
 
 export async function GET(request: Request) {
     try {
@@ -88,8 +88,8 @@ export async function PUT(request: Request) {
         // that revision still being current. Absent token = legacy path.
         let expectedRevision: Date | null = null;
         if (expectedUpdatedAt !== undefined) {
-            expectedRevision = new Date(expectedUpdatedAt as string);
-            if (Number.isNaN(expectedRevision.getTime())) {
+            expectedRevision = parseRevisionTimestamp(expectedUpdatedAt);
+            if (!expectedRevision) {
                 return NextResponse.json(
                     { error: 'expectedUpdatedAt không hợp lệ', code: 'INVALID_FIELDS' },
                     { status: 400 }

@@ -108,6 +108,32 @@ describe('PUT /api/services stale-write protection (WP-CORE-02)', () => {
         expect(after?.prefix).toBe(before?.prefix);
     });
 
+    it.each([
+        ['null', null],
+        ['zero number', 0],
+        ['object', {}],
+        ['empty string', ''],
+        ['malformed timestamp', 'not-a-timestamp'],
+    ])('malformed token (%s) returns 400 INVALID_FIELDS', async (_label, token) => {
+        const svc = await createTestService();
+        const res = await putRequest({ id: svc.id, name: 'Anything', expectedUpdatedAt: token });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('INVALID_FIELDS');
+    });
+
+    it('malformed token leaves the DB unchanged', async () => {
+        const svc = await createTestService();
+        const before = await prisma.service.findUnique({ where: { id: svc.id } });
+
+        const res = await putRequest({ id: svc.id, name: 'Anything', expectedUpdatedAt: null });
+        expect(res.status).toBe(400);
+
+        const after = await prisma.service.findUnique({ where: { id: svc.id } });
+        expect(after?.name).toBe(before?.name);
+        expect(after?.color).toBe(before?.color);
+        expect(after?.updatedAt.getTime()).toBe(before?.updatedAt.getTime());
+    });
+
     it('concurrent different-field updates: exactly one wins, no lost update', async () => {
         const svc = await createTestService();
         const token = await revisionOf(svc.id);

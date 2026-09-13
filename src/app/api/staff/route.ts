@@ -4,7 +4,7 @@ import { hashPassword, validatePassword } from '@/lib/password';
 import { UserRole } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
-import { isBlankString } from '@/lib/api-validation';
+import { isBlankString, parseRevisionTimestamp } from '@/lib/api-validation';
 
 export async function GET(): Promise<NextResponse> {
     const auth = await requireRole('ADMIN');
@@ -128,8 +128,8 @@ export async function PUT(request: Request): Promise<NextResponse> {
         // stays independent of MFA state.
         let expectedRevision: Date | null = null;
         if (expectedUpdatedAt !== undefined) {
-            expectedRevision = new Date(expectedUpdatedAt as string);
-            if (Number.isNaN(expectedRevision.getTime())) {
+            expectedRevision = parseRevisionTimestamp(expectedUpdatedAt);
+            if (!expectedRevision) {
                 return NextResponse.json(
                     { error: 'expectedUpdatedAt không hợp lệ', code: 'INVALID_FIELDS' },
                     { status: 400 }
