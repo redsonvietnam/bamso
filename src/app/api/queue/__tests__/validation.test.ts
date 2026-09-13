@@ -25,6 +25,9 @@ vi.mock('@/lib/db', () => ({
         ticket: {
             findFirst: vi.fn(),
         },
+        displayCallEvent: {
+            update: vi.fn().mockResolvedValue({}),
+        },
     },
 }));
 
@@ -91,7 +94,18 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Nguyễn Văn A',
         };
-        mockedCallNextTicket.mockResolvedValue({ ticket, replayed: false });
+        mockedCallNextTicket.mockResolvedValue({
+            ticket,
+            replayed: false,
+            displayEvent: {
+                eventId: 'test-event-1',
+                serviceId: 'service-1',
+                ticketNumber: 'A001',
+                pos: 'Q1',
+                customerName: 'Nguyễn Văn A',
+                nextTicketNumber: undefined,
+            },
+        });
         mockedFindFirst.mockResolvedValue(null);
 
         // Mock setImmediate to execute callbacks synchronously in tests
@@ -123,7 +137,18 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Test User',
         };
-        mockedCallNextTicket.mockResolvedValue({ ticket, replayed: false });
+        mockedCallNextTicket.mockResolvedValue({
+            ticket,
+            replayed: false,
+            displayEvent: {
+                eventId: 'test-event-2',
+                serviceId: 'service-1',
+                ticketNumber: 'A001',
+                pos: 'Q1',
+                customerName: 'Test User',
+                nextTicketNumber: undefined,
+            },
+        });
         mockedFindFirst.mockResolvedValue(null);
 
         // Controllable broadcast promises — we decide when they resolve

@@ -94,6 +94,24 @@ model CreateTicketIdempotency {
   createdAt   DateTime @default(now())
 }
 
+model DisplayCallEvent {
+  id               String   @id @default(uuid())
+  eventId          String   @unique // stable identity — survives retries, reconnects, restarts
+  callNextKey      String?  // links to CallNextIdempotency.key for idempotent operations; null for legacy
+  ticketId         String   // claimed ticket ID
+  ticketNumber     String   // ticket number displayed to customer
+  serviceId        String
+  pos              String   // counter position
+  customerName     String?
+  nextTicketNumber String?  // next-in-queue hint for display
+  sequence         Int      @default(0) // monotonic ordering within business day
+  status           String   @default("PENDING") // PENDING | DELIVERED
+  createdAt        DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([callNextKey])
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorType  String   // USER | ANONYMOUS | SYSTEM

@@ -18,6 +18,13 @@ vi.mock('@/lib/db', () => ({
         settings: {
             findUnique: vi.fn(),
         },
+        displayCallEvent: {
+            aggregate: vi.fn().mockResolvedValue({ _max: { sequence: null } }),
+            create: vi.fn().mockResolvedValue({}),
+        },
+        auditLog: {
+            create: vi.fn().mockResolvedValue({}),
+        },
     },
 }));
 
@@ -36,6 +43,13 @@ const mockedPrisma = prisma as unknown as {
     };
     settings: {
         findUnique: ReturnType<typeof vi.fn>;
+    };
+    displayCallEvent: {
+        aggregate: ReturnType<typeof vi.fn>;
+        create: ReturnType<typeof vi.fn>;
+    };
+    auditLog: {
+        create: ReturnType<typeof vi.fn>;
     };
 };
 
@@ -79,7 +93,7 @@ describe('callNextTicket', () => {
 
         const result = await callNextTicket(serviceId, pos);
 
-        expect(result).toEqual({ ticket: claimedTicket, replayed: false });
+        expect(result).toMatchObject({ ticket: claimedTicket, replayed: false });
         expect(mockedPrisma.$transaction).toHaveBeenCalledTimes(1);
         // Điều kiện claim phải là conditional update (chỉ claim nếu còn PENDING)
         expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
@@ -122,7 +136,7 @@ describe('callNextTicket', () => {
 
         const result = await callNextTicket(serviceId, pos);
 
-        expect(result).toEqual({ ticket: claimedTicket, replayed: false });
+        expect(result).toMatchObject({ ticket: claimedTicket, replayed: false });
         expect(mockedPrisma.$transaction).toHaveBeenCalledTimes(2);
         expect(mockedPrisma.ticket.updateMany).toHaveBeenCalledTimes(4);
     });

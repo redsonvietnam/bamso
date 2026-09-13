@@ -3,11 +3,9 @@ import { callNextTicket, IdempotencyConflictError } from '@/lib/queue-service';
 import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
-import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 import { readJsonObject, requiredStringFields, sanitizeQueueError } from '@/lib/api-validation';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
-import { getBusinessDayBounds } from '@/lib/business-day';
 
 export async function POST(request: Request) {
     let actor: AuditActor | null = null;
@@ -67,7 +65,7 @@ export async function POST(request: Request) {
         // operation. Blank header = legacy path with no idempotency record.
         const idempotencyKey = request.headers.get('idempotency-key')?.trim() || undefined;
 
-        const { ticket, replayed } = actor?.actorId
+        const { ticket, replayed, displayEvent } = actor?.actorId
             ? await callNextTicket(serviceId as string, pos as string, actor, { idempotencyKey })
             : await callNextTicket(serviceId as string, pos as string, undefined, { idempotencyKey });
         if (!ticket) {
@@ -91,33 +89,35 @@ export async function POST(request: Request) {
         // Replays resolve to the canonical result with zero side effects:
         // the original attempt already broadcast, so a replay must not
         // announce the same logical operation a second time.
-        const serviceIdForBroadcast = ticket.serviceId;
-        const ticketNumber = ticket.ticketNumber;
-        const customerName = ticket.customerName;
-        const posForBroadcast = pos as string;
+        //
+        // CORE-06: The durable DisplayCallEvent was already created atomically
+        // inside the transaction. Transport delivery is best-effort; the event
+        // remains recoverable via display reconnect or server restart until
+        // marked DELIVERED.
 
-        if (replayed) {
+        if (replayed || !displayEvent) {
             return NextResponse.json(ticket);
         }
 
         setImmediate(async () => {
             try {
-                const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
-
-                const nextPending = await prisma.ticket.findFirst({
-                    where: {
-                        serviceId: serviceIdForBroadcast,
-                        status: TicketStatus.PENDING,
-                        createdAt: { gte: startOfDay, lte: endOfDay },
-                        id: { not: ticket.id },
-                    },
-                    orderBy: { position: 'asc' },
-                });
-
                 await Promise.allSettled([
-                    broadcastQueueUpdate(serviceIdForBroadcast),
-                    broadcastDisplayCall(ticketNumber, posForBroadcast, customerName, nextPending?.ticketNumber)
+                    broadcastQueueUpdate(displayEvent.serviceId),
+                    broadcastDisplayCall(
+                        displayEvent.ticketNumber,
+                        displayEvent.pos,
+                        displayEvent.customerName,
+                        displayEvent.nextTicketNumber ?? undefined,
+                    ),
                 ]);
+
+                // Mark DELIVERED after transport attempt completes.
+                // If process crashes before this line, the event stays PENDING
+                // and will be recovered on display reconnect / server restart.
+                await prisma.displayCallEvent.update({
+                    where: { eventId: displayEvent.eventId },
+                    data: { status: 'DELIVERED' },
+                });
             } catch (err) {
                 logger.error('Post-call-next broadcast failed:', err);
             }

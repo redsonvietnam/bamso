@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
         $transaction: vi.fn(),
         ticket: {},
         callNextIdempotency: {},
+        displayCallEvent: {},
     },
 }));
 
@@ -46,6 +47,10 @@ function makeTx() {
             create: vi.fn(),
             update: vi.fn(),
             deleteMany: vi.fn(),
+        },
+        displayCallEvent: {
+            aggregate: vi.fn().mockResolvedValue({ _max: { sequence: null } }),
+            create: vi.fn().mockResolvedValue({}),
         },
     };
 }
@@ -116,7 +121,7 @@ describe('callNextTicket P2002 reservation recovery (WP-CORE-04)', () => {
 
         const result = await callNextTicket('svc-1', 'Q1', undefined, { idempotencyKey: KEY });
 
-        expect(result).toEqual({ ticket: claimed, replayed: false });
+        expect(result).toMatchObject({ ticket: claimed, replayed: false });
         expect(mockedWriteAuditLog).toHaveBeenCalledTimes(1);
     });
 });

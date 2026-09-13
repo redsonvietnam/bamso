@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
@@ -54,6 +55,15 @@ export class IdempotencyConflictError extends Error {
     constructor() {
         super('Idempotency-Key đã được sử dụng cho một thao tác khác.');
     }
+}
+
+export interface DisplayEvent {
+    eventId: string;
+    serviceId: string;
+    ticketNumber: string;
+    pos: string;
+    customerName?: string | null;
+    nextTicketNumber?: string;
 }
 
 export interface CallNextOptions {
@@ -130,7 +140,7 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                         if (!replayed) {
                             throw new Error('Bản ghi idempotency không nhất quán.');
                         }
-                        return { claimed: true as const, ticket: replayed, replayed: true as const };
+                        return { claimed: true as const, ticket: replayed, replayed: true as const, displayEvent: undefined };
                     }
                     await tx.callNextIdempotency.create({
                         data: { key: idempotencyKey, fingerprint },
@@ -213,6 +223,43 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                     },
                 });
 
+                // CORE-06: Persist display call event atomically with the
+                // business mutation. The event is the canonical record of
+                // the customer-facing notification that was created by this
+                // successful CALL-NEXT.
+                const nextInQueue = await tx.ticket.findFirst({
+                    where: {
+                        serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                        id: { not: nextTicket.id },
+                    },
+                    orderBy: { position: 'asc' },
+                });
+
+                const maxSeq = await tx.displayCallEvent.aggregate({
+                    where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+                    _max: { sequence: true },
+                });
+                const sequence = (maxSeq._max.sequence ?? 0) + 1;
+
+                const displayEventId = crypto.randomUUID();
+                await tx.displayCallEvent.create({
+                    data: {
+                        eventId: displayEventId,
+                        callNextKey: idempotencyKey ?? null,
+                        ticketId: nextTicket.id,
+                        ticketNumber: nextTicket.ticketNumber,
+                        serviceId,
+                        pos,
+                        customerName: nextTicket.customerName,
+                        nextTicketNumber: nextInQueue?.ticketNumber ?? null,
+                        sequence,
+                        status: 'PENDING',
+                    },
+                });
+
                 const claimedTicket = await tx.ticket.findUnique({
                     where: { id: nextTicket.id },
                     include: { service: true },
@@ -230,11 +277,19 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                     claimed: true as const,
                     ticket: claimedTicket,
                     replayed: false as const,
+                    displayEvent: {
+                        eventId: displayEventId,
+                        serviceId,
+                        ticketNumber: nextTicket.ticketNumber,
+                        pos,
+                        customerName: nextTicket.customerName,
+                        nextTicketNumber: nextInQueue?.ticketNumber ?? null,
+                    },
                 };
                 }, { timeout: 15000 });
 
                 if (result.claimed) {
-                    return { ticket: result.ticket, replayed: result.replayed };
+                    return { ticket: result.ticket, replayed: result.replayed, displayEvent: result.displayEvent };
                 }
             } catch (error) {
                 // Unique-key collision on the idempotency reservation: an
