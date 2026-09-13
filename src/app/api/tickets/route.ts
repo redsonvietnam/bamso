@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional, requireRole } from '@/lib/api-auth';
 import { readJsonObject, sanitizeApiError } from '@/lib/api-validation';
 import { writeAuditLog } from '@/lib/audit-service';
+import { getBusinessDayBounds, getBusinessDayBoundsForYMD } from '@/lib/business-day';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
@@ -151,9 +152,7 @@ export async function GET(request: Request) {
     const serviceId = searchParams.get('serviceId');
     const status = searchParams.get('status') as TicketStatus | null;
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
     try {
         const tickets = await prisma.ticket.findMany({
@@ -206,16 +205,18 @@ export async function DELETE(request: Request): Promise<NextResponse> {
             { status: 400 }
         );
     }
-    const cutoffDate = new Date(year, month - 1, day);
-    if (cutoffDate.getFullYear() !== year || cutoffDate.getMonth() !== month - 1 || cutoffDate.getDate() !== day) {
+    const localCheck = new Date(year, month - 1, day);
+    if (localCheck.getFullYear() !== year || localCheck.getMonth() !== month - 1 || localCheck.getDate() !== day) {
         return NextResponse.json(
             { error: 'cutoff không hợp lệ', code: 'INVALID_FIELDS' },
             { status: 400 }
         );
     }
+    // The cutoff names a Vietnam calendar date: delete strictly before its
+    // Vietnam-midnight instant, and never touch the current Vietnam day.
+    const cutoffDate = getBusinessDayBoundsForYMD(year, month, day).startOfDay;
 
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const { startOfDay: startOfToday } = getBusinessDayBounds(new Date());
     if (cutoffDate >= startOfToday) {
         return NextResponse.json(
             { error: 'cutoff phải trước ngày hôm nay', code: 'INVALID_FIELDS' },

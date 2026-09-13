@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
+import { getBusinessDayBounds, getBusinessDayKey } from '@/lib/business-day';
 
 const MAX_CALL_RETRIES = 5;
 
@@ -39,17 +40,11 @@ const withPosLock = createMutex();
 const withServiceQueueLock = createMutex();
 
 function getTodayBounds() {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    return { startOfDay, endOfDay };
+    return getBusinessDayBounds();
 }
 
 function getDayKey(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return getBusinessDayKey(date);
 }
 
 /**

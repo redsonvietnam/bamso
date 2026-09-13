@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST } from '@/app/api/tickets/route';
 import { createTicket } from '@/lib/ticket-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
@@ -225,5 +225,32 @@ describe('GET /api/tickets — PII redaction', () => {
         expect(data).toHaveLength(5);
         expect(data[3].customerName).toBe('Phạm Văn D');
         expect(data[3].phone).toBe('0933666666');
+    });
+});
+
+describe('GET /api/tickets — Vietnam today window (WP-CORE-03)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        const { default: prismaMock } = await import('@/lib/db');
+        vi.mocked(prismaMock.ticket.findMany).mockResolvedValue([]);
+        mockedAuthenticateOptional.mockResolvedValue({ role: null });
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('queries the Vietnam day containing 00:00 Sep 14 Vietnam', async () => {
+        vi.setSystemTime(new Date('2026-09-13T17:00:00.000Z'));
+        const response = await GET(makeGetTicketsRequest({}));
+        expect(response.status).toBe(200);
+
+        const { default: prismaMock } = await import('@/lib/db');
+        const args = vi.mocked(prismaMock.ticket.findMany).mock.calls[0][0] as {
+            where: { createdAt: { gte: Date; lte: Date } };
+        };
+        expect(args.where.createdAt.gte.toISOString()).toBe('2026-09-13T17:00:00.000Z');
+        expect(args.where.createdAt.lte.toISOString()).toBe('2026-09-14T16:59:59.999Z');
     });
 });

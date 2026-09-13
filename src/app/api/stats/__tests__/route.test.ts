@@ -25,6 +25,7 @@ vi.mock('@/lib/logger', () => ({
 import { GET } from '@/app/api/stats/route';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/api-auth';
+import { getBusinessDayKey } from '@/lib/business-day';
 
 const mockedTicketCount = prisma.ticket.count as unknown as ReturnType<typeof vi.fn>;
 const mockedTicketFindMany = prisma.ticket.findMany as unknown as ReturnType<typeof vi.fn>;
@@ -103,8 +104,7 @@ describe('GET /api/stats', () => {
         });
 
         it('accepts only to param (from defaults to today)', async () => {
-            const now = new Date();
-            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const today = getBusinessDayKey(new Date());
             const res = await callGet(`/api/stats?to=${today}`);
             expect(res.status).toBe(200);
         });
@@ -176,6 +176,19 @@ describe('GET /api/stats', () => {
             const res = await callGet('/api/stats?date=2026-08-15');
             const data = await res.json();
             expect(data.summary.avgWaitTimeSeconds).toBe(0);
+        });
+    });
+
+    describe('Vietnam date boundaries (WP-CORE-03)', () => {
+        it('resolves an explicit day to Vietnam-midnight instants', async () => {
+            const res = await callGet('/api/stats?from=2026-09-14&to=2026-09-14');
+            expect(res.status).toBe(200);
+
+            const args = mockedTicketCount.mock.calls[0][0] as {
+                where: { createdAt: { gte: Date; lte: Date } };
+            };
+            expect(args.where.createdAt.gte.toISOString()).toBe('2026-09-13T17:00:00.000Z');
+            expect(args.where.createdAt.lte.toISOString()).toBe('2026-09-14T16:59:59.999Z');
         });
     });
 });

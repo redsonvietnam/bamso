@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { getRedisClient, getRedisPubSubClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 import { UserRole } from '@/lib/constants';
+import { getBusinessDayBounds } from '@/lib/business-day';
 
 const encoder = new TextEncoder();
 
@@ -115,9 +116,7 @@ export class SSEBroker {
     }
 
     private async broadcastQueueUpdateLocal(serviceId?: string) {
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
         // Always fetch all of today's tickets, then filter per-client below.
         // Filtering the query by serviceId would make client-all subscribers

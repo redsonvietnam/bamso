@@ -7,6 +7,7 @@ import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 import { readJsonObject, requiredStringFields, sanitizeQueueError } from '@/lib/api-validation';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
+import { getBusinessDayBounds } from '@/lib/business-day';
 
 export async function POST(request: Request) {
     let actor: AuditActor | null = null;
@@ -90,9 +91,7 @@ export async function POST(request: Request) {
 
         setImmediate(async () => {
             try {
-                const now = new Date();
-                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
                 const nextPending = await prisma.ticket.findFirst({
                     where: {

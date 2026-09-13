@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
 import { UserRole } from '@/lib/constants';
+import { getBusinessDayBounds } from '@/lib/business-day';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
@@ -52,9 +53,7 @@ export async function GET(request: Request) {
         );
     }
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
     try {
         const ticket = await prisma.ticket.findFirst({
