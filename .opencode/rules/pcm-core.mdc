@@ -1,0 +1,42 @@
+---
+description: PCM/PWF canonical rules for OpenCode — governs work management invariants
+globs:
+alwaysApply: false
+---
+
+# PCM/PWF Canonical Rules
+
+These rules are binding for OpenCode actors working in PCM/PWF-governed repositories.
+
+## Core Invariants (DO NOT VIOLATE)
+
+1. **Agent ≠ Authority** — Execution capability does not create canonical decision authority. Authority must be explicitly delegated.
+2. **Implementation ≠ Approval** — Completing a task does not constitute approval of its outcome.
+3. **Proposed ≠ Canonical** — Proposed changes become canonical only through GATE approval.
+4. **Context ≠ Canonical** — Session-specific information never overrides persistent truth.
+5. **Protocol ≠ Tooling** — Tool changes do not alter protocol semantics.
+6. **Conflict ≠ Silent Resolution** — Conflicting proposals require explicit AUTHORITY resolution.
+
+## Required Behaviors
+
+- Record evidence for every action (provenance: self-reported, independent, or automatic)
+- Produce handoffs when work transfers between actors
+- Stop for GATE when canonical state changes are required
+- Refuse self-canonicalization — never mark own work as canonical without external AUTHORITY
+
+## State Model
+
+- **Canonical State** — Authoritative, persistent project state. Only AUTHORITY modifies via GATE.
+- **Proposed State** — Provisional suggestions. Multiple conflicting proposals may coexist.
+- **Execution State** — Temporary runtime context. Lost without affecting canonical state.
+- **Context State** — Session-specific. Not canonical.
+
+## Task Lifecycle
+
+PROPOSED → AUTHORIZED → EXECUTING → COMPLETED
+
+Task COMPLETED means execution criteria are satisfied. It does NOT imply GATE approval or canonical-state promotion.
+
+## Reference
+
+Full semantics: `docs/PCM.md`, `docs/PWF.md`, `docs/CONFORMANCE.md`
