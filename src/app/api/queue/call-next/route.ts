@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         // operation. Blank header = legacy path with no idempotency record.
         const idempotencyKey = request.headers.get('idempotency-key')?.trim() || undefined;
 
-        const ticket = actor?.actorId
+        const { ticket, replayed } = actor?.actorId
             ? await callNextTicket(serviceId as string, pos as string, actor, { idempotencyKey })
             : await callNextTicket(serviceId as string, pos as string, undefined, { idempotencyKey });
         if (!ticket) {
@@ -88,10 +88,17 @@ export async function POST(request: Request) {
         // Fire-and-forget: broadcasts are best-effort side effects.
         // The business transaction is complete when callNextTicket succeeds.
         // Do not block the HTTP response on notification delivery.
+        // Replays resolve to the canonical result with zero side effects:
+        // the original attempt already broadcast, so a replay must not
+        // announce the same logical operation a second time.
         const serviceIdForBroadcast = ticket.serviceId;
         const ticketNumber = ticket.ticketNumber;
         const customerName = ticket.customerName;
         const posForBroadcast = pos as string;
+
+        if (replayed) {
+            return NextResponse.json(ticket);
+        }
 
         setImmediate(async () => {
             try {

@@ -78,8 +78,8 @@ describe('callNextTicket per-counter concurrency safety', () => {
         expect(transactionCalls).toBe(1);
 
         releaseFirst();
-        await expect(first).resolves.toEqual(called1);
-        await expect(second).resolves.toEqual(called2);
+        await expect(first).resolves.toEqual({ ticket: called1, replayed: false });
+        await expect(second).resolves.toEqual({ ticket: called2, replayed: false });
         expect(transactionCalls).toBe(2);
     });
 });

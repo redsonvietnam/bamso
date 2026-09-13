@@ -91,7 +91,7 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Nguyễn Văn A',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({ ticket, replayed: false });
         mockedFindFirst.mockResolvedValue(null);
 
         // Mock setImmediate to execute callbacks synchronously in tests
@@ -123,7 +123,7 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Test User',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({ ticket, replayed: false });
         mockedFindFirst.mockResolvedValue(null);
 
         // Controllable broadcast promises — we decide when they resolve

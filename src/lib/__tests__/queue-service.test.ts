@@ -79,7 +79,7 @@ describe('callNextTicket', () => {
 
         const result = await callNextTicket(serviceId, pos);
 
-        expect(result).toEqual(claimedTicket);
+        expect(result).toEqual({ ticket: claimedTicket, replayed: false });
         expect(mockedPrisma.$transaction).toHaveBeenCalledTimes(1);
         // Điều kiện claim phải là conditional update (chỉ claim nếu còn PENDING)
         expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
@@ -122,7 +122,7 @@ describe('callNextTicket', () => {
 
         const result = await callNextTicket(serviceId, pos);
 
-        expect(result).toEqual(claimedTicket);
+        expect(result).toEqual({ ticket: claimedTicket, replayed: false });
         expect(mockedPrisma.$transaction).toHaveBeenCalledTimes(2);
         expect(mockedPrisma.ticket.updateMany).toHaveBeenCalledTimes(4);
     });

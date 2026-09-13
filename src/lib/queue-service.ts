@@ -72,6 +72,23 @@ function callNextFingerprint(serviceId: string, pos: string, actor?: AuditActor)
     });
 }
 
+// True only for a unique-key collision on the CallNextIdempotency primary
+// key (probed shape: { code: 'P2002', meta: { modelName:
+// 'CallNextIdempotency', target: ['key'] } }). Any other Prisma error,
+// including P2002 on other tables, is a genuine unrelated error and must
+// propagate untouched.
+function isIdempotencyKeyConflict(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const record = error as { code?: unknown; meta?: unknown };
+    if (record.code !== 'P2002') return false;
+    const meta = record.meta as { modelName?: unknown; target?: unknown } | undefined;
+    if (meta?.modelName !== 'CallNextIdempotency') return false;
+    const target = meta?.target;
+    if (Array.isArray(target)) return target.includes('key');
+    if (typeof target === 'string') return target === 'key' || target.includes('CallNextIdempotency');
+    return false;
+}
+
 /**
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
@@ -80,7 +97,9 @@ function callNextFingerprint(serviceId: string, pos: string, actor?: AuditActor)
  * row is created in the same transaction as the claim. A retry carrying the
  * same key and fingerprint replays the original claimed ticket without a
  * second mutation or audit; the same key with a different fingerprint is
- * rejected with IdempotencyConflictError and zero mutation.
+ * rejected with IdempotencyConflictError and zero mutation. The service is
+ * the authority on replay: the result carries replayed=true only when no
+ * mutation happened in this call.
  */
 export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor, options?: CallNextOptions) {
     const idempotencyKey = options?.idempotencyKey;
@@ -90,8 +109,9 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
         const dayKey = getDayKey(new Date());
 
         for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
-            const result = await prisma.$transaction(async (tx) => {
-                if (idempotencyKey && fingerprint) {
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    if (idempotencyKey && fingerprint) {
                     const existing =
                         typeof tx.callNextIdempotency?.findUnique === 'function'
                             ? await tx.callNextIdempotency.findUnique({ where: { key: idempotencyKey } })
@@ -110,7 +130,7 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                         if (!replayed) {
                             throw new Error('Bản ghi idempotency không nhất quán.');
                         }
-                        return { claimed: true as const, ticket: replayed };
+                        return { claimed: true as const, ticket: replayed, replayed: true as const };
                     }
                     await tx.callNextIdempotency.create({
                         data: { key: idempotencyKey, fingerprint },
@@ -209,11 +229,23 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                 return {
                     claimed: true as const,
                     ticket: claimedTicket,
+                    replayed: false as const,
                 };
-            }, { timeout: 15000 });
+                }, { timeout: 15000 });
 
-            if (result.claimed) {
-                return result.ticket;
+                if (result.claimed) {
+                    return { ticket: result.ticket, replayed: result.replayed };
+                }
+            } catch (error) {
+                // Unique-key collision on the idempotency reservation: an
+                // independent execution context committed the same key first.
+                // Prisma already rolled our transaction back completely (no
+                // partial mutation, no orphan row, no audit), so retrying
+                // observes the winner's committed row and replays it.
+                if (isIdempotencyKeyConflict(error) && attempt < MAX_CALL_RETRIES - 1) {
+                    continue;
+                }
+                throw error;
             }
         }
 

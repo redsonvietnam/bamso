@@ -121,6 +121,44 @@ describe('POST /api/queue/call-next idempotency (WP-CORE-04)', () => {
         expect(await successAuditCount(first.body.id as string)).toBe(1);
     });
 
+    it('replay performs zero broadcast side effects (exact call counts)', async () => {
+        const svc = await setupServiceWithPending(2);
+        const { broadcastQueueUpdate, broadcastDisplayCall } = await import('@/lib/sse-broker');
+
+        // Execute setImmediate callbacks inline so broadcasts land deterministically.
+        const originalSetImmediate = global.setImmediate;
+        global.setImmediate = ((fn: () => void) => fn()) as unknown as typeof setImmediate;
+        try {
+            const fresh = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}op-nb`);
+            expect(fresh.status).toBe(200);
+            await vi.waitFor(() => {
+                expect(vi.mocked(broadcastQueueUpdate)).toHaveBeenCalledTimes(1);
+                expect(vi.mocked(broadcastDisplayCall)).toHaveBeenCalledTimes(1);
+            });
+
+            const replay = await postCallNext(svc.id, SERVICE_POS, `${KEY_PREFIX}op-nb`);
+            expect(replay.status).toBe(200);
+            expect(replay.body.id).toBe(fresh.body.id);
+            // Allow any stray async broadcast to land, then assert silence.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            expect(vi.mocked(broadcastQueueUpdate)).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(broadcastDisplayCall)).toHaveBeenCalledTimes(1);
+        } finally {
+            global.setImmediate = originalSetImmediate;
+        }
+    });
+
+    it('database enforces key uniqueness behind P2002 recovery', async () => {
+        await prisma.callNextIdempotency.create({
+            data: { key: `${KEY_PREFIX}dup`, fingerprint: 'a' },
+        });
+        await expect(
+            prisma.callNextIdempotency.create({
+                data: { key: `${KEY_PREFIX}dup`, fingerprint: 'b' },
+            })
+        ).rejects.toMatchObject({ code: 'P2002' });
+    });
+
     it('concurrent retries of the same key resolve to one ticket and one audit', async () => {
         const svc = await setupServiceWithPending(3);
 
