@@ -1,13 +1,16 @@
 """
 Tests for scripts/purge-audit-logs.py
-======================================
+=====================================
 Persistence-level boundary tests for VN timezone-aware audit purge.
 
-All timestamps use UTC ISO 8601 with Z suffix — matching Prisma/SQLite
-AuditLog.createdAt representation: "2026-09-14T02:47:36.063Z"
+All timestamps use INTEGER epoch milliseconds — matching Prisma/SQLite
+AuditLog.createdAt production representation: 1789355536295
 
 Cutoff comparison: createdAt < cutoff (strict less-than).
 Record at exact cutoff is NOT deleted — it is still within retention.
+
+Regression: INTEGER-vs-TEXT mismatch is explicitly tested to prevent
+the bug where ISO TEXT cutoff was compared against INTEGER createdAt.
 
 Run: python -m pytest scripts/__tests__/test_purge_audit_logs.py -v
 """
@@ -17,25 +20,43 @@ import sqlite3
 import subprocess
 import sys
 import pytest
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "purge-audit-logs.py")
 VN_MIDNIGHT = "2026-09-14T00:00:00"  # frozen VN reference time for --until
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+# ──────────────────────────────────────────────────────────────
+# Epoch ms conversion helpers
+# ──────────────────────────────────────────────────────────────
+
+def iso_to_epoch_ms(iso_str: str) -> int:
+    """Convert ISO 8601 UTC string to epoch milliseconds."""
+    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    return int(dt.timestamp() * 1000)
+
+
+def vn_to_epoch_ms(vn_str: str) -> int:
+    """Convert VN-local ISO string (no offset) to epoch milliseconds."""
+    dt = datetime.fromisoformat(vn_str).replace(tzinfo=VN_TZ)
+    return int(dt.timestamp() * 1000)
+
 
 # Cutoff for --until 2026-09-14T00:00:00 with 365-day retention:
 # start_of_today_VN = 2026-09-14T00:00:00+07:00
 # cutoff_VN = 2025-09-14T00:00:00+07:00
 # cutoff_UTC = 2025-09-13T17:00:00.000Z
-#
-# SQL: DELETE FROM AuditLog WHERE createdAt < '2025-09-13T17:00:00.000Z'
-# Record at '2025-09-13T17:00:00.000Z' is NOT deleted (not strictly less than).
-CUTOFF_365 = "2025-09-13T17:00:00.000Z"
+# cutoff_epoch_ms = 1757782800000
+CUTOFF_365_MS = vn_to_epoch_ms("2025-09-14T00:00:00")  # = iso_to_epoch_ms("2025-09-13T17:00:00Z")
 
 
-def _create_db(path: str, records: list[str]):
+def _create_db(path: str, records: list[int]):
     """Create a temp SQLite DB with AuditLog table and insert records.
 
-    Records use UTC Z suffix format matching Prisma persistence:
-    prisma.auditLog.create() → "2026-09-14T02:47:36.063Z"
+    Records use INTEGER epoch milliseconds matching Prisma persistence:
+    prisma.auditLog.create() → 1789355536295
     """
     conn = sqlite3.connect(path)
     cursor = conn.cursor()
@@ -51,7 +72,7 @@ def _create_db(path: str, records: list[str]):
             success INTEGER NOT NULL,
             reasonCode TEXT,
             metadata TEXT,
-            createdAt TEXT NOT NULL
+            createdAt INTEGER NOT NULL
         )
     """)
     for i, ts in enumerate(records):
@@ -83,7 +104,7 @@ def _count_records(db_path: str) -> int:
     return count
 
 
-def _get_created_ats(db_path: str) -> list[str]:
+def _get_created_ats(db_path: str) -> list[int]:
     conn = sqlite3.connect(db_path)
     rows = conn.execute("SELECT createdAt FROM AuditLog ORDER BY createdAt").fetchall()
     conn.close()
@@ -98,7 +119,7 @@ class TestRecordInsideRetentionWindow:
     def test_recent_record_preserved(self, tmp_path):
         """Record 10 days before reference → kept."""
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2026-09-04T12:00:00.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2026-09-04T12:00:00.000Z")])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
@@ -106,9 +127,9 @@ class TestRecordInsideRetentionWindow:
     def test_record_one_day_after_cutoff_preserved(self, tmp_path):
         """Record 1 day after cutoff → kept."""
         db = str(tmp_path / "test.db")
-        # cutoff = 2025-09-13T17:00:00.000Z
-        # 2025-09-14T17:00:01.000Z = 1 day after cutoff → kept
-        _create_db(db, ["2025-09-14T17:00:01.000Z"])
+        # cutoff = CUTOFF_365_MS
+        # 1 day after cutoff → kept
+        _create_db(db, [CUTOFF_365_MS + 86400000])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
@@ -121,35 +142,37 @@ class TestRecordInsideRetentionWindow:
 
 class TestBoundaryRecord:
     def test_exact_cutoff_not_deleted(self, tmp_path):
-        """Record at exactly cutoff_UTC → NOT deleted (strict less-than)."""
+        """Record at exactly cutoff → NOT deleted (strict less-than)."""
         db = str(tmp_path / "test.db")
-        _create_db(db, [CUTOFF_365])  # 2025-09-13T17:00:00.000Z
+        _create_db(db, [CUTOFF_365_MS])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1  # kept
 
-    def test_one_second_after_cutoff_preserved(self, tmp_path):
-        """Record 1 second after cutoff → kept."""
+    def test_one_ms_after_cutoff_preserved(self, tmp_path):
+        """Record 1 ms after cutoff → kept."""
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2025-09-13T17:00:01.000Z"])
+        _create_db(db, [CUTOFF_365_MS + 1])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
 
-    def test_one_second_before_cutoff_deleted(self, tmp_path):
-        """Record 1 second before cutoff → deleted."""
+    def test_one_ms_before_cutoff_deleted(self, tmp_path):
+        """Record 1 ms before cutoff → deleted."""
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2025-09-13T16:59:59.000Z"])
+        _create_db(db, [CUTOFF_365_MS - 1])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 0
 
     def test_boundary_date_end_of_day_preserved(self, tmp_path):
-        """Record on boundary date at 23:59:59 VN → kept."""
+        """Record on boundary date at 23:59:59.999 VN → kept.
+
+        2025-09-14T23:59:59.999+07:00 = 2025-09-14T16:59:59.999Z
+        cutoff = 2025-09-13T17:00:00Z → this is after cutoff → kept
+        """
         db = str(tmp_path / "test.db")
-        # 2025-09-14T23:59:59+07:00 = 2025-09-14T16:59:59Z
-        # cutoff = 2025-09-13T17:00:00Z → this is after cutoff → kept
-        _create_db(db, ["2025-09-14T16:59:59.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2025-09-14T16:59:59.999Z")])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
@@ -168,54 +191,31 @@ class TestTimezoneCrossover:
         """
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2025-09-14T00:00:00.000Z",  # UTC midnight = VN 07:00 → kept
-            "2025-09-13T16:59:59.000Z",  # 1s before cutoff → deleted
+            iso_to_epoch_ms("2025-09-14T00:00:00.000Z"),  # UTC midnight = VN 07:00 → kept
+            CUTOFF_365_MS - 1000,  # 1s before cutoff → deleted
         ])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
 
-    def test_lexical_comparison_safe(self, tmp_path):
-        """Verify UTC Z suffix enables correct lexical comparison.
+    def test_numeric_comparison_safe(self, tmp_path):
+        """Verify INTEGER epoch ms enables correct numeric comparison.
 
-        Prisma stores: "2026-09-14T02:47:36.063Z"
-        Cutoff uses:   "2025-09-13T17:00:00.000Z"
-        Lexical sort of ISO 8601 UTC matches chronological order.
+        Prisma stores: 1789355536295
+        Cutoff uses:   1757782800000
+        Numeric comparison matches chronological order.
         """
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2025-09-13T16:59:59.999Z",  # just before cutoff → deleted
-            "2025-09-13T17:00:00.000Z",  # exact cutoff → kept (not strictly less)
-            "2025-09-13T17:00:00.001Z",  # just after cutoff → kept
+            CUTOFF_365_MS - 1,    # 1 ms before cutoff → deleted
+            CUTOFF_365_MS,         # exact cutoff → kept (not strictly less)
+            CUTOFF_365_MS + 1,     # 1 ms after cutoff → kept
         ])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 2
         remaining = _get_created_ats(db)
-        assert remaining == [
-            "2025-09-13T17:00:00.000Z",
-            "2025-09-13T17:00:00.001Z",
-        ]
-
-    def test_lexical_ordering_of_suffixes(self, tmp_path):
-        """Verify lexical ordering: +07:00 < Z in ASCII, so +07:00 is deleted.
-
-        Prisma stores Z suffix. The +07:00 suffix has lower ASCII value
-        than Z, so '...+07:00' < '...Z' lexically. This means +07:00
-        records would be deleted — but Prisma never produces +07:00.
-        This test documents the lexical behavior for completeness.
-        """
-        db = str(tmp_path / "test.db")
-        _create_db(db, [
-            "2025-09-13T17:00:00.000+07:00",  # +07:00 < Z lexically → deleted
-            "2025-09-13T17:00:00.000Z",        # UTC Z → exact cutoff → kept
-        ])
-        code, out = _run_purge(db, until=VN_MIDNIGHT)
-        assert code == 0
-        # +07:00 deleted (lexically before Z), Z kept (equals cutoff)
-        assert _count_records(db) == 1
-        remaining = _get_created_ats(db)
-        assert remaining == ["2025-09-13T17:00:00.000Z"]
+        assert remaining == [CUTOFF_365_MS, CUTOFF_365_MS + 1]
 
 
 # ──────────────────────────────────────────────────────────────
@@ -225,12 +225,13 @@ class TestTimezoneCrossover:
 class TestConfigurableDays:
     def test_90_day_retention(self, tmp_path):
         """90-day cutoff from 2026-09-14 VN = 2026-06-16T00:00:00+07:00
-        = 2026-06-15T17:00:00.000Z
+        = 2026-06-15T17:00:00Z = epoch ms
         """
         db = str(tmp_path / "test.db")
+        cutoff_90 = vn_to_epoch_ms("2026-06-16T00:00:00")
         _create_db(db, [
-            "2026-06-15T17:00:00.000Z",  # exact cutoff → kept
-            "2026-06-15T16:59:59.000Z",  # 1s before cutoff → deleted
+            cutoff_90,         # exact cutoff → kept
+            cutoff_90 - 1000,  # 1s before cutoff → deleted
         ])
         code, out = _run_purge(db, days=90, until=VN_MIDNIGHT)
         assert code == 0
@@ -238,12 +239,13 @@ class TestConfigurableDays:
 
     def test_30_day_retention(self, tmp_path):
         """30-day cutoff from 2026-09-14 VN = 2026-08-15T00:00:00+07:00
-        = 2026-08-14T17:00:00.000Z
+        = 2026-08-14T17:00:00Z = epoch ms
         """
         db = str(tmp_path / "test.db")
+        cutoff_30 = vn_to_epoch_ms("2026-08-15T00:00:00")
         _create_db(db, [
-            "2026-08-14T17:00:00.000Z",  # exact cutoff → kept
-            "2026-08-14T16:59:59.000Z",  # 1s before cutoff → deleted
+            cutoff_30,         # exact cutoff → kept
+            cutoff_30 - 1000,  # 1s before cutoff → deleted
         ])
         code, out = _run_purge(db, days=30, until=VN_MIDNIGHT)
         assert code == 0
@@ -259,8 +261,8 @@ class TestDefaultRetention:
         """Without --days, default is 365. Prove by omitting --days entirely."""
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2025-09-13T17:00:00.000Z",  # exact 365-day cutoff → kept
-            "2025-09-13T16:59:59.000Z",  # 1s before cutoff → deleted
+            CUTOFF_365_MS,         # exact 365-day cutoff → kept
+            CUTOFF_365_MS - 1000,  # 1s before cutoff → deleted
         ])
         # No --days argument passed → uses default 365
         code, out = _run_purge(db, until=VN_MIDNIGHT)
@@ -276,7 +278,7 @@ class TestDefaultRetention:
 class TestDryRun:
     def test_dry_run_no_deletion(self, tmp_path):
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2024-01-01T00:00:00.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2024-01-01T00:00:00.000Z")])
         code, out = _run_purge(db, dry_run=True, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1  # NOT deleted
@@ -285,8 +287,8 @@ class TestDryRun:
     def test_dry_run_reports_count(self, tmp_path):
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2024-01-01T00:00:00.000Z",
-            "2024-06-01T00:00:00.000Z",
+            iso_to_epoch_ms("2024-01-01T00:00:00.000Z"),
+            iso_to_epoch_ms("2024-06-01T00:00:00.000Z"),
         ])
         code, out = _run_purge(db, dry_run=True, until=VN_MIDNIGHT)
         assert code == 0
@@ -301,7 +303,7 @@ class TestDryRun:
 class TestIdempotency:
     def test_double_purge(self, tmp_path):
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2024-01-01T00:00:00.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2024-01-01T00:00:00.000Z")])
         code1, _ = _run_purge(db, until=VN_MIDNIGHT)
         assert code1 == 0
         assert _count_records(db) == 0
@@ -324,18 +326,14 @@ class TestRetryRecovery:
         assert "not found" in out.lower() or "error" in out.lower()
 
     def test_failed_then_recovered_purge_succeeds(self, tmp_path):
-        """Purge fails on missing DB → DB created → retry succeeds → rows removed once.
-
-        Simulates: operational condition prevents purge, condition is fixed,
-        purge runs again, eligible rows are removed exactly once.
-        """
+        """Purge fails on missing DB → DB created → retry succeeds → rows removed once."""
         db = str(tmp_path / "test.db")
         # Step 1: DB does not exist → purge fails
         code1, _ = _run_purge(db, until=VN_MIDNIGHT)
         assert code1 == 1  # not found
 
         # Step 2: DB is created (condition recovered)
-        _create_db(db, ["2024-01-01T00:00:00.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2024-01-01T00:00:00.000Z")])
         assert _count_records(db) == 1
 
         # Step 3: Retry succeeds → eligible row removed
@@ -367,7 +365,7 @@ class TestDataIsolation:
                 action TEXT NOT NULL,
                 entityType TEXT NOT NULL,
                 success INTEGER NOT NULL,
-                createdAt TEXT NOT NULL
+                createdAt INTEGER NOT NULL
             )
         """)
         cursor.execute("""
@@ -375,11 +373,13 @@ class TestDataIsolation:
                 id TEXT PRIMARY KEY,
                 number INTEGER NOT NULL,
                 status TEXT NOT NULL,
-                createdAt TEXT NOT NULL
+                createdAt INTEGER NOT NULL
             )
         """)
-        cursor.execute("INSERT INTO AuditLog VALUES ('a1', 'SYSTEM', 'LOGIN', 'AUTH', 1, '2024-01-01T00:00:00.000Z')")
-        cursor.execute("INSERT INTO Ticket VALUES ('t1', 1, 'CALLED', '2024-01-01T00:00:00.000Z')")
+        cursor.execute("INSERT INTO AuditLog VALUES ('a1', 'SYSTEM', 'LOGIN', 'AUTH', 1, ?)",
+                       (iso_to_epoch_ms("2024-01-01T00:00:00.000Z"),))
+        cursor.execute("INSERT INTO Ticket VALUES ('t1', 1, 'CALLED', ?)",
+                       (iso_to_epoch_ms("2024-01-01T00:00:00.000Z"),))
         conn.commit()
         conn.close()
 
@@ -403,11 +403,11 @@ class TestMixedRecords:
     def test_mixed_old_new_preserved_correctly(self, tmp_path):
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2024-01-01T08:00:00.000Z",  # old → deleted
-            "2025-09-13T16:59:59.000Z",  # 1s before cutoff → deleted
-            "2025-09-13T17:00:01.000Z",  # 1s after cutoff → kept
-            "2026-01-15T12:00:00.000Z",  # recent → kept
-            "2026-09-14T00:00:01.000Z",  # very recent → kept
+            iso_to_epoch_ms("2024-01-01T08:00:00.000Z"),    # old → deleted
+            CUTOFF_365_MS - 1000,                            # 1s before cutoff → deleted
+            CUTOFF_365_MS + 1000,                            # 1s after cutoff → kept
+            iso_to_epoch_ms("2026-01-15T12:00:00.000Z"),    # recent → kept
+            iso_to_epoch_ms("2026-09-14T00:00:01.000Z"),    # very recent → kept
         ])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
@@ -417,9 +417,9 @@ class TestMixedRecords:
     def test_all_recent(self, tmp_path):
         db = str(tmp_path / "test.db")
         _create_db(db, [
-            "2026-09-10T12:00:00.000Z",
-            "2026-09-12T08:00:00.000Z",
-            "2026-09-14T00:00:00.000Z",
+            iso_to_epoch_ms("2026-09-10T12:00:00.000Z"),
+            iso_to_epoch_ms("2026-09-12T08:00:00.000Z"),
+            iso_to_epoch_ms("2026-09-14T00:00:00.000Z"),
         ])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
@@ -442,7 +442,7 @@ class TestEdgeCases:
                 action TEXT NOT NULL,
                 entityType TEXT NOT NULL,
                 success INTEGER NOT NULL,
-                createdAt TEXT NOT NULL
+                createdAt INTEGER NOT NULL
             )
         """)
         conn.commit()
@@ -452,9 +452,9 @@ class TestEdgeCases:
         assert "purged 0" in out
 
     def test_future_date_preserved(self, tmp_path):
-        """Record with future UTC timestamp → kept."""
+        """Record with future epoch ms → kept."""
         db = str(tmp_path / "test.db")
-        _create_db(db, ["2027-01-01T00:00:00.000Z"])
+        _create_db(db, [iso_to_epoch_ms("2027-01-01T00:00:00.000Z")])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
@@ -462,17 +462,64 @@ class TestEdgeCases:
     def test_persistence_format_matches_prisma(self, tmp_path):
         """Verify test data format matches real Prisma persistence.
 
-        Real Prisma output: {"createdAt":"2026-09-14T02:47:36.063Z"}
-        This test proves the comparison works with that exact format.
+        Real Prisma output: INTEGER 1789355536295
+        This test proves the comparison works with that exact type.
         """
         db = str(tmp_path / "test.db")
-        # Exact format from Prisma: milliseconds, Z suffix
         _create_db(db, [
-            "2026-09-14T02:47:36.063Z",  # real Prisma format → kept
-            "2025-09-13T16:59:59.000Z",  # before cutoff → deleted
+            iso_to_epoch_ms("2026-09-14T02:47:36.063Z"),  # real Prisma epoch ms → kept
+            CUTOFF_365_MS - 1000,                          # before cutoff → deleted
         ])
         code, out = _run_purge(db, until=VN_MIDNIGHT)
         assert code == 0
         assert _count_records(db) == 1
         remaining = _get_created_ats(db)
-        assert remaining == ["2026-09-14T02:47:36.063Z"]
+        assert remaining == [iso_to_epoch_ms("2026-09-14T02:47:36.063Z")]
+
+
+# ──────────────────────────────────────────────────────────────
+# L. REGRESSION: INTEGER-vs-TEXT mismatch prevention
+# ──────────────────────────────────────────────────────────────
+
+class TestRegressionIntegerVsText:
+    def test_cutoff_is_integer_not_string(self, tmp_path):
+        """Regression: cutoff passed to SQL must be INTEGER, not ISO TEXT.
+
+        The previous bug compared INTEGER createdAt against TEXT ISO cutoff.
+        SQLite rule: numeric < non-numeric-text → always TRUE → all rows deleted.
+
+        This test proves the purge passes an integer parameter by verifying
+        that a record with INTEGER createdAt > cutoff is NOT deleted.
+        """
+        db = str(tmp_path / "test.db")
+        _create_db(db, [CUTOFF_365_MS + 86400000])  # 1 day after cutoff
+        code, out = _run_purge(db, until=VN_MIDNIGHT)
+        assert code == 0
+        assert _count_records(db) == 1  # kept — proves integer comparison
+
+    def test_text_cutoff_would_delete_everything(self, tmp_path):
+        """Proof that ISO TEXT cutoff against INTEGER createdAt deletes ALL.
+
+        If the purge script passes a string like '2025-09-13T17:00:00.000Z'
+        as the SQL parameter, SQLite's numeric affinity on createdAt causes
+        the string to be cast to 0, making every INTEGER > 0 comparison TRUE.
+
+        This test creates the exact scenario and verifies the purge still
+        works correctly — proving the script uses INTEGER cutoff.
+        """
+        db = str(tmp_path / "test.db")
+        # Record safely within retention — should NOT be deleted
+        _create_db(db, [iso_to_epoch_ms("2026-06-01T00:00:00.000Z")])
+        code, out = _run_purge(db, until=VN_MIDNIGHT)
+        assert code == 0
+        assert _count_records(db) == 1  # kept — integer comparison works
+
+    def test_epoch_ms_parameter_type(self, tmp_path):
+        """Verify the purge script outputs epoch ms (integer) in logs."""
+        db = str(tmp_path / "test.db")
+        _create_db(db, [CUTOFF_365_MS + 1])
+        code, out = _run_purge(db, until=VN_MIDNIGHT)
+        assert code == 0
+        # The script should log the epoch ms value
+        assert "epoch ms" in out
+        assert str(CUTOFF_365_MS) in out

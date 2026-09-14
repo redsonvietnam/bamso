@@ -80,9 +80,11 @@ model AuditLog {
 
 - **Retention period:** 365 days (default).
 - **Timezone:** Asia/Ho_Chi_Minh (UTC+7, fixed offset). All retention boundary calculations use VN business-day semantics.
+- **Storage representation:** `AuditLog.createdAt` is stored as INTEGER epoch milliseconds (Prisma/SQLite production behavior).
 - **Purge script:** `scripts/purge-audit-logs.py`
   - Uses standard Python `sqlite3` library + `zoneinfo.ZoneInfo`.
-  - Cutoff: `start_of_today_VN - retention_days`. A record is eligible for deletion only when `createdAt < cutoff`.
+  - Cutoff: `start_of_today_VN - retention_days` → converted to epoch milliseconds. A record is eligible for deletion only when `createdAt < cutoff_ms` (INTEGER comparison).
+  - SQL parameter type: INTEGER (epoch ms). Never passes ISO TEXT cutoff against INTEGER createdAt.
   - Supports `--dry-run`, `--days <N>`, `--db <path>`, `--until <ISO8601>` (testing override).
   - npm script: `npm run audit:purge`.
 
