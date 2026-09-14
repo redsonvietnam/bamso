@@ -4,6 +4,10 @@ BAMSO Audit Log Retention Purge Script
 ======================================
 Purges AuditLog records older than the specified retention period (default 365 days).
 
+Cutoff semantics: Asia/Ho_Chi_Minh business-day boundary.
+A record is eligible for deletion only when the current date in
+Asia/Ho_Chi_Minh is strictly after the retention boundary.
+
 Usage:
     python scripts/purge-audit-logs.py                     # default 365 days
     python scripts/purge-audit-logs.py --days 180           # custom retention
@@ -17,9 +21,11 @@ import sys
 import argparse
 import datetime
 import logging
+from zoneinfo import ZoneInfo
 
 DEFAULT_DB_PATH = "prisma/dev.db"
 DEFAULT_RETENTION_DAYS = 365
+VN_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -44,24 +50,52 @@ def parse_args():
         action="store_true",
         help="Calculate purge candidates without deleting",
     )
+    parser.add_argument(
+        "--until",
+        help="Override current time for testing (ISO 8601, interpreted in Asia/Ho_Chi_Minh). "
+             "Example: --until 2026-09-14T00:00:00",
+    )
     return parser.parse_args()
 
 
-def purge_audit_logs(db_path: str, retention_days: int, dry_run: bool = False):
+def compute_cutoff(now_vn: datetime.datetime, retention_days: int) -> datetime.datetime:
+    """Compute the retention cutoff in Asia/Ho_Chi_Minh.
+
+    A record is eligible for purge when its createdAt is strictly before
+    the cutoff instant. The cutoff is computed as:
+        cutoff = start_of_today_vn - retention_days
+
+    This means a record created at exactly the boundary date is NOT
+    deleted (it is still within the retention window).
+    """
+    start_of_today = now_vn.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_of_today - datetime.timedelta(days=retention_days)
+
+
+def purge_audit_logs(db_path: str, retention_days: int, dry_run: bool = False,
+                     until: str | None = None):
     if not os.path.exists(db_path):
         logger.error(f"Database not found: {db_path}")
         return 1
 
-    cutoff_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=retention_days)
-    cutoff_iso = cutoff_date.strftime("%Y-%m-%dT%H:%M:%S")
+    if until:
+        now_vn = datetime.datetime.fromisoformat(until).replace(tzinfo=VN_TIMEZONE)
+    else:
+        now_vn = datetime.datetime.now(VN_TIMEZONE)
 
-    logger.info(f"Purging audit logs older than {retention_days} days (cutoff: {cutoff_iso})")
+    cutoff = compute_cutoff(now_vn, retention_days)
+    cutoff_iso = cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+
+    logger.info(f"Timezone: Asia/Ho_Chi_Minh (UTC+7)")
+    logger.info(f"Current VN time: {now_vn.strftime('%Y-%m-%dT%H:%M:%S %Z')}")
+    logger.info(f"Retention: {retention_days} days")
+    logger.info(f"Cutoff: {cutoff_iso}")
+    logger.info(f"Purging audit logs older than {cutoff_iso}")
 
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # Check total matching rows
         cursor.execute(
             "SELECT COUNT(*) FROM AuditLog WHERE createdAt < ?",
             (cutoff_iso,),
@@ -93,5 +127,5 @@ def purge_audit_logs(db_path: str, retention_days: int, dry_run: bool = False):
 
 if __name__ == "__main__":
     args = parse_args()
-    code = purge_audit_logs(args.db, args.days, args.dry_run)
+    code = purge_audit_logs(args.db, args.days, args.dry_run, args.until)
     sys.exit(code)

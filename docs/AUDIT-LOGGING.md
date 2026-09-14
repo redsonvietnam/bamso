@@ -79,12 +79,42 @@ model AuditLog {
 ## 5. Retention & Purge Policy
 
 - **Retention period:** 365 days (default).
+- **Timezone:** Asia/Ho_Chi_Minh (UTC+7, fixed offset). All retention boundary calculations use VN business-day semantics.
 - **Purge script:** `scripts/purge-audit-logs.py`
-  - Uses standard Python `sqlite3` library.
-  - Deterministic cutoff based on `createdAt < now - 365 days`.
-  - Supports `--dry-run`, `--days <N>`, `--db <path>`.
+  - Uses standard Python `sqlite3` library + `zoneinfo.ZoneInfo`.
+  - Cutoff: `start_of_today_VN - retention_days`. A record is eligible for deletion only when `createdAt < cutoff`.
+  - Supports `--dry-run`, `--days <N>`, `--db <path>`, `--until <ISO8601>` (testing override).
   - npm script: `npm run audit:purge`.
-- **Production deployment status:** Manual execution or scheduled via Windows Task Scheduler. Automated daily Task Scheduler job is **NOT YET CONFIGURED** on production hardware (planned for operational deployment phase).
+
+### Operational Procedure
+
+| Step | Command | Description |
+|------|---------|-------------|
+| Preview | `npm run audit:purge -- --dry-run` | Reports what would be deleted without mutating |
+| Execute | `npm run audit:purge` | Purges records older than 365 VN days |
+| Custom | `npm run audit:purge -- --days 90` | Purges records older than 90 VN days |
+| Verify | `npm run audit:purge -- --dry-run` | Confirm zero candidates after purge |
+
+### Production Deployment
+
+Recommended: Windows Task Scheduler daily job (e.g., 02:00 AM VN).
+
+```
+schtasks /create /tn "BAMSO Audit Purge" /tr "python scripts/purge-audit-logs.py" /sc daily /st 02:00
+```
+
+Existing scheduler pattern: `scripts/install-backup-task.ps1` (daily backup at 02:00 AM).
+
+### Safety Properties
+
+- **Idempotent:** Running purge twice is safe; second run deletes zero records.
+- **Partial failure safe:** If purge fails mid-execution (locked DB, disk full), retry succeeds without data corruption.
+- **Data isolation:** Only `AuditLog` table is affected. `Ticket`, `CallNextIdempotency`, `CreateTicketIdempotency`, `DisplayCallEvent`, `User`/MFA state are untouched.
+- **Dry-run:** `--dry-run` performs zero deletion, reports count only.
+
+### Production deployment status
+
+Manual execution or scheduled via Windows Task Scheduler. Automated daily Task Scheduler job is **NOT YET CONFIGURED** on production hardware (planned for operational deployment phase).
 
 ---
 
