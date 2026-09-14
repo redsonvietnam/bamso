@@ -15,6 +15,26 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Load .env before anything reads process.env (NODE_ENV, JWT_SECRET, HTTPS_PFX_PASSWORD)
+// Next.js loads .env during app.prepare(), but server.js reads these variables at the top level.
+const envPath = path.join(process.cwd(), '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
+
 // --- Simple logger for server.js (CommonJS, no TS dependency) ---
 const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
 const LEVEL_ORDER = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
@@ -117,6 +137,7 @@ validateProductionSecrets();
 app.prepare().then(() => {
   const credentials = loadCredentials();
   const servers = [];
+  const upgradeHandle = app.getUpgradeHandler();
 
   function gracefulShutdown(signal) {
     log.info(`${signal} received. Shutting down gracefully...`);
@@ -141,6 +162,13 @@ app.prepare().then(() => {
       handle(req, res);
     });
     servers.push(httpsServer);
+
+    // WebSocket upgrade support for Turbopack HMR in dev mode
+    if (dev) {
+      httpsServer.on('upgrade', (req, socket, head) => {
+        upgradeHandle(req, socket, head);
+      });
+    }
 
     httpsServer.listen(HTTPS_PORT, HOST, (err) => {
       if (err) throw err;
