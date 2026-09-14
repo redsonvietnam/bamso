@@ -5,14 +5,22 @@ BAMSO Audit Log Retention Purge Script
 Purges AuditLog records older than the specified retention period (default 365 days).
 
 Cutoff semantics: Asia/Ho_Chi_Minh business-day boundary.
-A record is eligible for deletion only when the current date in
-Asia/Ho_Chi_Minh is strictly after the retention boundary.
+Cutoff = start_of_today_VN - retention_days, expressed as UTC ISO 8601 (Z suffix).
+
+Persisted AuditLog.createdAt is UTC ISO 8601 with Z suffix (Prisma/SQLite).
+This script computes the cutoff in the same representation for correct lexical
+comparison in SQLite.
 
 Usage:
     python scripts/purge-audit-logs.py                     # default 365 days
     python scripts/purge-audit-logs.py --days 180           # custom retention
     python scripts/purge-audit-logs.py --db prisma/dev.db   # custom db path
     python scripts/purge-audit-logs.py --dry-run            # report without deleting
+
+Testing:
+    --until <ISO8601>   Override current time for deterministic testing.
+                        Interpreted as Asia/Ho_Chi_Minh local time.
+                        Example: --until 2026-09-14T00:00:00
 """
 
 import sqlite3
@@ -52,24 +60,33 @@ def parse_args():
     )
     parser.add_argument(
         "--until",
-        help="Override current time for testing (ISO 8601, interpreted in Asia/Ho_Chi_Minh). "
+        help="Override current time for deterministic testing (ISO 8601, "
+             "interpreted as Asia/Ho_Chi_Minh local time). "
              "Example: --until 2026-09-14T00:00:00",
     )
     return parser.parse_args()
 
 
-def compute_cutoff(now_vn: datetime.datetime, retention_days: int) -> datetime.datetime:
-    """Compute the retention cutoff in Asia/Ho_Chi_Minh.
+def _start_of_today_vn(now_vn: datetime.datetime) -> datetime.datetime:
+    """Return start of today (midnight) in Asia/Ho_Chi_Minh."""
+    return now_vn.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    A record is eligible for purge when its createdAt is strictly before
-    the cutoff instant. The cutoff is computed as:
-        cutoff = start_of_today_vn - retention_days
 
-    This means a record created at exactly the boundary date is NOT
-    deleted (it is still within the retention window).
+def compute_cutoff_utc(now_vn: datetime.datetime, retention_days: int) -> str:
+    """Compute the retention cutoff as a UTC ISO 8601 string with Z suffix.
+
+    Matches the TypeScript purgeAuditLogs in audit-service.ts:
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+
+    Where days are counted in VN business-day semantics.
+
+    Returns: 'YYYY-MM-DDTHH:MM:SS.000Z'
     """
-    start_of_today = now_vn.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start_of_today - datetime.timedelta(days=retention_days)
+    start_of_today = _start_of_today_vn(now_vn)
+    cutoff_vn = start_of_today - datetime.timedelta(days=retention_days)
+    cutoff_utc = cutoff_vn.astimezone(datetime.timezone.utc)
+    return cutoff_utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 def purge_audit_logs(db_path: str, retention_days: int, dry_run: bool = False,
@@ -83,13 +100,12 @@ def purge_audit_logs(db_path: str, retention_days: int, dry_run: bool = False,
     else:
         now_vn = datetime.datetime.now(VN_TIMEZONE)
 
-    cutoff = compute_cutoff(now_vn, retention_days)
-    cutoff_iso = cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+    cutoff_iso = compute_cutoff_utc(now_vn, retention_days)
 
     logger.info(f"Timezone: Asia/Ho_Chi_Minh (UTC+7)")
     logger.info(f"Current VN time: {now_vn.strftime('%Y-%m-%dT%H:%M:%S %Z')}")
     logger.info(f"Retention: {retention_days} days")
-    logger.info(f"Cutoff: {cutoff_iso}")
+    logger.info(f"Cutoff (UTC): {cutoff_iso}")
     logger.info(f"Purging audit logs older than {cutoff_iso}")
 
     try:
