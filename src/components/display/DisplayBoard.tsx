@@ -12,6 +12,7 @@ import { PageWatermark } from '@/components/ui/dong-son-motif';
 
 interface DisplayCallEvent {
     type: 'DISPLAY_CALL';
+    eventId?: string;
     ticketNumber: string;
     pos: string;
     customerName?: string | null;
@@ -56,6 +57,10 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     const PREVIOUS_CALL_TTL = 60000;
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const { speakAnnouncement, speakPrepare } = useSpeech();
+    // CORE-07: Bounded in-memory dedupe window for DISPLAY_CALL eventId.
+    // Prevents duplicate announcements from recovery/replay while allowing
+    // legitimate RECALL events (which have different identity semantics).
+    const seenEventIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -118,6 +123,22 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
             try {
                 const data: DisplayCallEvent = JSON.parse(event.data);
                 if (data.type === 'DISPLAY_CALL') {
+                    // CORE-07: Dedupe by eventId. Same eventId received twice
+                    // → at most one logical announcement. Bounded by the
+                    // in-memory Set (cleared on page reload / reconnect).
+                    // RECALL events do not carry eventId and are not deduped.
+                    if (data.eventId) {
+                        if (seenEventIds.current.has(data.eventId)) {
+                            return; // duplicate transport, skip announcement
+                        }
+                        seenEventIds.current.add(data.eventId);
+                        // Bound the dedupe window to prevent unbounded growth.
+                        // 500 is generous for a single business day.
+                        if (seenEventIds.current.size > 500) {
+                            const first = seenEventIds.current.values().next().value;
+                            if (first) seenEventIds.current.delete(first);
+                        }
+                    }
                     const newCall: CurrentCall = { ticketNumber: data.ticketNumber, pos: data.pos, customerName: data.customerName, timestamp: Date.now() };
                     setCurrentCalls(prev => ({ ...prev, [data.pos]: newCall }));
                     setLastCalledTicket(newCall);

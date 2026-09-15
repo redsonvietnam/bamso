@@ -5,6 +5,10 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 vi.mock('@/lib/queue-service', () => ({
+    IdempotencyConflictError: class IdempotencyConflictError extends Error {
+        code = 'IDEMPOTENCY_CONFLICT';
+        status = 409;
+    },
     callNextTicket: vi.fn(),
     restoreTicket: vi.fn(),
     skipTicket: vi.fn(),
@@ -20,6 +24,9 @@ vi.mock('@/lib/db', () => ({
     default: {
         ticket: {
             findFirst: vi.fn(),
+        },
+        displayCallEvent: {
+            update: vi.fn().mockResolvedValue({}),
         },
     },
 }));
@@ -87,7 +94,18 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Nguyễn Văn A',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({
+            ticket,
+            replayed: false,
+            displayEvent: {
+                eventId: 'test-event-1',
+                serviceId: 'service-1',
+                ticketNumber: 'A001',
+                pos: 'Q1',
+                customerName: 'Nguyễn Văn A',
+                nextTicketNumber: undefined,
+            },
+        });
         mockedFindFirst.mockResolvedValue(null);
 
         // Mock setImmediate to execute callbacks synchronously in tests
@@ -102,9 +120,11 @@ describe('call-next route pos contract', () => {
             if (!response) throw new Error('expected a response');
 
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, {
+                idempotencyKey: undefined,
+            });
             expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
-            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
+            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('test-event-1', 'A001', 'Q1', 'Nguyễn Văn A', undefined);
         } finally {
             global.setImmediate = originalSetImmediate;
         }
@@ -117,7 +137,18 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Test User',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({
+            ticket,
+            replayed: false,
+            displayEvent: {
+                eventId: 'test-event-2',
+                serviceId: 'service-1',
+                ticketNumber: 'A001',
+                pos: 'Q1',
+                customerName: 'Test User',
+                nextTicketNumber: undefined,
+            },
+        });
         mockedFindFirst.mockResolvedValue(null);
 
         // Controllable broadcast promises — we decide when they resolve
@@ -152,7 +183,9 @@ describe('call-next route pos contract', () => {
 
             // ASSERTION 1: HTTP response returned successfully
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, {
+                idempotencyKey: undefined,
+            });
 
             // ASSERTION 2: setImmediate callback captured but NOT executed yet
             expect(capturedCallback).not.toBeNull();

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DELETE } from '@/app/api/tickets/route';
 import { requireRole } from '@/lib/api-auth';
+import { getBusinessDayKey } from '@/lib/business-day';
 
 vi.mock('@/lib/db', () => ({
     default: {
@@ -81,8 +82,7 @@ describe('DELETE /api/tickets — bulk cleanup', () => {
     it('returns 400 when cutoff is today or future', async () => {
         mockedRequireRole.mockResolvedValue({ payload: { role: 'ADMIN' } });
 
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const todayStr = getBusinessDayKey(new Date());
 
         const res = await DELETE(makeDeleteRequest({ cutoff: todayStr }));
         expect(res.status).toBe(400);
