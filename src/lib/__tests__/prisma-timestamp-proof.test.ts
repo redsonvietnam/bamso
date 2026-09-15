@@ -26,6 +26,20 @@ import path from 'path';
 const PY_PROOF = path.resolve(process.cwd(), 'scripts/__tests__/read_raw_sqlite.py');
 const PY_CHECK = path.resolve(process.cwd(), 'scripts/__tests__/check_comparison.py');
 
+// Resolve the actual SQLite database path from DATABASE_URL or default location
+function resolveDbPath(): string {
+  const dbUrl = process.env.DATABASE_URL || '';
+  if (dbUrl.includes('file:')) {
+    const filePart = dbUrl.split('file:')[1].split('?')[0];
+    return path.resolve(process.cwd(), 'prisma', filePart);
+  }
+  return path.resolve(process.cwd(), 'prisma', 'dev.db');
+}
+
+const DB_PATH = resolveDbPath();
+const PY_PROOF_CMD = `python "${PY_PROOF}" "${DB_PATH}"`;
+const PY_CHECK_CMD = `python "${PY_CHECK}" "${DB_PATH}"`;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PrismaClient = any;
 
@@ -65,7 +79,7 @@ describe('CORE-07: Production timestamp representation proof', () => {
   });
 
   it('2. raw SQLite typeof(createdAt) = int (not text)', () => {
-    const output = execSync(`python "${PY_PROOF}"`, {
+    const output = execSync(PY_PROOF_CMD, {
       cwd: process.cwd(),
       encoding: 'utf-8',
       timeout: 10000,
@@ -76,7 +90,7 @@ describe('CORE-07: Production timestamp representation proof', () => {
   it('3. raw SQLite hex confirms epoch ms digits, not ISO string', () => {
     // hex starts with 31 (ASCII '1') = epoch ms integer
     // An ISO string like "2026-09-14..." would start with hex 32303236... (ASCII "2026")
-    const output = execSync(`python "${PY_PROOF}"`, {
+    const output = execSync(PY_PROOF_CMD, {
       cwd: process.cwd(),
       encoding: 'utf-8',
       timeout: 10000,
@@ -89,7 +103,7 @@ describe('CORE-07: Production timestamp representation proof', () => {
     // But stored values are epoch ms integers.
     // SQLite rule: numeric < non-numeric-text → ALWAYS TRUE
     // This means the purge would delete EVERY row, not just old ones.
-    const output = execSync(`python "${PY_CHECK}"`, {
+    const output = execSync(PY_CHECK_CMD, {
       cwd: process.cwd(),
       encoding: 'utf-8',
       timeout: 10000,
@@ -99,7 +113,7 @@ describe('CORE-07: Production timestamp representation proof', () => {
   });
 
   it('5. epoch ms cutoff comparison correctly deletes 0 rows', () => {
-    const output = execSync(`python "${PY_CHECK}"`, {
+    const output = execSync(PY_CHECK_CMD, {
       cwd: process.cwd(),
       encoding: 'utf-8',
       timeout: 10000,

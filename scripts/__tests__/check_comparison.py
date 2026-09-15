@@ -1,5 +1,17 @@
-import sqlite3
-conn = sqlite3.connect('D:/bamso/prisma/dev.db')
+import sqlite3, sys, os
+
+# Accept DB path as argument, env var, or default relative path
+if len(sys.argv) > 1:
+    db_path = sys.argv[1]
+elif 'DATABASE_URL' in os.environ:
+    # Parse file:./dev.db from DATABASE_URL
+    url = os.environ['DATABASE_URL']
+    file_part = url.split('file:')[1].split('?')[0] if 'file:' in url else url
+    db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'prisma', file_part)
+else:
+    db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'prisma', 'dev.db')
+
+conn = sqlite3.connect(db_path)
 cur = conn.cursor()
 
 # The critical question: what does SQLite do when comparing

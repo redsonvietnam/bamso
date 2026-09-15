@@ -1,7 +1,10 @@
 """Read raw createdAt from SQLite AuditLog — proves the on-disk representation."""
 import sqlite3, sys, os, re
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'prisma', 'dev.db')
+if len(sys.argv) > 1:
+    DB_PATH = sys.argv[1]
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'prisma', 'dev.db')
 
 conn = sqlite3.connect(DB_PATH)
 cur = conn.cursor()
