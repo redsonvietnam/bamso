@@ -372,7 +372,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                     initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 20 }}
                                     animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
                                     exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.1 }}
-                                    className={compact ? 'mb-3' : 'mb-12 relative'}
+                                    className="absolute inset-x-0 top-0"
                                 >
                                     <div className={`relative flex flex-col items-center justify-center bg-card border-4 border-[color:var(--display-accent)] shadow-[0_20px_50px_var(--display-accent-15)] ${compact ? 'p-4 md:p-5 rounded-2xl' : 'p-12 rounded-[28px]'}`}>
                                         <div className="flex items-center gap-3 mb-2">
@@ -399,7 +399,8 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                     </div>
                                 </motion.div>
                             )}
-                        </AnimatePresence>
+                            </AnimatePresence>
+                        </div>
 
                         <div className={`grid gap-6 ${compact ? 'grid-cols-1 gap-3' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'}`}>
                             {counterDisplayList.map(({ pos, call, serviceId, isActive, isHighlighted, isBetweenCalls, waitingCount, nextWaiting }, index) => (
