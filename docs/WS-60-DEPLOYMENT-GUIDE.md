@@ -90,7 +90,7 @@ Edit `.env` and set:
 |---|---|---|
 | `NODE_ENV` | `production` | Required |
 | `JWT_SECRET` | `<unique-value-32+chars>` | NOT dev value |
-| `DATABASE_URL` | `file:./prisma/dev.db` | Default |
+| `DATABASE_URL` | `file:./dev.db?socket_timeout=5&connection_limit=1` | Match `.env.example` |
 | `HTTPS_PFX_PASSWORD` | `<certificate-password>` | Set after cert generation |
 
 **DO NOT** commit `.env` or production credentials to Git.
