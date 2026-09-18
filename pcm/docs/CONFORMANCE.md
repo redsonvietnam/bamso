@@ -1,8 +1,8 @@
 # PCM/PWF Conformance Specification
 
-**Version:** 1.0 (Canonical)  
-**Status:** Approved — PCM-GATE-01  
-**Authority:** External Authority Gate  
+**Version:** 1.0 (Proposed Reference)  
+**Status:** Proposed — pending external Authority Gate review  
+**Authority:** External reference; not BAMSO canonical state  
 
 ## 1. Purpose
 
@@ -116,4 +116,4 @@ Conformance specifications follow PCM versioning:
 
 ## 6. Authority
 
-This specification is CANONICAL as part of PCM/PWF v0.2 baseline approved by PCM-GATE-01.
+This specification is PROPOSED reference material and does not represent canonical BAMSO state until approved through the applicable GATE.
