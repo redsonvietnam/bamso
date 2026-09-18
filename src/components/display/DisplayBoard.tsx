@@ -390,8 +390,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                                 <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Vị trí</p>
                                                 <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.pos}</p>
                                             </div>
-                                            <div className={`w-px bg-border ${compact ? 'h-8' : 'h-12'}`} />
-                                            <div className="text-center">
+                                            <div className="min-w-0 px-3 text-center first:pl-0 last:pr-0">
                                                 <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Khách hàng</p>
                                                 <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.customerName || 'Quý khách'}</p>
                                             </div>
