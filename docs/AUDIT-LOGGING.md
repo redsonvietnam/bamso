@@ -101,11 +101,19 @@ model AuditLog {
 
 Recommended: Windows Task Scheduler daily job (e.g., 02:00 AM VN).
 
-```
-schtasks /create /tn "BAMSO Audit Purge" /tr "python scripts/purge-audit-logs.py" /sc daily /st 02:00
+Install the repository-provided task installer so the scheduled action has an explicit project working directory and database path:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-audit-purge-task.ps1
 ```
 
-Existing scheduler pattern: `scripts/install-backup-task.ps1` (daily backup at 02:00 AM).
+Preview without mutating Task Scheduler:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-audit-purge-task.ps1 -DryRun
+```
+
+The installer follows the same operational pattern as `scripts/install-backup-task.ps1` and passes an explicit `--db` path to the purge script.
 
 ### Safety Properties
 
