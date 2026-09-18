@@ -2,7 +2,11 @@
 
 ## STATUS: READY FOR ON-SITE EXECUTION
 
-## BASE HEAD: `203ebb1`
+## RELEASE PINNING
+
+This guide is a procedure, not the canonical release identifier.
+
+Before on-site deployment, verify the checked-out commit against the **explicitly approved canonical release commit** recorded by the R1 GATE. Do not hardcode a historical relay or development commit in this document.
 
 ## PURPOSE
 
@@ -36,17 +40,17 @@ ipconfig | findstr "IPv4"
 # Check project path
 cd D:\bamso
 git log --oneline -1
-# Expected: 203ebb1 feat(ws-60): add production rehearsal and on-site acceptance checklist
 ```
 
-### A2. Verify HEAD
+### A2. Verify Approved Release Commit
+
+Confirm that the current commit matches the exact commit authorized by the R1 GATE for this deployment.
 
 ```powershell
 git rev-parse HEAD
-# Expected: 203ebb15d4ce0eada821497a7afe5d1512b39ed5
 ```
 
-If HEAD doesn't match, STOP and report BLOCKER.
+If the commit is not the approved canonical release commit, STOP and report BLOCKER.
 
 ---
 
@@ -89,7 +93,7 @@ Edit `.env` and set:
 | `DATABASE_URL` | `file:./prisma/dev.db` | Default |
 | `HTTPS_PFX_PASSWORD` | `<certificate-password>` | Set after cert generation |
 
-**DO NOT** commit `.env` to Git.
+**DO NOT** commit `.env` or production credentials to Git.
 
 ### B5. Generate HTTPS Certificate
 
@@ -191,9 +195,12 @@ https://<server-ip>:3443/kiosk
 
 ### E2. Login
 
-Use kiosk credentials:
-- Username: `kiosk1`
-- Password: `kiosk@2026`
+Use the kiosk account provisioned for this deployment.
+
+- Username: `<provisioned-kiosk-username>`
+- Password: `<provisioned-kiosk-password>`
+
+Do not store production credentials in this repository or in screenshots/evidence.
 
 ### E3. Open QR Scanner
 
@@ -207,13 +214,13 @@ Use kiosk credentials:
 - Wait for decode
 - Confirm customer name is extracted and displayed
 
+**DO NOT** record raw CCCD payload, CCCD number, DOB, gender, nationality, or issue date.
+
 ### E5. Create Ticket
 
 - Click "Create Ticket" or similar button
 - Confirm ticket number is generated
 - Record ticket number
-
-**DO NOT** record raw CCCD payload, CCCD number, DOB, gender, nationality, or issue date.
 
 ---
 
@@ -229,9 +236,12 @@ https://<server-ip>:3443
 
 ### F2. Login
 
-Use staff credentials:
-- Username: `canbo1`
-- Password: `canbo1@123`
+Use the staff account provisioned for this deployment.
+
+- Username: `<provisioned-staff-username>`
+- Password: `<provisioned-staff-password>`
+
+Do not store production credentials in this repository or in screenshots/evidence.
 
 ### F3. Verify Ticket Appears
 
