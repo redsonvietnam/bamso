@@ -1,8 +1,8 @@
 # Protocol Workflow Framework (PWF)
 
-**Version:** 1.0 (Canonical)  
-**Status:** Approved — PCM-GATE-01  
-**Authority:** External Authority Gate  
+**Version:** 1.0 (Proposed Reference)  
+**Status:** Proposed — pending external Authority Gate review  
+**Authority:** External reference; not BAMSO canonical state  
 
 ## 1. Purpose
 
