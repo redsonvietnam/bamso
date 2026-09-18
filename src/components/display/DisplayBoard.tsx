@@ -385,8 +385,8 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                         <p className={`font-display font-semibold tracking-tight leading-none text-foreground ${compact ? 'text-5xl md:text-7xl' : 'text-4xl sm:text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem]'}`}>
                                             {lastCalledTicket.ticketNumber}
                                         </p>
-                                        <div className={`flex items-center ${compact ? 'gap-4 md:gap-6 mt-2' : 'gap-12 mt-6'}`}>
-                                            <div className="text-center">
+                                        <div className={`grid grid-cols-2 divide-x divide-border ${compact ? 'mt-3' : 'mt-6 w-full max-w-3xl'}`}>
+                                            <div className="min-w-0 px-3 text-center first:pl-0 last:pr-0">
                                                 <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Vị trí</p>
                                                 <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.pos}</p>
                                             </div>
