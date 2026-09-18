@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST } from '@/app/api/tickets/route';
-import { createTicket } from '@/lib/ticket-service';
+import { createTicketIdempotent } from '@/lib/ticket-service';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { authenticateOptional } from '@/lib/api-auth';
@@ -16,6 +16,14 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/ticket-service', () => ({
     createTicket: vi.fn(),
+    createTicketIdempotent: vi.fn(),
+    IdempotencyConflictError: class IdempotencyConflictError extends Error {
+        code = 'IDEMPOTENCY_CONFLICT';
+        status = 409;
+        constructor() {
+            super('Idempotency-Key đã được sử dụng cho một thao tác khác.');
+        }
+    },
 }));
 
 vi.mock('@/lib/sse-broker', () => ({
@@ -43,7 +51,7 @@ vi.mock('@/lib/logger', () => ({
     },
 }));
 
-const mockedCreateTicket = createTicket as ReturnType<typeof vi.fn>;
+const mockedCreateTicketIdempotent = createTicketIdempotent as ReturnType<typeof vi.fn>;
 const mockedBroadcastQueueUpdate = broadcastQueueUpdate as ReturnType<typeof vi.fn>;
 const mockedCheckRateLimit = checkRateLimit as ReturnType<typeof vi.fn>;
 const mockedGetClientIp = getClientIp as ReturnType<typeof vi.fn>;
@@ -86,10 +94,13 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockedGetClientIp.mockReturnValue('127.0.0.1');
     mockedCheckRateLimit.mockResolvedValue({ allowed: true });
-    mockedCreateTicket.mockResolvedValue({
-        id: 'ticket-1',
-        serviceId: 'svc-1',
-        ticketNumber: 'A001',
+    mockedCreateTicketIdempotent.mockResolvedValue({
+        ticket: {
+            id: 'ticket-1',
+            serviceId: 'svc-1',
+            ticketNumber: 'A001',
+        },
+        replayed: false,
     });
     mockedBroadcastQueueUpdate.mockResolvedValue(undefined);
 });
@@ -127,7 +138,7 @@ describe('POST /api/tickets', () => {
 
         expect(response.status).toBe(400);
         await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_FIELDS' });
-        expect(mockedCreateTicket).not.toHaveBeenCalled();
+        expect(mockedCreateTicketIdempotent).not.toHaveBeenCalled();
     });
 
     it('returns 201 even when queue broadcast rejects', async () => {
@@ -225,5 +236,32 @@ describe('GET /api/tickets — PII redaction', () => {
         expect(data).toHaveLength(5);
         expect(data[3].customerName).toBe('Phạm Văn D');
         expect(data[3].phone).toBe('0933666666');
+    });
+});
+
+describe('GET /api/tickets — Vietnam today window (WP-CORE-03)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        const { default: prismaMock } = await import('@/lib/db');
+        vi.mocked(prismaMock.ticket.findMany).mockResolvedValue([]);
+        mockedAuthenticateOptional.mockResolvedValue({ role: null });
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('queries the Vietnam day containing 00:00 Sep 14 Vietnam', async () => {
+        vi.setSystemTime(new Date('2026-09-13T17:00:00.000Z'));
+        const response = await GET(makeGetTicketsRequest({}));
+        expect(response.status).toBe(200);
+
+        const { default: prismaMock } = await import('@/lib/db');
+        const args = vi.mocked(prismaMock.ticket.findMany).mock.calls[0][0] as {
+            where: { createdAt: { gte: Date; lte: Date } };
+        };
+        expect(args.where.createdAt.gte.toISOString()).toBe('2026-09-13T17:00:00.000Z');
+        expect(args.where.createdAt.lte.toISOString()).toBe('2026-09-14T16:59:59.999Z');
     });
 });
