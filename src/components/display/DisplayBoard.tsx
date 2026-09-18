@@ -363,7 +363,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                     </div>
                 ) : (
                     <>
-                        <div className={compact ? 'mb-3 min-h-[9rem] md:min-h-[10rem]' : 'mb-8 min-h-[20rem] md:min-h-[22rem] lg:min-h-[24rem] relative'}>
+                        <div className={compact ? 'mb-3 min-h-[9rem] md:min-h-[10rem]' : 'mb-8 lg:mb-10 min-h-[20rem] md:min-h-[22rem] lg:min-h-[24rem] relative'}>
                             <AnimatePresence initial={false} mode="sync">
                             {lastCalledTicket && (
                                 <motion.div
