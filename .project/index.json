@@ -1,0 +1,46 @@
+[
+  {
+    "id": "UI-02",
+    "kind": "ui",
+    "name": "Can bo page / queue selection UI",
+    "status": "completed",
+    "relations": ["src/app/canbo/page.tsx"],
+    "artifacts": ["src/app/canbo/page.tsx"],
+    "evidence": ["git history: d970ff3", "git history: 7569a27"],
+    "provenance": "inferred",
+    "freshness": "current"
+  },
+  {
+    "id": "CORE-06",
+    "kind": "workstream",
+    "name": "Display Call Durability",
+    "status": "completed",
+    "relations": ["WP-CORE-06", "DisplayBoard", "SSE", "display recovery"],
+    "artifacts": ["docs/CORE-06-CC-FINAL-REPORT.md"],
+    "evidence": ["commit 90bcc6c", "CORE-06 CC Final Report"],
+    "provenance": "verified",
+    "freshness": "current"
+  },
+  {
+    "id": "TASK-A",
+    "kind": "task",
+    "name": "MFA Task A",
+    "status": "completed",
+    "relations": ["MFA"],
+    "artifacts": [],
+    "evidence": ["commit 19258be", "commit 7f5ecde"],
+    "provenance": "verified",
+    "freshness": "current"
+  },
+  {
+    "id": "TASK-C.1",
+    "kind": "task",
+    "name": "MFA Task C.1",
+    "status": "completed",
+    "relations": ["MFA Task C", "concurrency", "audit", "recovery"],
+    "artifacts": ["docs/ROADMAP.md"],
+    "evidence": ["commit 97185d7", "docs/ROADMAP.md"],
+    "provenance": "verified",
+    "freshness": "current"
+  }
+]
