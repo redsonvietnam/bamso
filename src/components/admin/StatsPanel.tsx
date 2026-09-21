@@ -9,6 +9,7 @@ import { apiClient } from '@/lib/api-client';
 import { buildStatsCsv } from '@/lib/stats-csv';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+import { getBusinessDayKey } from '@/lib/business-day';
 
 type StatsData = {
     summary: {
@@ -25,13 +26,11 @@ type StatsData = {
 };
 
 function todayStr() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return getBusinessDayKey(new Date());
 }
 
 function yesterdayStr() {
-    const d = new Date(Date.now() - 86400000);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return getBusinessDayKey(new Date(Date.now() - 86400000));
 }
 
 export default function StatsPanel() {
@@ -246,6 +245,7 @@ export default function StatsPanel() {
                 </CardHeader>
                 <CardContent>
                     <div className="border rounded-lg overflow-hidden">
+                        <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-muted">
                                 <tr>
@@ -287,6 +287,7 @@ export default function StatsPanel() {
                                 })}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

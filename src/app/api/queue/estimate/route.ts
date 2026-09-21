@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { getBusinessDayBounds } from '@/lib/business-day';
 
 export async function GET(request: Request) {
   try {
@@ -14,9 +15,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
     const completedTickets = await prisma.ticket.findMany({
       where: {

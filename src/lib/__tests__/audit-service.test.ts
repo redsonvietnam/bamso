@@ -182,7 +182,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
 
             const called = await callNextTicket(testServiceId, 'Quầy 1', staffActor);
             expect(called).toBeDefined();
-            expect(called?.id).toBe(ticket.id);
+            expect(called?.ticket?.id).toBe(ticket.id);
 
             const audit = await prisma.auditLog.findFirst({
                 where: {
@@ -219,7 +219,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
 
             // Calling next will auto-complete ticket1 at Quầy 1 and claim ticket2
             const called2 = await callNextTicket(testServiceId, 'Quầy 1', staffActor);
-            expect(called2?.id).toBe(ticket2.id);
+            expect(called2?.ticket?.id).toBe(ticket2.id);
 
             // Verify ticket1 status is completed
             const updated1 = await prisma.ticket.findUnique({ where: { id: ticket1.id } });

@@ -1,6 +1,8 @@
+import crypto from 'crypto';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
+import { getBusinessDayBounds, getBusinessDayKey } from '@/lib/business-day';
 
 const MAX_CALL_RETRIES = 5;
 
@@ -39,30 +41,112 @@ const withPosLock = createMutex();
 const withServiceQueueLock = createMutex();
 
 function getTodayBounds() {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    return { startOfDay, endOfDay };
+    return getBusinessDayBounds();
 }
 
 function getDayKey(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return getBusinessDayKey(date);
+}
+
+export class IdempotencyConflictError extends Error {
+    readonly code = 'IDEMPOTENCY_CONFLICT';
+    readonly status = 409;
+
+    constructor() {
+        super('Idempotency-Key đã được sử dụng cho một thao tác khác.');
+    }
+}
+
+export interface DisplayEvent {
+    eventId: string;
+    serviceId: string;
+    ticketNumber: string;
+    pos: string;
+    customerName?: string | null;
+    nextTicketNumber?: string;
+}
+
+export interface CallNextOptions {
+    // Client-supplied key for one logical CALL-NEXT operation. Absent key =
+    // legacy path with no idempotency record. Present key = the key row is
+    // reserved atomically inside the same transaction as the queue mutation.
+    idempotencyKey?: string;
+}
+
+function callNextFingerprint(serviceId: string, pos: string, actor?: AuditActor): string {
+    return JSON.stringify({
+        serviceId,
+        pos,
+        actorId: actor?.actorId ?? null,
+        actorRole: actor?.actorRole ?? null,
+    });
+}
+
+// True only for a unique-key collision on the CallNextIdempotency primary
+// key (probed shape: { code: 'P2002', meta: { modelName:
+// 'CallNextIdempotency', target: ['key'] } }). Any other Prisma error,
+// including P2002 on other tables, is a genuine unrelated error and must
+// propagate untouched.
+function isIdempotencyKeyConflict(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const record = error as { code?: unknown; meta?: unknown };
+    if (record.code !== 'P2002') return false;
+    const meta = record.meta as { modelName?: unknown; target?: unknown } | undefined;
+    if (meta?.modelName !== 'CallNextIdempotency') return false;
+    const target = meta?.target;
+    if (Array.isArray(target)) return target.includes('key');
+    if (typeof target === 'string') return target === 'key' || target.includes('CallNextIdempotency');
+    return false;
 }
 
 /**
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
+ *
+ * Idempotency (WP-CORE-04): when options.idempotencyKey is present, the key
+ * row is created in the same transaction as the claim. A retry carrying the
+ * same key and fingerprint replays the original claimed ticket without a
+ * second mutation or audit; the same key with a different fingerprint is
+ * rejected with IdempotencyConflictError and zero mutation. The service is
+ * the authority on replay: the result carries replayed=true only when no
+ * mutation happened in this call.
  */
-export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor) {
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor, options?: CallNextOptions) {
+    const idempotencyKey = options?.idempotencyKey;
+    const fingerprint = idempotencyKey ? callNextFingerprint(serviceId, pos, actor) : null;
     return withPosLock(pos, async () => {
         const { startOfDay, endOfDay } = getTodayBounds();
         const dayKey = getDayKey(new Date());
 
         for (let attempt = 0; attempt < MAX_CALL_RETRIES; attempt++) {
-            const result = await prisma.$transaction(async (tx) => {
+            try {
+                const result = await prisma.$transaction(async (tx) => {
+                    if (idempotencyKey && fingerprint) {
+                    const existing =
+                        typeof tx.callNextIdempotency?.findUnique === 'function'
+                            ? await tx.callNextIdempotency.findUnique({ where: { key: idempotencyKey } })
+                            : null;
+                    if (existing) {
+                        if (existing.fingerprint !== fingerprint) {
+                            throw new IdempotencyConflictError();
+                        }
+                        if (!existing.ticketId) {
+                            throw new Error('Bản ghi idempotency không nhất quán.');
+                        }
+                        const replayed = await tx.ticket.findUnique({
+                            where: { id: existing.ticketId },
+                            include: { service: true },
+                        });
+                        if (!replayed) {
+                            throw new Error('Bản ghi idempotency không nhất quán.');
+                        }
+                        return { claimed: true as const, ticket: replayed, replayed: true as const, displayEvent: undefined };
+                    }
+                    await tx.callNextIdempotency.create({
+                        data: { key: idempotencyKey, fingerprint },
+                    });
+                }
+
                 const autoCompleted = typeof tx.ticket.findMany === 'function'
                     ? await tx.ticket.findMany({
                           where: {
@@ -115,6 +199,12 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                 });
 
                 if (claimResult.count === 0) {
+                    if (idempotencyKey) {
+                        // Release this attempt's key reservation so the retry
+                        // starts clean; the committed transaction carries no
+                        // trace of the unclaimed attempt.
+                        await tx.callNextIdempotency.deleteMany({ where: { key: idempotencyKey } });
+                    }
                     return { claimed: false as const };
                 }
 
@@ -133,17 +223,84 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                     },
                 });
 
+                // CORE-06: Persist display call event atomically with the
+                // business mutation. The event is the canonical record of
+                // the customer-facing notification that was created by this
+                // successful CALL-NEXT.
+                const nextInQueue = await tx.ticket.findFirst({
+                    where: {
+                        serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                        id: { not: nextTicket.id },
+                    },
+                    orderBy: { position: 'asc' },
+                });
+
+                const maxSeq = await tx.displayCallEvent.aggregate({
+                    where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+                    _max: { sequence: true },
+                });
+                const sequence = (maxSeq._max.sequence ?? 0) + 1;
+
+                const displayEventId = crypto.randomUUID();
+                await tx.displayCallEvent.create({
+                    data: {
+                        eventId: displayEventId,
+                        callNextKey: idempotencyKey ?? null,
+                        ticketId: nextTicket.id,
+                        ticketNumber: nextTicket.ticketNumber,
+                        serviceId,
+                        pos,
+                        customerName: nextTicket.customerName,
+                        nextTicketNumber: nextInQueue?.ticketNumber ?? null,
+                        sequence,
+                        status: 'PENDING',
+                    },
+                });
+
+                const claimedTicket = await tx.ticket.findUnique({
+                    where: { id: nextTicket.id },
+                    include: { service: true },
+                });
+                if (idempotencyKey) {
+                    // Seal the reservation with the canonical outcome inside
+                    // the same transaction as the claim and its audit record.
+                    await tx.callNextIdempotency.update({
+                        where: { key: idempotencyKey },
+                        data: { ticketId: nextTicket.id, ticketNumber: nextTicket.ticketNumber },
+                    });
+                }
+
                 return {
                     claimed: true as const,
-                    ticket: await tx.ticket.findUnique({
-                        where: { id: nextTicket.id },
-                        include: { service: true },
-                    }),
+                    ticket: claimedTicket,
+                    replayed: false as const,
+                    displayEvent: {
+                        eventId: displayEventId,
+                        serviceId,
+                        ticketNumber: nextTicket.ticketNumber,
+                        pos,
+                        customerName: nextTicket.customerName,
+                        nextTicketNumber: nextInQueue?.ticketNumber ?? null,
+                    },
                 };
-            }, { timeout: 15000 });
+                }, { timeout: 15000 });
 
-            if (result.claimed) {
-                return result.ticket;
+                if (result.claimed) {
+                    return { ticket: result.ticket, replayed: result.replayed, displayEvent: result.displayEvent };
+                }
+            } catch (error) {
+                // Unique-key collision on the idempotency reservation: an
+                // independent execution context committed the same key first.
+                // Prisma already rolled our transaction back completely (no
+                // partial mutation, no orphan row, no audit), so retrying
+                // observes the winner's committed row and replays it.
+                if (isIdempotencyKeyConflict(error) && attempt < MAX_CALL_RETRIES - 1) {
+                    continue;
+                }
+                throw error;
             }
         }
 

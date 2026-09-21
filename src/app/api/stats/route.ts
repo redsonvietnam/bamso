@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { requireRole } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+import { getBusinessDayBounds, getBusinessDayBoundsForYMD, getBusinessHour } from '@/lib/business-day';
 
 function parseDateParam(value: string): Date | null {
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -25,8 +26,11 @@ export async function GET(request: Request) {
         const toParam = searchParams.get('to');
         const serviceIdParam = searchParams.get('serviceId');
 
-        let startDate: Date;
-        let endDate: Date;
+        // Explicit YYYY-MM-DD params name Vietnam calendar dates; resolve them
+        // to Vietnam-midnight instants. Missing bounds default to the
+        // current Vietnam day.
+        let startOfDay: Date;
+        let endOfDay: Date;
 
         if (fromParam || toParam) {
             const from = fromParam ? parseDateParam(fromParam) : null;
@@ -39,29 +43,38 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: 'Invalid to date', code: 'INVALID_DATE' }, { status: 400 });
             }
 
-            const today = new Date();
-            startDate = from ?? today;
-            endDate = to ?? from ?? today;
-
-            const startNormalized = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            const endNormalized = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-            if (startNormalized > endNormalized) {
+            const todayBounds = getBusinessDayBounds(new Date());
+            // `to` defaults to `from`, mirroring the previous defaulting
+            // rules; a missing side defaults to the current Vietnam day.
+            const effectiveTo = to ?? from;
+            const startBounds = from
+                ? getBusinessDayBoundsForYMD(from.getFullYear(), from.getMonth() + 1, from.getDate())
+                : todayBounds;
+            const endBounds = effectiveTo
+                ? getBusinessDayBoundsForYMD(
+                      effectiveTo.getFullYear(),
+                      effectiveTo.getMonth() + 1,
+                      effectiveTo.getDate()
+                  )
+                : todayBounds;
+            if (startBounds.startOfDay > endBounds.endOfDay) {
                 return NextResponse.json({ error: 'from must not be after to', code: 'INVALID_RANGE' }, { status: 400 });
             }
+            startOfDay = startBounds.startOfDay;
+            endOfDay = endBounds.endOfDay;
         } else if (dateParam) {
             const d = parseDateParam(dateParam);
             if (!d) {
                 return NextResponse.json({ error: 'Invalid date', code: 'INVALID_DATE' }, { status: 400 });
             }
-            startDate = d;
-            endDate = d;
+            const bounds = getBusinessDayBoundsForYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+            startOfDay = bounds.startOfDay;
+            endOfDay = bounds.endOfDay;
         } else {
-            startDate = new Date();
-            endDate = new Date();
+            const bounds = getBusinessDayBounds(new Date());
+            startOfDay = bounds.startOfDay;
+            endOfDay = bounds.endOfDay;
         }
-
-        const startOfDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-        const endOfDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
 
         const where: Record<string, unknown> = { createdAt: { gte: startOfDay, lte: endOfDay } };
         if (serviceIdParam) {
@@ -104,7 +117,7 @@ export async function GET(request: Request) {
             hourMap[h] = 0;
         }
         for (const t of ticketsPerHour) {
-            const hour = t.createdAt.getHours();
+            const hour = getBusinessHour(t.createdAt);
             hourMap[hour] = (hourMap[hour] || 0) + t._count.id;
         }
 

@@ -112,10 +112,11 @@ describe('subscribeDisplay / unsubscribeDisplay', () => {
         const { controller } = makeController();
 
         broker.subscribeDisplay('display-1', controller);
-        await broker.broadcastDisplayCall('A001', 'Q1', 'Nguyễn Văn A');
+        await broker.broadcastDisplayCall('evt-1', 'A001', 'Q1', 'Nguyễn Văn A');
 
-        const event = parseEvent(received(controller)) as { type: string; ticketNumber: string; pos: string; customerName: string };
+        const event = parseEvent(received(controller)) as { type: string; eventId: string; ticketNumber: string; pos: string; customerName: string };
         expect(event.type).toBe('DISPLAY_CALL');
+        expect(event.eventId).toBe('evt-1');
         expect(event.ticketNumber).toBe('A001');
         expect(event.pos).toBe('Q1');
         expect(event.customerName).toBe('Nguyễn Văn A');
@@ -127,7 +128,7 @@ describe('subscribeDisplay / unsubscribeDisplay', () => {
 
         broker.subscribeDisplay('display-1', controller);
         broker.unsubscribeDisplay('display-1');
-        await broker.broadcastDisplayCall('A001', 'Q1');
+        await broker.broadcastDisplayCall('evt-2', 'A001', 'Q1');
 
         const enqueueMock = (controller as unknown as { enqueue: ReturnType<typeof vi.fn> }).enqueue;
         expect(enqueueMock).not.toHaveBeenCalled();
@@ -299,12 +300,13 @@ describe('broadcastDisplayCall', () => {
 
         broker.subscribeDisplay('display-1', displayCtrl.controller);
         broker.subscribeQueue('queue-1', queueCtrl.controller);
-        await broker.broadcastDisplayCall('A001', 'Q1', 'Nguyễn Văn A', 'A002');
+        await broker.broadcastDisplayCall('evt-3', 'A001', 'Q1', 'Nguyễn Văn A', 'A002');
 
         // Display client: đầy đủ, có customerName + nextTicketNumber
         const displayEvent = parseEvent(received(displayCtrl.controller)) as Record<string, unknown>;
         expect(displayEvent).toEqual({
             type: 'DISPLAY_CALL',
+            eventId: 'evt-3',
             ticketNumber: 'A001',
             pos: 'Q1',
             customerName: 'Nguyễn Văn A',
@@ -315,6 +317,7 @@ describe('broadcastDisplayCall', () => {
         const queueEvent = parseEvent(received(queueCtrl.controller)) as Record<string, unknown>;
         expect(queueEvent).toEqual({
             type: 'DISPLAY_CALL',
+            eventId: 'evt-3',
             ticketNumber: 'A001',
             pos: 'Q1',
             nextTicketNumber: 'A002',
@@ -324,11 +327,11 @@ describe('broadcastDisplayCall', () => {
 
     it('gọi redis.publish đúng channel DISPLAY_CALL', async () => {
         const broker = createBroker();
-        await broker.broadcastDisplayCall('A001', 'Q1', 'Nguyễn Văn A');
+        await broker.broadcastDisplayCall('evt-4', 'A001', 'Q1', 'Nguyễn Văn A');
 
         expect(mockRedis.publish).toHaveBeenCalledWith(
             'display:calls',
-            JSON.stringify({ ticketNumber: 'A001', pos: 'Q1', customerName: 'Nguyễn Văn A', nextTicketNumber: undefined })
+            JSON.stringify({ eventId: 'evt-4', ticketNumber: 'A001', pos: 'Q1', customerName: 'Nguyễn Văn A', nextTicketNumber: undefined })
         );
     });
 });
@@ -361,10 +364,10 @@ describe('controller.enqueue ném lỗi → client bị gỡ', () => {
         });
 
         broker.subscribeDisplay('display-1', controller);
-        await broker.broadcastDisplayCall('A001', 'Q1');
+        await broker.broadcastDisplayCall('evt-5', 'A001', 'Q1');
         expect(enqueueMock).toHaveBeenCalledTimes(1);
 
-        await broker.broadcastDisplayCall('A001', 'Q1');
+        await broker.broadcastDisplayCall('evt-6', 'A001', 'Q1');
         expect(enqueueMock).toHaveBeenCalledTimes(1);
     });
 

@@ -9,6 +9,13 @@ vi.mock('@/lib/db', () => ({
             findFirst: vi.fn(),
             findUnique: vi.fn(),
         },
+        displayCallEvent: {
+            aggregate: vi.fn().mockResolvedValue({ _max: { sequence: null } }),
+            create: vi.fn().mockResolvedValue({}),
+        },
+        auditLog: {
+            create: vi.fn().mockResolvedValue({}),
+        },
     },
 }));
 
@@ -21,6 +28,13 @@ const mockedPrisma = prisma as unknown as {
         updateMany: ReturnType<typeof vi.fn>;
         findFirst: ReturnType<typeof vi.fn>;
         findUnique: ReturnType<typeof vi.fn>;
+    };
+    displayCallEvent: {
+        aggregate: ReturnType<typeof vi.fn>;
+        create: ReturnType<typeof vi.fn>;
+    };
+    auditLog: {
+        create: ReturnType<typeof vi.fn>;
     };
 };
 
@@ -63,7 +77,9 @@ describe('callNextTicket per-counter concurrency safety', () => {
             .mockResolvedValueOnce({ count: 1 });
         mockedPrisma.ticket.findFirst
             .mockResolvedValueOnce(ticket1)
-            .mockResolvedValueOnce(ticket2);
+            .mockResolvedValueOnce(null)   // nextInQueue for first call
+            .mockResolvedValueOnce(ticket2)
+            .mockResolvedValueOnce(null);  // nextInQueue for second call
         mockedPrisma.ticket.findUnique
             .mockResolvedValueOnce(called1)
             .mockResolvedValueOnce(called2);
@@ -78,8 +94,8 @@ describe('callNextTicket per-counter concurrency safety', () => {
         expect(transactionCalls).toBe(1);
 
         releaseFirst();
-        await expect(first).resolves.toEqual(called1);
-        await expect(second).resolves.toEqual(called2);
+        await expect(first).resolves.toMatchObject({ ticket: called1, replayed: false });
+        await expect(second).resolves.toMatchObject({ ticket: called2, replayed: false });
         expect(transactionCalls).toBe(2);
     });
 });

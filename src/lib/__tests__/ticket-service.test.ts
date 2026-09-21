@@ -37,7 +37,7 @@ function uniqueConflict() {
 beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-15T09:00:00'));
+    vi.setSystemTime(new Date('2026-08-15T09:00:00+07:00'));
 
     mockedPrisma.$transaction.mockImplementation(async (cb: (tx: typeof mockedPrisma) => unknown) => {
         return cb(mockedPrisma);

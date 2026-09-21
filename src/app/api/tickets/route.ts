@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createTicket } from '@/lib/ticket-service';
+import { createTicketIdempotent, IdempotencyConflictError } from '@/lib/ticket-service';
 import { TicketStatus, UserRole } from '@/lib/constants';
 import { broadcastQueueUpdate } from '@/lib/sse-broker';
 import { logger } from '@/lib/logger';
@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateOptional, requireRole } from '@/lib/api-auth';
 import { readJsonObject, sanitizeApiError } from '@/lib/api-validation';
 import { writeAuditLog } from '@/lib/audit-service';
+import { getBusinessDayBounds, getBusinessDayBoundsForYMD } from '@/lib/business-day';
 
 const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
@@ -117,18 +118,36 @@ export async function POST(request: Request) {
             );
         }
 
-        const ticket = await createTicket({
-            serviceId,
-            customerName: customerName as string | undefined,
-            phone: phone as string | undefined,
-        });
+        const ticket = await createTicketIdempotent(
+            {
+                serviceId,
+                customerName: customerName as string | undefined,
+                phone: phone as string | undefined,
+            },
+            request.headers.get('Idempotency-Key')
+        );
 
-        void broadcastQueueUpdate(ticket.serviceId).catch((err) => {
-            logger.error('Ticket queue broadcast failed:', err);
-        });
+        if (!ticket.replayed) {
+            void broadcastQueueUpdate(ticket.ticket.serviceId).catch((err) => {
+                logger.error('Ticket queue broadcast failed:', err);
+            });
+        }
 
-        return NextResponse.json(ticket, { status: 201 });
+        return NextResponse.json(ticket.ticket, { status: ticket.replayed ? 200 : 201 });
     } catch (error) {
+        if (error instanceof IdempotencyConflictError) {
+            await writeAuditLog(prisma, {
+                actor: { actorType: 'ANONYMOUS' },
+                action: 'TICKET_CREATED',
+                entityType: 'TICKET',
+                success: false,
+                reasonCode: 'IDEMPOTENCY_CONFLICT',
+            });
+            return NextResponse.json(
+                { error: error.message, code: error.code },
+                { status: error.status }
+            );
+        }
         logger.error('Ticket creation error:', error);
         const { message, isClientError } = sanitizeApiError(error);
         const isInactive = message.includes('ngừng hoạt động') || message.includes('không tồn tại');
@@ -151,9 +170,7 @@ export async function GET(request: Request) {
     const serviceId = searchParams.get('serviceId');
     const status = searchParams.get('status') as TicketStatus | null;
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
     try {
         const tickets = await prisma.ticket.findMany({
@@ -206,16 +223,18 @@ export async function DELETE(request: Request): Promise<NextResponse> {
             { status: 400 }
         );
     }
-    const cutoffDate = new Date(year, month - 1, day);
-    if (cutoffDate.getFullYear() !== year || cutoffDate.getMonth() !== month - 1 || cutoffDate.getDate() !== day) {
+    const localCheck = new Date(year, month - 1, day);
+    if (localCheck.getFullYear() !== year || localCheck.getMonth() !== month - 1 || localCheck.getDate() !== day) {
         return NextResponse.json(
             { error: 'cutoff không hợp lệ', code: 'INVALID_FIELDS' },
             { status: 400 }
         );
     }
+    // The cutoff names a Vietnam calendar date: delete strictly before its
+    // Vietnam-midnight instant, and never touch the current Vietnam day.
+    const cutoffDate = getBusinessDayBoundsForYMD(year, month, day).startOfDay;
 
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const { startOfDay: startOfToday } = getBusinessDayBounds(new Date());
     if (cutoffDate >= startOfToday) {
         return NextResponse.json(
             { error: 'cutoff phải trước ngày hôm nay', code: 'INVALID_FIELDS' },

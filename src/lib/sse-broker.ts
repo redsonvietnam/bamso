@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { getRedisClient, getRedisPubSubClient } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 import { UserRole } from '@/lib/constants';
+import { getBusinessDayBounds } from '@/lib/business-day';
 
 const encoder = new TextEncoder();
 
@@ -58,8 +59,8 @@ export class SSEBroker {
                         const { serviceId } = JSON.parse(message);
                         this.broadcastQueueUpdateLocal(serviceId);
                     } else if (channel === CHANNELS.DISPLAY_CALL) {
-                        const { ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
-                        this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber);
+                        const { eventId, ticketNumber, pos, customerName, nextTicketNumber } = JSON.parse(message);
+                        this.broadcastDisplayCallLocal(eventId, ticketNumber, pos, customerName, nextTicketNumber);
                     }
                 } catch (err) {
                     logger.error('Redis message parse error:', err);
@@ -115,9 +116,7 @@ export class SSEBroker {
     }
 
     private async broadcastQueueUpdateLocal(serviceId?: string) {
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const { startOfDay, endOfDay } = getBusinessDayBounds(new Date());
 
         // Always fetch all of today's tickets, then filter per-client below.
         // Filtering the query by serviceId would make client-all subscribers
@@ -148,14 +147,14 @@ export class SSEBroker {
         }
     }
 
-    async broadcastDisplayCall(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+    async broadcastDisplayCall(eventId: string, ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
         const redis = getRedisClient();
         const promises = [
-            this.broadcastDisplayCallLocal(ticketNumber, pos, customerName, nextTicketNumber).catch((err) => {
+            this.broadcastDisplayCallLocal(eventId, ticketNumber, pos, customerName, nextTicketNumber).catch((err) => {
                 logger.error('Local display call broadcast failed:', err);
             }),
             redis
-                ? redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
+                ? redis.publish(CHANNELS.DISPLAY_CALL, JSON.stringify({ eventId, ticketNumber, pos, customerName, nextTicketNumber })).catch((err) => {
                       logger.error('Redis publish display call failed:', err);
                   })
                 : Promise.resolve(0),
@@ -163,9 +162,10 @@ export class SSEBroker {
         await Promise.allSettled(promises);
     }
 
-    private async broadcastDisplayCallLocal(ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
+    private async broadcastDisplayCallLocal(eventId: string, ticketNumber: string, pos: string, customerName?: string | null, nextTicketNumber?: string) {
         const payload = JSON.stringify({
             type: 'DISPLAY_CALL',
+            eventId,
             ticketNumber,
             pos,
             customerName: customerName || null,
@@ -181,7 +181,7 @@ export class SSEBroker {
             }
         }
 
-        const queuePayload = JSON.stringify({ type: 'DISPLAY_CALL', ticketNumber, pos, nextTicketNumber });
+        const queuePayload = JSON.stringify({ type: 'DISPLAY_CALL', eventId, ticketNumber, pos, nextTicketNumber });
         const queueMessage = `data: ${queuePayload}\n\n`;
         for (const client of this.queueClients) {
             try {

@@ -140,6 +140,7 @@ export default function CanboPage() {
                     <Button
                         variant="ghost"
                         size="sm"
+                        className="min-h-11"
                         onClick={() => {
                             if (user) clearStaffSelection(user.id);
                             setSelectedService(null);
@@ -195,7 +196,7 @@ export default function CanboPage() {
                                 <Label htmlFor="pos">Tên quầy</Label>
                                 {counters.length > 0 ? (
                                     <Select value={selectedPos} onValueChange={setSelectedPos}>
-                                        <SelectTrigger className="h-10">
+                                        <SelectTrigger className="h-11">
                                             <SelectValue placeholder="Chọn quầy" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -214,7 +215,7 @@ export default function CanboPage() {
                             </div>
                             <Button
                                 type="submit"
-                                className="w-full font-medium"
+                                className="w-full min-h-11 font-medium"
                                 disabled={!selectedPos.trim()}
                                 onClick={(e) => {
                                     if (!selectedPos.trim()) {
@@ -249,7 +250,15 @@ export default function CanboPage() {
                         <Card
                             key={service.id}
                             className="cursor-pointer sketch-radius riso-paper-card glass-card hover:shadow-lg transition-shadow border-2 hover:border-primary/50"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setSelectedService(service)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    setSelectedService(service);
+                                }
+                            }}
                         >
                             <CardHeader>
                                 <div className="flex items-center gap-3">
