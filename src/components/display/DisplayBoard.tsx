@@ -61,6 +61,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     // Prevents duplicate announcements from recovery/replay while allowing
     // legitimate RECALL events (which have different identity semantics).
     const seenEventIds = useRef<Set<string>>(new Set());
+    const clearLastCalledTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -154,7 +155,15 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                         speakPrepare(data.nextTicketNumber);
                     }
 
-                    setTimeout(() => setLastCalledTicket(null), 7000);
+                    if (clearLastCalledTimeoutRef.current) {
+                        clearTimeout(clearLastCalledTimeoutRef.current);
+                    }
+                    clearLastCalledTimeoutRef.current = setTimeout(() => {
+                        setLastCalledTicket(current =>
+                            current?.timestamp === newCall.timestamp ? null : current
+                        );
+                        clearLastCalledTimeoutRef.current = null;
+                    }, 7000);
                 }
             } catch (error) {
                 logger.error('Error parsing display SSE message:', error);
@@ -219,6 +228,10 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
         global.displayBoard_queueEventSource.onerror = () => setIsConnected(false);
 
         return () => {
+            if (clearLastCalledTimeoutRef.current) {
+                clearTimeout(clearLastCalledTimeoutRef.current);
+                clearLastCalledTimeoutRef.current = null;
+            }
             if (global.displayBoard_displayEventSource) {
                 global.displayBoard_displayEventSource.close();
                 global.displayBoard_displayEventSource = undefined;
@@ -350,7 +363,8 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                     </div>
                 ) : (
                     <>
-                        <AnimatePresence mode="wait">
+                        <div className={compact ? 'mb-3 min-h-[9rem] md:min-h-[10rem]' : 'mb-8 lg:mb-10 min-h-[20rem] md:min-h-[22rem] lg:min-h-[24rem] relative'}>
+                            <AnimatePresence initial={false} mode="sync">
                             {lastCalledTicket && (
                                 <motion.div
                                     role="status"
@@ -358,7 +372,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                     initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 20 }}
                                     animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
                                     exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.1 }}
-                                    className={compact ? 'mb-3' : 'mb-12 relative'}
+                                    className="absolute inset-x-0 top-0"
                                 >
                                     <div className={`relative flex flex-col items-center justify-center bg-card border-4 border-[color:var(--display-accent)] shadow-[0_20px_50px_var(--display-accent-15)] ${compact ? 'p-4 md:p-5 rounded-2xl' : 'p-12 rounded-[28px]'}`}>
                                         <div className="flex items-center gap-3 mb-2">
@@ -366,17 +380,17 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                                 <Bell className={`text-[color:var(--display-accent)] animate-ring ${compact ? 'w-4 h-4' : 'w-6 h-6'}`} aria-hidden="true" />
                                             </span>
                                             <span className={`text-foreground uppercase tracking-[0.3em] font-black ${compact ? 'text-[10px] md:text-xs' : 'text-sm'}`}>Đang gọi số</span>
+                                            <span className={`rounded-full border border-[color:var(--display-accent-30)] bg-[color:var(--display-accent-10)] font-black tracking-[0.18em] text-foreground ${compact ? 'px-2 py-0.5 text-[9px]' : 'px-2.5 py-1 text-[10px]'}`}>MỚI</span>
                                         </div>
                                         <p className={`font-display font-semibold tracking-tight leading-none text-foreground ${compact ? 'text-5xl md:text-7xl' : 'text-4xl sm:text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem]'}`}>
                                             {lastCalledTicket.ticketNumber}
                                         </p>
-                                        <div className={`flex items-center ${compact ? 'gap-4 md:gap-6 mt-2' : 'gap-12 mt-6'}`}>
-                                            <div className="text-center">
+                                        <div className={`grid grid-cols-2 divide-x divide-border ${compact ? 'mt-3' : 'mt-6 w-full max-w-3xl'}`}>
+                                            <div className="min-w-0 px-3 text-center first:pl-0 last:pr-0">
                                                 <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Vị trí</p>
                                                 <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.pos}</p>
                                             </div>
-                                            <div className={`w-px bg-border ${compact ? 'h-8' : 'h-12'}`} />
-                                            <div className="text-center">
+                                            <div className="min-w-0 px-3 text-center first:pl-0 last:pr-0">
                                                 <p className={`text-muted-foreground uppercase font-bold tracking-widest mb-1 ${compact ? 'text-[9px] md:text-[10px]' : 'text-xs'}`}>Khách hàng</p>
                                                 <p className={`font-bold text-foreground ${compact ? 'text-2xl md:text-3xl' : 'text-5xl'}`}>{lastCalledTicket.customerName || 'Quý khách'}</p>
                                             </div>
@@ -384,7 +398,8 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                                     </div>
                                 </motion.div>
                             )}
-                        </AnimatePresence>
+                            </AnimatePresence>
+                        </div>
 
                         <div className={`grid gap-6 ${compact ? 'grid-cols-1 gap-3' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'}`}>
                             {counterDisplayList.map(({ pos, call, serviceId, isActive, isHighlighted, isBetweenCalls, waitingCount, nextWaiting }, index) => (

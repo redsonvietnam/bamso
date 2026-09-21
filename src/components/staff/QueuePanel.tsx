@@ -145,7 +145,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setSoundEnabled(!soundEnabled)}
-                                    className={`rounded-full ${soundEnabled ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                    className={`rounded-full min-h-11 min-w-11 ${soundEnabled ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                                     title={soundEnabled ? 'Tắt âm thanh thông báo' : 'Bật âm thanh thông báo'}
                                 >
                                     {soundEnabled ? <Volume2 /> : <VolumeX />}
@@ -196,11 +196,11 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                     </p>
                                 </div>
 
-                                <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-4">
+                                <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4 pt-4">
                                     <Button
                                         size="lg"
                                         variant="default"
-                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
+                                        className="w-full sm:w-auto px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
                                         onClick={complete}
                                         disabled={isLoading}
                                     >
@@ -209,7 +209,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                     <Button
                                         size="lg"
                                         variant="outline"
-                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
+                                        className="w-full sm:w-auto px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
                                         onClick={recall}
                                         disabled={isLoading}
                                     >
@@ -218,7 +218,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                     <Button
                                         size="lg"
                                         variant="outline"
-                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold text-destructive border-destructive/30 hover:bg-destructive/10"
+                                        className="w-full sm:w-auto px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold text-destructive border-destructive/30 hover:bg-destructive/10"
                                         onClick={skip}
                                         disabled={isLoading}
                                     >
