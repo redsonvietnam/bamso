@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
@@ -52,11 +53,27 @@ function getDayKey(date: Date): string {
     return `${y}-${m}-${d}`;
 }
 
+export interface DisplayEvent {
+    eventId: string;
+    ticketId: string;
+    ticketNumber: string;
+    serviceId: string;
+    pos: string;
+    customerName?: string | null;
+    nextTicketNumber?: string | null;
+}
+
+interface CallNextDisplayEventOptions {
+    includeDisplayEvent: true;
+}
+
 /**
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
  */
-export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor) {
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor): Promise<any>;
+export async function callNextTicket(serviceId: string, pos: string, actor: AuditActor | undefined, options: CallNextDisplayEventOptions): Promise<any>;
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor, options?: CallNextDisplayEventOptions) {
     return withPosLock(pos, async () => {
         const { startOfDay, endOfDay } = getTodayBounds();
         const dayKey = getDayKey(new Date());
@@ -133,17 +150,44 @@ export async function callNextTicket(serviceId: string, pos: string, actor?: Aud
                     },
                 });
 
+                const nextInQueue = await tx.ticket.findFirst({
+                    where: {
+                        serviceId,
+                        status: TicketStatus.PENDING,
+                        dayKey,
+                        createdAt: { gte: startOfDay, lte: endOfDay },
+                        id: { not: nextTicket.id },
+                    },
+                    orderBy: { position: 'asc' },
+                });
+
+                const displayEvent = await tx.displayCallEvent.create({
+                    data: {
+                        eventId: crypto.randomUUID(),
+                        ticketId: nextTicket.id,
+                        ticketNumber: nextTicket.ticketNumber,
+                        serviceId,
+                        pos,
+                        customerName: nextTicket.customerName,
+                        nextTicketNumber: nextInQueue?.ticketNumber ?? null,
+                        status: 'PENDING',
+                    },
+                });
+
                 return {
                     claimed: true as const,
                     ticket: await tx.ticket.findUnique({
                         where: { id: nextTicket.id },
                         include: { service: true },
                     }),
+                    displayEvent,
                 };
             }, { timeout: 15000 });
 
             if (result.claimed) {
-                return result.ticket;
+                return options?.includeDisplayEvent
+                    ? { ticket: result.ticket, displayEvent: result.displayEvent }
+                    : result.ticket;
             }
         }
 

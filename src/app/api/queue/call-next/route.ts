@@ -3,7 +3,6 @@ import { callNextTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
 import prisma from '@/lib/db';
-import { TicketStatus } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 import { readJsonObject, requiredStringFields, sanitizeQueueError } from '@/lib/api-validation';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
@@ -11,6 +10,10 @@ import { writeAuditLog, AuditActor } from '@/lib/audit-service';
 export async function POST(request: Request) {
     let actor: AuditActor | null = null;
     let targetPos: string | null = null;
+    let callNextStartedAt: number | null = null;
+
+    // A1: Request correlation ID
+    const requestId = crypto.randomUUID?.() ?? `call-next-${Date.now()}`;
 
     try {
         const auth = await requireRole('STAFF', 'ADMIN');
@@ -62,10 +65,19 @@ export async function POST(request: Request) {
             );
         }
 
-        const ticket = actor?.actorId
-            ? await callNextTicket(serviceId as string, pos as string, actor)
-            : await callNextTicket(serviceId as string, pos as string);
-        if (!ticket) {
+        // --- A1: Call-next observability ---
+        callNextStartedAt = performance.now();
+        logger.log('call-next-start', {
+            requestId,
+            serviceId,
+            targetPos: pos,
+        });
+
+        const result = actor?.actorId
+            ? await callNextTicket(serviceId as string, pos as string, actor, { includeDisplayEvent: true })
+            : await callNextTicket(serviceId as string, pos as string, undefined, { includeDisplayEvent: true });
+        const ticket = result.ticket;
+        if (!ticket || !result.displayEvent) {
             await writeAuditLog(prisma, {
                 actor,
                 action: 'CALL_NEXT',
@@ -74,43 +86,59 @@ export async function POST(request: Request) {
                 reasonCode: 'CALL_FAILED',
                 metadata: targetPos ? { counter: targetPos } : null,
             });
+            const processingTimeMs = callNextStartedAt === null
+                ? null
+                : Math.round(performance.now() - callNextStartedAt);
+            logger.error('call-next-failed', {
+                requestId,
+                errorMessage: 'Không thể gọi vé',
+                isClientError: false,
+                noPending: false,
+                targetPos,
+                processingTimeMs,
+                eventId: null,
+                eventStatus: null,
+            });
             return NextResponse.json(
                 { error: 'Không thể gọi vé', code: 'CALL_FAILED' },
                 { status: 500 }
             );
         }
 
-        // Fire-and-forget: broadcasts are best-effort side effects.
-        // The business transaction is complete when callNextTicket succeeds.
-        // Do not block the HTTP response on notification delivery.
-        const serviceIdForBroadcast = ticket.serviceId;
-        const ticketNumber = ticket.ticketNumber;
-        const customerName = ticket.customerName;
-        const posForBroadcast = pos as string;
+        // The display event is durably persisted in the same transaction as the ticket claim.
+        // Transport remains fire-and-forget; a PENDING event is recoverable on display reconnect.
+        const displayEvent = result.displayEvent;
 
         setImmediate(async () => {
             try {
-                const now = new Date();
-                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-                const nextPending = await prisma.ticket.findFirst({
-                    where: {
-                        serviceId: serviceIdForBroadcast,
-                        status: TicketStatus.PENDING,
-                        createdAt: { gte: startOfDay, lte: endOfDay },
-                        id: { not: ticket.id },
-                    },
-                    orderBy: { position: 'asc' },
-                });
-
                 await Promise.allSettled([
-                    broadcastQueueUpdate(serviceIdForBroadcast),
-                    broadcastDisplayCall(ticketNumber, posForBroadcast, customerName, nextPending?.ticketNumber)
+                    broadcastQueueUpdate(displayEvent.serviceId),
+                    broadcastDisplayCall(
+                        displayEvent.eventId,
+                        displayEvent.ticketNumber,
+                        displayEvent.pos,
+                        displayEvent.customerName,
+                        displayEvent.nextTicketNumber ?? undefined,
+                    ),
                 ]);
             } catch (err) {
                 logger.error('Post-call-next broadcast failed:', err);
             }
+        });
+
+        const processingTimeMs = callNextStartedAt === null
+            ? null
+            : Math.round(performance.now() - callNextStartedAt);
+
+        // A1: Observability log - completed call-next
+        logger.log('call-next-completed', {
+            requestId,
+            ticketId: ticket.id,
+            ticketNumber: ticket.ticketNumber,
+            pos: ticket.pos,
+            eventId: displayEvent.eventId,
+            eventStatus: displayEvent.status,
+            processingTimeMs,
         });
 
         return NextResponse.json(ticket);
@@ -119,6 +147,10 @@ export async function POST(request: Request) {
         const { message, isClientError } = sanitizeQueueError(error);
         const isNoPending = message.includes('Không còn số thứ tự nào đang chờ');
 
+        const processingTimeMs = callNextStartedAt === null
+            ? null
+            : Math.round(performance.now() - callNextStartedAt);
+
         await writeAuditLog(prisma, {
             actor: actor ?? { actorType: 'ANONYMOUS' },
             action: 'CALL_NEXT',
@@ -126,6 +158,18 @@ export async function POST(request: Request) {
             success: false,
             reasonCode: isNoPending ? 'NO_PENDING_TICKETS' : isClientError ? 'CLIENT_ERROR' : 'INTERNAL_ERROR',
             metadata: targetPos ? { counter: targetPos } : null,
+        });
+
+        // Structured error observability
+        logger.error('call-next-failed', {
+            requestId,
+            errorMessage: message,
+            isClientError,
+            noPending: isNoPending,
+            targetPos: targetPos,
+            processingTimeMs,
+            eventId: null,
+            eventStatus: null,
         });
 
         return NextResponse.json(

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { broadcastDisplayCall } from '@/lib/sse-broker';
 import { requireRole } from '@/lib/api-auth';
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
         });
 
         await broadcastDisplayCall(
+            crypto.randomUUID(),
             currentTicket.ticketNumber,
             pos as string,
             currentTicket.customerName,

@@ -7,6 +7,7 @@ const DEFAULT_CONFIG: APIClientConfig = {
 };
 
 const DEFAULT_TIMEOUT = 10000;
+export const CALL_NEXT_TIMEOUT = 16000;
 
 type RequestMethodOptions = Omit<RequestOptions, 'method' | 'body'>;
 
@@ -74,14 +75,15 @@ export class APIClient {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let cleanup = () => {};
       let finalSignal: AbortSignal | undefined;
+      let timeoutController: AbortController | undefined;
 
       try {
         if (attempt > 0) {
           await delay(Math.min(1000 * 2 ** attempt, 5000));
         }
 
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
+        timeoutController = new AbortController();
+        const timeoutId = setTimeout(() => timeoutController?.abort(), timeout);
         const combined = signal
           ? combineSignals([signal, timeoutController.signal])
           : { signal: timeoutController.signal, cleanup: () => {} };
@@ -108,7 +110,7 @@ export class APIClient {
           if (!res.ok) {
             const errorBody = await res.json().catch(() => ({}));
             const error = new Error(
-              errorBody.error ?? `Request failed with status ${res.status}`
+              errorBody?.error ?? `Request failed with status ${res.status}`
             );
             (error as Error & { status?: number }).status = res.status;
             throw error;
@@ -120,6 +122,9 @@ export class APIClient {
         }
       } catch (error) {
         if (finalSignal?.aborted) {
+          if (timeoutController?.signal.aborted) {
+            throw new Error(`Request timed out after ${timeout}ms`);
+          }
           throw error;
         }
 

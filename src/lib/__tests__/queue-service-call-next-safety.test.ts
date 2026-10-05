@@ -9,6 +9,9 @@ vi.mock('@/lib/db', () => ({
             findFirst: vi.fn(),
             findUnique: vi.fn(),
         },
+        displayCallEvent: {
+            create: vi.fn(),
+        },
     },
 }));
 
@@ -21,6 +24,9 @@ const mockedPrisma = prisma as unknown as {
         updateMany: ReturnType<typeof vi.fn>;
         findFirst: ReturnType<typeof vi.fn>;
         findUnique: ReturnType<typeof vi.fn>;
+    };
+    displayCallEvent: {
+        create: ReturnType<typeof vi.fn>;
     };
 };
 
@@ -63,10 +69,15 @@ describe('callNextTicket per-counter concurrency safety', () => {
             .mockResolvedValueOnce({ count: 1 });
         mockedPrisma.ticket.findFirst
             .mockResolvedValueOnce(ticket1)
-            .mockResolvedValueOnce(ticket2);
+            .mockResolvedValueOnce(undefined)
+            .mockResolvedValueOnce(ticket2)
+            .mockResolvedValueOnce(undefined);
         mockedPrisma.ticket.findUnique
             .mockResolvedValueOnce(called1)
             .mockResolvedValueOnce(called2);
+        mockedPrisma.displayCallEvent.create
+            .mockResolvedValueOnce({ id: 'event-row-1', eventId: 'event-1' })
+            .mockResolvedValueOnce({ id: 'event-row-2', eventId: 'event-2' });
 
         const first = callNextTicket('svc-1', 'Q1');
         await Promise.resolve();

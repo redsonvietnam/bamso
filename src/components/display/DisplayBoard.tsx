@@ -9,9 +9,11 @@ import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
+import { markDisplayCallEventSeen } from '@/lib/display-vibration';
 
 interface DisplayCallEvent {
     type: 'DISPLAY_CALL';
+    eventId?: string;
     ticketNumber: string;
     pos: string;
     customerName?: string | null;
@@ -56,6 +58,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     const PREVIOUS_CALL_TTL = 60000;
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const { speakAnnouncement, speakPrepare } = useSpeech();
+    const seenEventIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -118,6 +121,9 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
             try {
                 const data: DisplayCallEvent = JSON.parse(event.data);
                 if (data.type === 'DISPLAY_CALL') {
+                    if (data.eventId) {
+                        if (!markDisplayCallEventSeen(data.eventId, seenEventIds.current)) return;
+                    }
                     const newCall: CurrentCall = { ticketNumber: data.ticketNumber, pos: data.pos, customerName: data.customerName, timestamp: Date.now() };
                     setCurrentCalls(prev => ({ ...prev, [data.pos]: newCall }));
                     setLastCalledTicket(newCall);

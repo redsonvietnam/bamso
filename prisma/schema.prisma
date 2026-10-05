@@ -78,6 +78,23 @@ model Settings {
   value String
 }
 
+model DisplayCallEvent {
+  id               String   @id @default(uuid())
+  eventId          String   @unique
+  ticketId         String
+  ticketNumber     String
+  serviceId        String
+  pos              String
+  customerName     String?
+  nextTicketNumber String?
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([createdAt, id])
+  @@index([ticketId])
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorType  String   // USER | ANONYMOUS | SYSTEM

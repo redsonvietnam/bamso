@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe('APIClient timeout and abort handling', () => {
-  it('passes a timeout signal to fetch and aborts without retrying', async () => {
+  it('classifies a timeout abort instead of exposing the native abort message', async () => {
     vi.useFakeTimers();
     const client = new APIClient();
 
@@ -51,7 +51,7 @@ describe('APIClient timeout and abort handling', () => {
     });
 
     const request = client.get('/api/slow', { timeout: 100 });
-    const expectation = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    const expectation = expect(request).rejects.toThrow('Request timed out after 100ms');
 
     await vi.advanceTimersByTimeAsync(100);
 
@@ -100,6 +100,27 @@ describe('APIClient timeout and abort handling', () => {
     await expect(client.get('/api/ok', { timeout: 5000 })).resolves.toEqual({ ok: true });
 
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the generic default timeout at 10 seconds', async () => {
+    vi.useFakeTimers();
+    const client = new APIClient();
+
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => (
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      })
+    ));
+
+    const request = client.get('/api/generic-timeout');
+    const expectation = expect(request).rejects.toThrow('Request timed out after 10000ms');
+
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expectation;
   });
 
   it('does not retry POST requests after network errors', async () => {
@@ -201,6 +222,22 @@ describe('APIClient retry policy', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('falls back to the HTTP status when an error response has a null JSON body', async () => {
+    const client = new APIClient();
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: vi.fn().mockResolvedValue(null),
+    });
+
+    await expect(client.get('/api/x')).rejects.toMatchObject({
+      status: 500,
+      message: 'Request failed with status 500',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('clamps negative retries to a single attempt', async () => {
     const client = new APIClient();
     fetchMock.mockRejectedValue(new Error('network down'));
@@ -268,7 +305,7 @@ describe('APIClient retry policy', () => {
     });
 
     const request = client.get('/api/slow', { timeout: 100 });
-    const expectation = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    const expectation = expect(request).rejects.toThrow('Request timed out after 100ms');
 
     await vi.advanceTimersByTimeAsync(100);
     await expectation;

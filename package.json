@@ -28,6 +28,7 @@
     "health": "powershell -ExecutionPolicy Bypass -File scripts/check-health.ps1 -IgnoreCert",
     "backup:status": "powershell -ExecutionPolicy Bypass -File scripts/check-backup.ps1",
     "audit:purge": "python scripts/purge-audit-logs.py",
+    "audit:install-task": "powershell -ExecutionPolicy Bypass -File scripts/install-audit-purge-task.ps1",
     "ops:status": "powershell -ExecutionPolicy Bypass -File scripts/ops-status.ps1 -IgnoreCert",
     "logs:rotate": "powershell -ExecutionPolicy Bypass -File scripts/rotate-logs.ps1"
   },

@@ -18,6 +18,9 @@ vi.mock('@/lib/db', () => ({
         settings: {
             findUnique: vi.fn(),
         },
+        displayCallEvent: {
+            create: vi.fn(),
+        },
     },
 }));
 
@@ -36,6 +39,9 @@ const mockedPrisma = prisma as unknown as {
     };
     settings: {
         findUnique: ReturnType<typeof vi.fn>;
+    };
+    displayCallEvent: {
+        create: ReturnType<typeof vi.fn>;
     };
 };
 
@@ -76,10 +82,30 @@ describe('callNextTicket', () => {
             .mockResolvedValueOnce({ count: 1 }); // bước claim: thành công
         mockedPrisma.ticket.findFirst.mockResolvedValueOnce(pendingTicket);
         mockedPrisma.ticket.findUnique.mockResolvedValueOnce(claimedTicket);
+        mockedPrisma.displayCallEvent.create.mockResolvedValueOnce({
+            id: 'event-row-1',
+            eventId: 'event-1',
+            ticketId: pendingTicket.id,
+            ticketNumber: 'A001',
+            serviceId,
+            pos,
+            customerName: null,
+            nextTicketNumber: null,
+            status: 'PENDING',
+            createdAt: new Date('2026-08-07T10:00:00'),
+        });
 
         const result = await callNextTicket(serviceId, pos);
 
         expect(result).toEqual(claimedTicket);
+        expect(mockedPrisma.displayCallEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                ticketId: pendingTicket.id,
+                serviceId,
+                pos,
+                status: 'PENDING',
+            }),
+        }));
         expect(mockedPrisma.$transaction).toHaveBeenCalledTimes(1);
         // Điều kiện claim phải là conditional update (chỉ claim nếu còn PENDING)
         expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(

@@ -26,6 +26,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/logger', () => ({
     logger: {
+        log: vi.fn(),
         error: vi.fn(),
     },
 }));
@@ -38,11 +39,14 @@ import { PUT as complete } from '@/app/api/queue/complete/route';
 import { callNextTicket } from '@/lib/queue-service';
 import { broadcastQueueUpdate, broadcastDisplayCall } from '@/lib/sse-broker';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 const mockedCallNextTicket = callNextTicket as unknown as ReturnType<typeof vi.fn>;
 const mockedBroadcastQueueUpdate = broadcastQueueUpdate as unknown as ReturnType<typeof vi.fn>;
 const mockedBroadcastDisplayCall = broadcastDisplayCall as unknown as ReturnType<typeof vi.fn>;
 const mockedFindFirst = prisma.ticket.findFirst as unknown as ReturnType<typeof vi.fn>;
+const mockedLoggerLog = logger.log as unknown as ReturnType<typeof vi.fn>;
+const mockedLoggerError = logger.error as unknown as ReturnType<typeof vi.fn>;
 
 const routes = [
     ['call-next', callNext, 'POST'],
@@ -87,7 +91,7 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Nguyễn Văn A',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({ ticket, displayEvent: { eventId: 'event-1', serviceId: ticket.serviceId, ticketId: ticket.id, ticketNumber: ticket.ticketNumber, pos: 'Q1', customerName: ticket.customerName, nextTicketNumber: null, status: 'PENDING' } });
         mockedFindFirst.mockResolvedValue(null);
 
         // Mock setImmediate to execute callbacks synchronously in tests
@@ -102,12 +106,63 @@ describe('call-next route pos contract', () => {
             if (!response) throw new Error('expected a response');
 
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, { includeDisplayEvent: true });
             expect(mockedBroadcastQueueUpdate).toHaveBeenCalledWith('service-1');
-            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('A001', 'Q1', 'Nguyễn Văn A', undefined);
+            expect(mockedBroadcastDisplayCall).toHaveBeenCalledWith('event-1', 'A001', 'Q1', 'Nguyễn Văn A', undefined);
+            expect(mockedLoggerLog).toHaveBeenCalledWith('call-next-start', expect.objectContaining({
+                requestId: expect.any(String),
+                serviceId: 'service-1',
+                targetPos: 'Q1',
+            }));
+            expect(mockedLoggerLog).toHaveBeenCalledWith('call-next-completed', expect.objectContaining({
+                requestId: expect.any(String),
+                ticketId: 't1',
+                eventId: 'event-1',
+                eventStatus: 'PENDING',
+                processingTimeMs: expect.any(Number),
+            }));
         } finally {
             global.setImmediate = originalSetImmediate;
         }
+    });
+
+    it('emits structured failure observability with processing time', async () => {
+        mockedCallNextTicket.mockRejectedValueOnce(new Error('database unavailable'));
+
+        const response = await callNext(
+            request('POST', JSON.stringify({ serviceId: 'service-1', pos: 'Q1' }))
+        );
+        if (!response) throw new Error('expected a response');
+
+        expect(response.status).toBe(500);
+        expect(mockedLoggerLog).toHaveBeenCalledWith('call-next-start', expect.objectContaining({
+            requestId: expect.any(String),
+            serviceId: 'service-1',
+            targetPos: 'Q1',
+        }));
+        expect(mockedLoggerError).toHaveBeenCalledWith('call-next-failed', expect.objectContaining({
+            requestId: expect.any(String),
+            processingTimeMs: expect.any(Number),
+            eventId: null,
+            eventStatus: null,
+        }));
+    });
+
+    it('emits structured failure observability when no ticket is returned', async () => {
+        mockedCallNextTicket.mockResolvedValueOnce({ ticket: null, displayEvent: null });
+
+        const response = await callNext(
+            request('POST', JSON.stringify({ serviceId: 'service-1', pos: 'Q1' }))
+        );
+        if (!response) throw new Error('expected a response');
+
+        expect(response.status).toBe(500);
+        expect(mockedLoggerError).toHaveBeenCalledWith('call-next-failed', expect.objectContaining({
+            requestId: expect.any(String),
+            processingTimeMs: expect.any(Number),
+            eventId: null,
+            eventStatus: null,
+        }));
     });
 
     it('returns HTTP response before notification completes (non-blocking)', async () => {
@@ -117,7 +172,7 @@ describe('call-next route pos contract', () => {
             serviceId: 'service-1',
             customerName: 'Test User',
         };
-        mockedCallNextTicket.mockResolvedValue(ticket);
+        mockedCallNextTicket.mockResolvedValue({ ticket, displayEvent: { eventId: 'event-1', serviceId: ticket.serviceId, ticketId: ticket.id, ticketNumber: ticket.ticketNumber, pos: 'Q1', customerName: ticket.customerName, nextTicketNumber: null, status: 'PENDING' } });
         mockedFindFirst.mockResolvedValue(null);
 
         // Controllable broadcast promises — we decide when they resolve
@@ -152,7 +207,7 @@ describe('call-next route pos contract', () => {
 
             // ASSERTION 1: HTTP response returned successfully
             expect(response.status).toBe(200);
-            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1');
+            expect(mockedCallNextTicket).toHaveBeenCalledWith('service-1', 'Q1', undefined, { includeDisplayEvent: true });
 
             // ASSERTION 2: setImmediate callback captured but NOT executed yet
             expect(capturedCallback).not.toBeNull();

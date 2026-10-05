@@ -9,6 +9,7 @@
     - API health
     - Database connectivity
     - Backup freshness
+    - Audit retention scheduler status
     - Log directory
 
 .PARAMETER IgnoreCert
@@ -102,7 +103,17 @@ if (Test-Path $backupDir) {
     Write-Host "  BACKUP DIR NOT FOUND" -ForegroundColor Yellow
 }
 
-# 5. Logs
+# 5. Audit retention
+Write-Host ""
+Write-Host "Audit retention:" -ForegroundColor Yellow
+$auditTask = Get-ScheduledTask -TaskName "BAMSO Audit Retention Purge" -ErrorAction SilentlyContinue
+if ($auditTask) {
+    Write-Host "  REGISTERED ($($auditTask.State))" -ForegroundColor Green
+} else {
+    Write-Host "  NOT REGISTERED" -ForegroundColor Red
+}
+
+# 6. Logs
 Write-Host ""
 Write-Host "Logs:" -ForegroundColor Yellow
 $logDir = Join-Path $ProjectRoot "logs"
