@@ -79,6 +79,35 @@ next-env.d.ts
 *.zip
 *.patch
 
+# local/tool artifacts
+scripts/**pycache__/
+/.codelocal-backups/
+/.claude/settings.local.json
+/.playwright-mcp/
+/.project/preview/
+time-to-usable-results.json
+performance-probe-report.txt
+performance-result.md
+
 # misc generated
 cf-out.txt
+
+# disposable migration proof artifacts
+.migration-proof/
+.codelocal-write-test.txt
+bamso-pair-poc/
+bamso-pair-poc-v2/
+bamso-pair-bridge-v0-1/
+bamso-readonly-verification.ps1
+bamso-readonly-verification-v2.ps1
+bamso-startup-runtime-verification.ps1
+chrome-foundation-check.md
+chrome-foundation-result.md
+codelocal-e2e-proof.tmp
+mcp-diagnostic-result.md
+optimize-svg.ps1
+optisize.txt
+origsize.txt
+route_check.txt
+time-to-usable-probe.mjs
 
