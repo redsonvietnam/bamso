@@ -13,8 +13,8 @@
 
 ## Canonical Git State
 
-- **Active branch:** main
-- The working tree is intentionally dirty and contains multiple workstreams; do not infer that every dirty file belongs to the customer/kiosk/UI workstream.
+- **Active branch:** `agent/bamso-core06-audit-snapshot-20261005` (pushed to origin through `fcdf562`).
+- The working tree may contain multiple workstreams; do not infer that every dirty file belongs to the customer/kiosk/UI workstream.
 - Current source and tests are authoritative over historical handoff commit references.
 
 ## Key Files
@@ -63,17 +63,16 @@ npx prisma studio    # Visual DB browser
 - Thank-you overlay, vibration, and recent dvh viewport hardening are present.
 - Trống Đồng watermark uses the optimized SVG and remains outside normal layout flow.
 
-### Fresh verification — 2026-10-07 (stable-baseline staging)
+### Fresh verification — 2026-10-08 (post T137/T139 flaky fixes)
 
 - npm run type-check: **PASS** (0 errors).
 - npm run lint: **PASS** (`eslint src --max-warnings=0`, 0 errors, 0 warnings).
 - npm run build: **PASS** (Next.js 16.2.6 production build).
-- git diff --check: **PASS**.
-- Full `npm test -- --run`: **NOT GREEN (intermittent)** — 57 test files: 55 passed, 1 skipped, 1 failed; 627 tests: 624 passed, 2 skipped, 1 failed.
-  - The recurring failure is `src/components/customer/KioskQueuePeek.test.tsx` "retains desktop kiosk presentation by keeping the existing DisplayBoard breakpoint" → **5000ms timeout** while importing `@/app/kiosk/page` under full-suite parallel load. It passes in isolation (6/6 tests, ~659ms).
-  - One earlier full-suite run additionally failed `src/lib/__tests__/audit-service.test.ts` ("autoCompletedTicketId … length 1 but got 2") → **Category A shared-DB test isolation** (tests write to the same database from parallel workers); it passes alone. Same classification as `docs/CORE-06-CC-FINAL-REPORT.md`.
-  - The previous "3 unrelated MFA failures" claim is obsolete: the MFA suites pass in the runs above.
-- Test stderr also contains React act(...) warnings in UI tests; they did not cause focused-suite failures.
+- Full `npm test -- --run`: **GREEN ×3 consecutive runs** — 57 test files: 56 passed, 1 skipped; 627 tests: 625 passed, 2 skipped. Logs: `logs/t139b-run-{1,2,3}.log`.
+- Both known flakes are fixed (test-only changes, no timeouts increased):
+  - `KioskQueuePeek.test.tsx` breakpoint test no longer imports the whole Kiosk page graph (reads page source + contract assertions) — commit `fcdf562`.
+  - `audit-service.test.ts` now scopes all cleanup/asserts to its own service/markers instead of global `deleteMany`/`count` (shared-DB Category A isolation) — see `logs/t139-run-*.log` for the pre-fix reproduction (2 failed) and `t139b-run-*.log` for post-fix GREEN ×3.
+- Test stderr still contains React act(...) warnings in UI tests; they do not fail tests.
 - No physical phone/kiosk/camera/vibration/TTS hardware UAT was performed.
 - **Classification:** snapshot verified (code/tests/build/lint) · **production pending** · **physical UAT pending**.
 

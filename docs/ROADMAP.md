@@ -1,7 +1,7 @@
 # ROADMAP.md — Current Roadmap
 
 > This is the single source of truth for current roadmap information.
-> Updated: 2026-10-07
+> Updated: 2026-10-08
 
 ## Completed Work
 
@@ -24,9 +24,9 @@
 
 ## Current State
 
-- **Current branch:** `agent/bamso-core06-audit-snapshot-20261005` (stable-baseline staging; **not pushed** to origin — `origin/main` is still the remote state).
+- **Current branch:** `agent/bamso-core06-audit-snapshot-20261005` (stable-baseline staging; **pushed to origin** — commits through `fcdf562` are on the remote).
 - **Recent customer/kiosk/UI source work:** implemented; fresh physical/runtime acceptance remains pending.
-- **Current audit:** type-check, lint and production build pass; full suite is intermittently red on one timeout (`KioskQueuePeek` heavy dynamic import under parallel load) plus a known shared-DB isolation flake — see HANDOFF.md "Fresh verification — 2026-10-07".
+- **Current audit:** type-check, lint and production build pass; both known flakes fixed test-only — `KioskQueuePeek` (`fcdf562`) and `audit-service` shared-DB isolation; full suite GREEN ×3 consecutive — see HANDOFF.md "Fresh verification — 2026-10-08".
 - **Production deployment:** not established on this machine; see HANDOFF.md and deployment runbook for blockers.
 
 ## Recent Workstream Status
