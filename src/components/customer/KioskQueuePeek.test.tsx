@@ -1,4 +1,6 @@
 import React, { act } from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 
@@ -100,9 +102,11 @@ describe('KioskQueuePeek', () => {
         expect(region?.textContent).toContain('Chưa có số chờ');
     });
 
-    it('retains desktop kiosk presentation by keeping the existing DisplayBoard breakpoint', async () => {
-        // The mobile-only peek is separate; the existing desktop board remains mounted behind md:hidden.
-        const source = await import('@/app/kiosk/page');
-        expect(source.default).toBeDefined();
+    it('retains desktop kiosk presentation by keeping the existing DisplayBoard breakpoint', () => {
+        // Read the page source without importing the whole Kiosk dependency graph.
+        const source = readFileSync(path.join(process.cwd(), 'src', 'app', 'kiosk', 'page.tsx'), 'utf8');
+        expect(source).toContain('hidden md:flex');
+        expect(source).toContain('md:w-[45%]');
+        expect(source).toContain('<DisplayBoard variant="compact" />');
     });
 });
