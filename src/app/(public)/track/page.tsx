@@ -20,7 +20,7 @@ export default function TrackPage() {
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!query.trim()) {
-            toast.error('Vui lòng nhập số phiếu hoặc số điện thoại.');
+            toast.error('Vui lòng nhập số phiếu hoặc mã vé.');
             return;
         }
 
@@ -64,11 +64,11 @@ export default function TrackPage() {
                         <CardContent>
                             <form onSubmit={handleSearch} className="space-y-4">
                                 <div className="grid w-full items-center gap-1.5">
-                                    <Label htmlFor="query">Số phiếu hoặc Số điện thoại</Label>
+                                    <Label htmlFor="query">Số phiếu hoặc mã vé</Label>
                                     <Input
                                         id="query"
                                         type="text"
-                                        placeholder="Ví dụ: A001 hoặc 0901234567"
+                                        placeholder="Ví dụ: A001 hoặc mã vé"
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
                                         disabled={isLoading}

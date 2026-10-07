@@ -53,11 +53,11 @@ const mockedLogger = logger as unknown as {
 };
 
 const mockTickets = [
-    { id: 't1', serviceId: 'svc-1', ticketNumber: 'A001', dayKey: '2026-08-21', status: 'CALLED', customerName: 'Nguyễn Văn A', phone: '0909999999', position: 1, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
-    { id: 't2', serviceId: 'svc-1', ticketNumber: 'A002', dayKey: '2026-08-21', status: 'IN_PROGRESS', customerName: 'Trần Thị B', phone: '0911888888', position: 2, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
-    { id: 't3', serviceId: 'svc-1', ticketNumber: 'A003', dayKey: '2026-08-21', status: 'PENDING', customerName: 'Lê Văn C', phone: '0922777777', position: 3, missCount: 0, pos: null, createdAt: new Date(), calledAt: null, completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
-    { id: 't4', serviceId: 'svc-1', ticketNumber: 'A004', dayKey: '2026-08-21', status: 'COMPLETED', customerName: 'Phạm Văn D', phone: '0933666666', position: 4, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: new Date(), service: { id: 'svc-1', name: 'Service 1' } },
-    { id: 't5', serviceId: 'svc-1', ticketNumber: 'A005', dayKey: '2026-08-21', status: 'MISSED', customerName: 'Hoàng Văn E', phone: '0944555555', position: 5, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
+    { id: 't1', serviceId: 'svc-1', ticketNumber: 'A001', dayKey: '2026-08-21', status: 'CALLED', customerName: 'Nguyễn Văn A', position: 1, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
+    { id: 't2', serviceId: 'svc-1', ticketNumber: 'A002', dayKey: '2026-08-21', status: 'IN_PROGRESS', customerName: 'Trần Thị B', position: 2, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
+    { id: 't3', serviceId: 'svc-1', ticketNumber: 'A003', dayKey: '2026-08-21', status: 'PENDING', customerName: 'Lê Văn C', position: 3, missCount: 0, pos: null, createdAt: new Date(), calledAt: null, completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
+    { id: 't4', serviceId: 'svc-1', ticketNumber: 'A004', dayKey: '2026-08-21', status: 'COMPLETED', customerName: 'Phạm Văn D', position: 4, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: new Date(), service: { id: 'svc-1', name: 'Service 1' } },
+    { id: 't5', serviceId: 'svc-1', ticketNumber: 'A005', dayKey: '2026-08-21', status: 'MISSED', customerName: 'Hoàng Văn E', position: 5, missCount: 0, pos: null, createdAt: new Date(), calledAt: new Date(), completedAt: null, service: { id: 'svc-1', name: 'Service 1' } },
 ];
 
 function makePostRequest(body: unknown) {
@@ -199,31 +199,20 @@ describe('GET /api/tickets — PII redaction', () => {
         expect(data[4].customerName).toBeUndefined();
     });
 
-    it('anonymous: phone is NEVER exposed', async () => {
-        const response = await GET(makeGetTicketsRequest({}));
-        const data = await response.json();
-        for (const ticket of data) {
-            expect(ticket.phone).toBeUndefined();
-        }
-    });
-
-    it('STAFF: receives full data with customerName and phone', async () => {
+    it('STAFF: receives customerName but never phone', async () => {
         mockedAuthenticateOptional.mockResolvedValue({ role: 'STAFF' });
         const response = await GET(makeStaffGetTicketsRequest());
         const data = await response.json();
         expect(data).toHaveLength(5);
         expect(data[0].customerName).toBe('Nguyễn Văn A');
-        expect(data[0].phone).toBe('0909999999');
         expect(data[2].customerName).toBe('Lê Văn C');
-        expect(data[2].phone).toBe('0922777777');
     });
 
-    it('ADMIN: receives full data with customerName and phone', async () => {
+    it('ADMIN: receives customerName but never phone', async () => {
         mockedAuthenticateOptional.mockResolvedValue({ role: 'ADMIN' });
         const response = await GET(makeStaffGetTicketsRequest());
         const data = await response.json();
         expect(data).toHaveLength(5);
         expect(data[3].customerName).toBe('Phạm Văn D');
-        expect(data[3].phone).toBe('0933666666');
     });
 });

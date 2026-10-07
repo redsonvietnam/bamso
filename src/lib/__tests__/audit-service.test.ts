@@ -145,7 +145,6 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const ticket = await createTicket({
                 serviceId: testServiceId,
                 customerName: 'Nguyen Van A',
-                phone: '0901234567',
             });
 
             expect(ticket).toBeDefined();
@@ -164,7 +163,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             expect(log.success).toBe(true);
             expect(log.metadata).toBeNull();
 
-            // PII Verification: metadata & audit record must not leak customerName or phone
+            // PII Verification: metadata & audit record must not leak customerName
             expect(JSON.stringify(log)).not.toContain('Nguyen Van A');
             expect(JSON.stringify(log)).not.toContain('0901234567');
         });
@@ -401,7 +400,6 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const ticket = await createTicket({
                 serviceId: testServiceId,
                 customerName: 'Trần Thị B',
-                phone: '0987654321',
             });
 
             // Call it and complete it
@@ -417,7 +415,6 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             // Strictly forbidden strings
             const forbidden = [
                 'Trần Thị B',
-                '0987654321',
                 'password',
                 'passwordHash',
                 'auth_token',

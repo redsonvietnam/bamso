@@ -13,7 +13,6 @@ type TicketResult = {
     dayKey: string;
     serviceId: string;
     customerName: string | null;
-    phone: string | null;
     status: string;
     position: number;
     missCount: number;
@@ -24,15 +23,15 @@ type TicketResult = {
     service: { id: string; name: string; code: string; color: string; prefix: string; description: string | null; order: number; isActive: boolean; allowedModes: string; createdAt: Date; updatedAt: Date };
 };
 
-type RedactedTicket = Omit<TicketResult, 'customerName' | 'phone'>;
+type RedactedTicket = Omit<TicketResult, 'customerName'>;
 
 function redactTicket(ticket: TicketResult, role: string | null): RedactedTicket {
     if (role && STAFF_ROLES.includes(role)) {
         return ticket;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { customerName, phone, ...rest } = ticket;
-    return rest;
+    const rest: Partial<TicketResult> = { ...ticket };
+    delete rest.customerName;
+    return rest as RedactedTicket;
 }
 
 export async function GET(request: Request) {
@@ -65,7 +64,6 @@ export async function GET(request: Request) {
                 },
                 OR: [
                     { ticketNumber: query },
-                    { phone: query },
                     { id: query }, // Support lookup by UUID (used by /waiting page)
                 ],
             },

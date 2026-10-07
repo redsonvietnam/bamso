@@ -45,7 +45,6 @@ const fullTicket = {
     dayKey: '2026-08-20',
     serviceId: 'svc-1',
     customerName: 'Nguyen Van A',
-    phone: '0901234567',
     status: 'PENDING',
     position: 1,
     missCount: 0,
@@ -96,7 +95,7 @@ describe('GET /api/tickets/track', () => {
         await expect(response.json()).resolves.toMatchObject({ code: 'TICKET_NOT_FOUND' });
     });
 
-    it('returns full ticket with PII for authenticated staff', async () => {
+    it('returns ticket details for authenticated staff without phone', async () => {
         mockedAuthenticateOptional.mockResolvedValue({ userId: 'user-1', role: 'STAFF' });
 
         const response = await GET(makeGetRequest('A001'));
@@ -104,11 +103,10 @@ describe('GET /api/tickets/track', () => {
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body.customerName).toBe('Nguyen Van A');
-        expect(body.phone).toBe('0901234567');
         expect(body.ticketNumber).toBe('A001');
     });
 
-    it('returns full ticket with PII for authenticated admin', async () => {
+    it('returns ticket details for authenticated admin without phone', async () => {
         mockedAuthenticateOptional.mockResolvedValue({ userId: 'user-1', role: 'ADMIN' });
 
         const response = await GET(makeGetRequest('A001'));
@@ -116,10 +114,9 @@ describe('GET /api/tickets/track', () => {
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body.customerName).toBe('Nguyen Van A');
-        expect(body.phone).toBe('0901234567');
     });
 
-    it('redacts customerName and phone for anonymous callers', async () => {
+    it('redacts customerName for anonymous callers', async () => {
         mockedAuthenticateOptional.mockResolvedValue(null);
 
         const response = await GET(makeGetRequest('A001'));
@@ -127,7 +124,6 @@ describe('GET /api/tickets/track', () => {
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body.customerName).toBeUndefined();
-        expect(body.phone).toBeUndefined();
         expect(body.ticketNumber).toBe('A001');
         expect(body.service).toEqual(fullTicket.service);
     });
@@ -140,7 +136,21 @@ describe('GET /api/tickets/track', () => {
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body.customerName).toBeUndefined();
-        expect(body.phone).toBeUndefined();
+    });
+
+    it('does not allow phone-number lookup', async () => {
+        mockedFindFirst.mockResolvedValue(null);
+
+        const response = await GET(makeGetRequest('0901234567'));
+
+        expect(response.status).toBe(404);
+        expect(mockedFindFirst).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    OR: [{ ticketNumber: '0901234567' }, { id: '0901234567' }],
+                }),
+            })
+        );
     });
 
     it('includes service relation in response', async () => {

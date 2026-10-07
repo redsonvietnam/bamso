@@ -13,12 +13,14 @@ const STAFF_ROLES: string[] = [UserRole.ADMIN, UserRole.STAFF];
 
 const ACTIVE_STATUSES = new Set<string>([TicketStatus.CALLED, TicketStatus.IN_PROGRESS]);
 
-function redactTicketsForRole<T extends { customerName?: string | null; phone?: string | null; status?: string }>(
+function redactTicketsForRole<T extends { customerName?: string | null; status?: string }>(
     tickets: T[],
     role: string | null
 ) {
-    if (role && STAFF_ROLES.includes(role)) return tickets;
-    return tickets.map(({ customerName, phone: _phone, status, ...rest }) => {
+    if (role && STAFF_ROLES.includes(role)) {
+        return tickets;
+    }
+    return tickets.map(({ customerName, status, ...rest }) => {
         if (status && ACTIVE_STATUSES.has(status)) {
             return { ...rest, customerName, status };
         }
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
             });
             return parsed.response;
         }
-        const { serviceId, customerName, phone } = parsed.value;
+        const { serviceId, customerName } = parsed.value;
 
         if (!serviceId || typeof serviceId !== 'string' || serviceId.trim() === '') {
             await writeAuditLog(prisma, {
@@ -75,20 +77,6 @@ export async function POST(request: Request) {
             );
         }
 
-        if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.trim().length === 0)) {
-            await writeAuditLog(prisma, {
-                actor: { actorType: 'ANONYMOUS' },
-                action: 'TICKET_CREATED',
-                entityType: 'TICKET',
-                success: false,
-                reasonCode: 'INVALID_FIELDS',
-            });
-            return NextResponse.json(
-                { error: 'phone phải là chuỗi không rỗng', code: 'INVALID_FIELDS' },
-                { status: 400 }
-            );
-        }
-
         if (customerName !== undefined && customerName !== null && customerName.trim().length > 100) {
             await writeAuditLog(prisma, {
                 actor: { actorType: 'ANONYMOUS' },
@@ -103,24 +91,9 @@ export async function POST(request: Request) {
             );
         }
 
-        if (phone !== undefined && phone !== null && phone.trim().length > 20) {
-            await writeAuditLog(prisma, {
-                actor: { actorType: 'ANONYMOUS' },
-                action: 'TICKET_CREATED',
-                entityType: 'TICKET',
-                success: false,
-                reasonCode: 'FIELD_TOO_LONG',
-            });
-            return NextResponse.json(
-                { error: 'phone không được vượt quá 20 ký tự', code: 'FIELD_TOO_LONG' },
-                { status: 400 }
-            );
-        }
-
         const ticket = await createTicket({
             serviceId,
             customerName: customerName as string | undefined,
-            phone: phone as string | undefined,
         });
 
         void broadcastQueueUpdate(ticket.serviceId).catch((err) => {

@@ -15,7 +15,6 @@ export async function createTicket(
     data: {
         serviceId: string;
         customerName?: string;
-        phone?: string;
     },
     actor?: AuditActor
 ) {
@@ -37,7 +36,6 @@ async function createTicketInternal(
     data: {
         serviceId: string;
         customerName?: string;
-        phone?: string;
     },
     actor?: AuditActor
 ) {
@@ -78,7 +76,8 @@ async function createTicketInternal(
 
         const ticket = await tx.ticket.create({
             data: {
-                ...data,
+                serviceId: data.serviceId,
+                customerName: data.customerName,
                 ticketNumber,
                 dayKey,
                 position,

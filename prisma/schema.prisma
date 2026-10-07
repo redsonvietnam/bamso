@@ -59,7 +59,6 @@ model Ticket {
   serviceId    String
   service      Service      @relation(fields: [serviceId], references: [id])
   customerName String?
-  phone        String?
   status       String       @default("PENDING")
   position     Int
   missCount    Int          @default(0)
