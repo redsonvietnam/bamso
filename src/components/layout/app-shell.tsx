@@ -31,7 +31,7 @@ function HeaderShell({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({ setRight: setRightStable }), [setRightStable]);
   return (
     <HeaderRightContext.Provider value={value}>
-      <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex h-dvh flex-col overflow-hidden">
         <AgencyHeader right={right} />
         <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
       </div>

@@ -56,19 +56,20 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
           serviceColor={ticket.service.color}
           message={thankYouMessage}
           onDismiss={dismissThankYou}
+          supersedeKey={currentServed?.ticketNumber ?? null}
         />
       )}
       <div className="mx-auto w-full max-w-xl px-4 py-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div
             className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-sm"
             style={{ backgroundColor: ticket.service.color }}
           >
             <span className="text-base font-bold">{ticket.service.prefix}</span>
           </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{ticket.service.name}</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">{ticket.service.name}</p>
               {ticket.customerName && (
                 <p className="text-xs text-muted-foreground">
                   Khách: <span className="font-medium">{ticket.customerName}</span>
@@ -77,7 +78,7 @@ export default function WaitingTracker({ initialTicket }: WaitingTrackerProps) {
               <p className="text-xs text-muted-foreground">Cập nhật realtime</p>
             </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <SoundToggle soundEnabled={soundEnabled} onToggle={handleToggleSound} />
           <ConnectionBadge isConnected={isConnected} />
         </div>

@@ -1,5 +1,4 @@
 import type { SVGProps } from 'react';
-import { motion } from 'framer-motion';
 
 interface Point {
     x: number;
@@ -61,6 +60,8 @@ export function DongSonSun(props: SVGProps<SVGSVGElement>) {
  * Decorative watermark layer using the Dong Son drum PNG (transparent background).
  * Positioned absolutely, ignores pointer events, and never blocks content.
  * Tune size / placement / opacity via `className`.
+ * Animation handled via CSS `animation` property for minimal JavaScript overhead.
+ * Respects `prefers-reduced-motion` media query.
  */
 export function PageWatermark({ className = '', opacity }: { className?: string; opacity?: number }) {
     return (
@@ -69,13 +70,12 @@ export function PageWatermark({ className = '', opacity }: { className?: string;
             className={`pointer-events-none select-none absolute overflow-hidden scale-[1.5] sm:scale-[2] md:scale-[2.5] lg:scale-[3] ${className}`}
             {...(opacity !== undefined ? { style: { opacity } } : {})}
         >
-            <motion.img
-    src="/brand/trong-dong-dong-son.svg"
+            {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG watermark stays as a plain asset. */}
+            <img
+    src="/brand/trong-dong-dong-son-optimized.svg"
     alt=""
     draggable={false}
-    className="h-full w-full object-contain"
-    animate={{ rotate: -360 }}
-    transition={{ ease: "linear", duration: 270, repeat: Infinity }}
+    className="h-full w-full object-contain animate-spin-rtl"
 />
         </div>
     );

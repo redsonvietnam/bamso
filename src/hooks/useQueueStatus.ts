@@ -19,6 +19,8 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
   const { speak, isAudioUnlocked, unlockAudio } = useSpeech();
 
   const prevStatusRef = useRef(ticket.status);
+  const prevQueueStatusesRef = useRef<Record<string, Ticket['status']>>({ [ticket.id]: ticket.status });
+  const hasSeenQueueSnapshotRef = useRef(false);
   const thankYouTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearThankYouTimer = useCallback(() => {
@@ -46,8 +48,25 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'QUEUE_UPDATE' && Array.isArray(data.tickets)) {
-          setAllTickets(data.tickets);
-          const updatedTicket = data.tickets.find((t: Ticket) => t.id === ticket.id);
+          const queueTickets = data.tickets as (Ticket & { service: Service })[];
+          const hasNewCallEvent = hasSeenQueueSnapshotRef.current && queueTickets.some((t) => {
+            if (t.id === ticket.id || (t.status !== 'CALLED' && t.status !== 'IN_PROGRESS')) return false;
+            const previousStatus = prevQueueStatusesRef.current[t.id];
+            return previousStatus !== 'CALLED' && previousStatus !== 'IN_PROGRESS';
+          });
+
+          if (hasNewCallEvent) {
+            clearThankYouTimer();
+            setShowThankYou(false);
+          }
+
+          prevQueueStatusesRef.current = Object.fromEntries(
+            queueTickets.map((t) => [t.id, t.status])
+          ) as Record<string, Ticket['status']>;
+          hasSeenQueueSnapshotRef.current = true;
+
+          setAllTickets(queueTickets);
+          const updatedTicket = queueTickets.find((t) => t.id === ticket.id);
           if (updatedTicket) {
             const prevStatus = prevStatusRef.current;
             const newStatus = updatedTicket.status;
@@ -68,7 +87,11 @@ export function useQueueStatus(initialTicket: Ticket & { service: Service }) {
               speak(`Số ${updatedTicket.ticketNumber} đã đến lượt. Xin mời quý khách${pos}.`);
             }
             prevStatusRef.current = newStatus;
-            setTicket((prev) => ({ ...updatedTicket, service: prev.service }));
+            setTicket((prev) => ({
+              ...updatedTicket,
+              customerName: updatedTicket.customerName ?? prev.customerName,
+              service: prev.service,
+            }));
           }
         }
       } catch (error) {

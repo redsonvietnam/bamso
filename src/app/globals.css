@@ -653,6 +653,36 @@
   }
 }
 
+/* ============================================
+   RTL spin animation for Trống Đồng watermark
+   270s linear infinite rotation (matching previous framer-motion config)
+   ============================================ */
+
+@keyframes rtl-spin {
+  from {
+    transform: rotate(-360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-rtl {
+  animation: rtl-spin 270s linear infinite;
+}
+
+/* Respect OS-level reduced-motion preferences without removing the visual
+   state/feedback represented by these classes. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-once,
+  .animate-urgent-bounce,
+  .animate-alert-glow,
+  .animate-pulse-slow,
+  .animate-spin-rtl {
+    animation: none !important;
+  }
+}
+
 /* Cards - white on cream, crisp 1px border like the portal.
    Solid (opaque) surface so text stays readable; content is lifted above. */
 .bca [class~="bg-card"],

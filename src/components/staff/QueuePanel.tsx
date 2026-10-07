@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { useQueueStore } from '@/stores/queue.store';
 import { useSpeech } from '@/hooks/useSpeech';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, CALL_NEXT_TIMEOUT } from '@/lib/api-client';
 
 interface QueuePanelProps {
     serviceId: string;
@@ -79,11 +79,11 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentTicket?.id, nextPendingTicket?.id, soundEnabled]);
 
-    const handleAction = async (url: string, method: string, body: object, successMsg: string) => {
+    const handleAction = async (url: string, method: string, body: object, successMsg: string, timeout?: number) => {
         setIsLoading(true);
         try {
             if (method === 'POST') {
-                await apiClient.post(url, body);
+                await apiClient.post(url, body, timeout === undefined ? undefined : { timeout });
             } else if (method === 'PUT') {
                 await apiClient.put(url, body);
             } else {
@@ -98,7 +98,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
         }
     };
 
-    const callNext = () => handleAction('/api/queue/call-next', 'POST', { serviceId, pos }, 'Đã gọi số tiếp theo');
+    const callNext = () => handleAction('/api/queue/call-next', 'POST', { serviceId, pos }, 'Đã gọi số tiếp theo', CALL_NEXT_TIMEOUT);
     const complete = () => currentTicket && handleAction('/api/queue/complete', 'PUT', { ticketId: currentTicket.id }, 'Đã hoàn thành phục vụ');
     const skip = () => currentTicket && handleAction('/api/queue/skip', 'PUT', { ticketId: currentTicket.id }, 'Đã bỏ qua số thứ tự');
     const recall = () => handleAction('/api/queue/recall', 'POST', { serviceId, pos }, 'Đã phát lại thông báo');
@@ -118,7 +118,7 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setSoundEnabled(!soundEnabled)}
-                                    className={`p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+                                    className={`min-h-11 min-w-11 p-1.5 rounded-full transition-colors ${soundEnabled ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
                                     title={soundEnabled ? 'Tắt âm thanh thông báo' : 'Bật âm thanh thông báo'}
                                 >
                                     {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -168,6 +168,15 @@ export default function QueuePanel({ serviceId, pos }: QueuePanelProps) {
                                         disabled={isLoading}
                                     >
                                         <XCircle className="mr-2 w-5 h-5" /> Bỏ qua
+                                    </Button>
+                                    <Button
+                                        size="lg"
+                                        onClick={callNext}
+                                        disabled={isLoading || pendingTickets.length === 0}
+                                        className="px-6 sm:px-8 h-12 sm:h-14 text-base sm:text-lg font-bold"
+                                    >
+                                        <UserPlus className="mr-2 w-5 h-5" />
+                                        {isLoading ? 'Đang gọi...' : 'Gọi số tiếp theo'}
                                     </Button>
                                 </div>
                             </div>

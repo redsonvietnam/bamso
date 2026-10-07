@@ -1,8 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { CheckCircle2, ExternalLink, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useRef } from 'react';
+import { CheckCircle2, X } from 'lucide-react';
 
 interface ThankYouOverlayProps {
   ticketNumber: string;
@@ -10,8 +9,11 @@ interface ThankYouOverlayProps {
   servicePrefix: string;
   serviceColor: string;
   message: string;
+  supersedeKey?: string | number | null;
   onDismiss: () => void;
 }
+
+const THANK_YOU_DURATION_MS = 3500;
 
 export default function ThankYouOverlay({
   ticketNumber,
@@ -19,61 +21,57 @@ export default function ThankYouOverlay({
   servicePrefix,
   serviceColor,
   message,
+  supersedeKey,
   onDismiss,
 }: ThankYouOverlayProps) {
-  const router = useRouter();
+  const initialSupersedeKeyRef = useRef(supersedeKey);
+
+  useEffect(() => {
+    const timer = window.setTimeout(onDismiss, THANK_YOU_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [onDismiss]);
+
+  useEffect(() => {
+    if (initialSupersedeKeyRef.current === supersedeKey) return;
+    initialSupersedeKeyRef.current = supersedeKey;
+    onDismiss();
+  }, [supersedeKey, onDismiss]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background animate-in fade-in duration-500">
-      <div className="flex flex-col items-center text-center px-6 max-w-sm">
-        <div className="rounded-full bg-primary/5 p-4 mb-6">
-          <CheckCircle2 className="w-16 h-16 text-brand-gold" />
-        </div>
-
-        <h1 className="text-2xl font-bold text-foreground mb-6">
-          {message}
-        </h1>
-
-        <p className="text-5xl font-black tracking-tighter mb-1" style={{ color: serviceColor }}>
-          {ticketNumber}
-        </p>
-
-        <div
-          className="flex items-center gap-2 px-4 py-1.5 rounded-xl mb-4"
-          style={{ backgroundColor: `${serviceColor}15` }}
-        >
-          <span className="text-sm font-bold" style={{ color: serviceColor }}>
-            {servicePrefix}
-          </span>
-          <span className="text-sm text-muted-foreground">&middot;</span>
-          <span className="text-sm text-muted-foreground">{serviceName}</span>
-        </div>
-
-        <div className="flex gap-3 w-full mt-6">
-          <Button
-            className="flex-1 py-6 rounded-2xl text-base font-semibold border-0 text-white"
-            style={{ backgroundColor: serviceColor }}
-            onClick={() => router.push('/get-ticket')}
+    <div className="pointer-events-none fixed inset-x-4 top-4 z-50 flex justify-center">
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-auto w-full max-w-md rounded-2xl border bg-card/95 p-4 shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300"
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${serviceColor}15` }}
           >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Lấy số mới
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 py-6 rounded-2xl border-border text-base font-semibold"
-            onClick={() => router.push('/')}
-          >
-            <Home className="mr-2 h-4 w-4" />
-            Về trang chủ
-          </Button>
-        </div>
+            <CheckCircle2 className="h-5 w-5" style={{ color: serviceColor }} />
+          </div>
 
-        <button
-          onClick={onDismiss}
-          className="mt-6 text-sm text-muted-foreground underline underline-offset-2 hover:text-muted-foreground transition-colors"
-        >
-          Tiếp tục xem thông tin
-        </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">{message}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-bold" style={{ color: serviceColor }}>
+                {ticketNumber}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">{servicePrefix} · {serviceName}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Đóng thông báo hoàn thành"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ export function SoundToggle({ soundEnabled, onToggle }: {
   return (
     <button
       onClick={onToggle}
-      className={`rounded-full border px-3 py-2 text-sm transition ${
+      className={`min-h-11 min-w-11 rounded-full border px-3 py-2 text-sm transition ${
         soundEnabled
           ? 'border-border bg-card text-muted-foreground hover:bg-muted'
           : 'border-border bg-muted text-muted-foreground hover:bg-muted'

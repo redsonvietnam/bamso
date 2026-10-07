@@ -11,6 +11,8 @@ import { useSpeech } from '@/hooks/useSpeech';
 import QRScanner from '@/components/qr-scanner/QRScanner';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
 import DisplayBoard from '@/components/display/DisplayBoard';
+import { ServiceActionCards } from '@/components/customer/ServiceActionCards';
+import KioskQueuePeek from '@/components/customer/KioskQueuePeek';
 
 type KioskStep = 'service' | 'scan' | 'creating' | 'success';
 
@@ -25,6 +27,7 @@ export default function KioskPage() {
     const [time, setTime] = useState(new Date());
     const [scanError, setScanError] = useState<string | null>(null);
     const autoResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const ticketSubmissionLockRef = useRef(false);
     const { speak, unlockAudio } = useSpeech();
 
     useEffect(() => {
@@ -66,12 +69,13 @@ export default function KioskPage() {
         setScanError(null);
     }, [clearAutoReset]);
 
-    const handleCreateTicket = useCallback(async (customerName?: string) => {
-        if (!selectedService) return;
-
+    const handleCreateTicket = useCallback(async (service: Service, customerName?: string) => {
+        if (ticketSubmissionLockRef.current) return;
+        ticketSubmissionLockRef.current = true;
+        setSelectedService(service);
         setStep('creating');
         try {
-            const body: Record<string, string> = { serviceId: selectedService.id };
+            const body: Record<string, string> = { serviceId: service.id };
             if (customerName) body.customerName = customerName;
 
             const ticket = await apiClient.post<{ ticketNumber: string }>('/api/tickets', body);
@@ -86,9 +90,11 @@ export default function KioskPage() {
             }, 5000);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Lỗi tạo vé.');
-            setStep('scan');
+            setStep('service');
+        } finally {
+            ticketSubmissionLockRef.current = false;
         }
-    }, [selectedService, speak, resetKiosk]);
+    }, [speak, resetKiosk]);
 
     const handleScanSuccess = useCallback((decodedText: string) => {
         unlockAudio();
@@ -98,8 +104,8 @@ export default function KioskPage() {
             return;
         }
         setScanError(null);
-        handleCreateTicket(name);
-    }, [handleCreateTicket, unlockAudio]);
+        if (selectedService) handleCreateTicket(selectedService, name);
+    }, [handleCreateTicket, selectedService, unlockAudio]);
 
     const handleScanError = useCallback((error: string) => {
         setScanError(error);
@@ -133,77 +139,69 @@ export default function KioskPage() {
     }
 
     return (
-        <div className="flex flex-col md:flex-row min-h-screen h-screen bg-background overflow-hidden select-none">
+        <div className="flex flex-col md:flex-row min-h-dvh h-dvh bg-background overflow-hidden select-none">
             {/* LEFT PANEL — Ticket Flow */}
             <div className="flex-1 md:w-[55%] flex flex-col bg-gradient-to-br from-muted via-card to-primary/5 relative overflow-hidden min-h-0">
                 <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[62.5rem] w-[62.5rem] opacity-[0.10]" />
                 <div className="h-1.5 bg-brand-red shrink-0" />
                 {/* Header */}
-                <div className="relative z-10 header-chrome flex items-center justify-between px-4 md:px-8 py-2 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
-                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                        <div className="w-14 h-14 md:w-28 md:h-28 shrink-0 overflow-hidden rounded-full">
+                <div className="relative z-10 header-chrome flex items-center justify-between px-3 py-1.5 md:px-8 md:py-5 bg-white/80 backdrop-blur-sm border-b border-border/60 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-4 min-w-0">
+                        <div className="w-9 h-9 md:w-28 md:h-28 shrink-0 overflow-hidden rounded-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/brand/bca/huy-hieu-cong-an-nhan.png" alt="Logo" className="h-full w-full object-contain" />
                         </div>
                         <div className="min-w-0 overflow-hidden">
-                            <p className="truncate text-lg md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
-                            <h1 className="truncate text-2xl md:text-3xl font-black uppercase text-foreground">
+                            <p className="truncate text-xs md:text-xl font-black uppercase tracking-wide text-brand-red">CÔNG AN TỈNH LÂM ĐỒNG</p>
+                            <h1 className="truncate text-base md:text-3xl font-black uppercase text-foreground">
                                 {agencyName}
                             </h1>
                         </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 text-muted-foreground shrink-0">
-                        <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Hệ thống lấy số dịch vụ công</span>
+                    <div className="flex flex-col items-end gap-0 md:gap-1 text-muted-foreground shrink-0">
+                        <span className="hidden md:block text-xs font-bold uppercase tracking-widest">Hệ thống lấy số dịch vụ công</span>
                         <span className="flex items-center gap-2">
                             <Volume2 className="w-4 h-4 hidden md:block" />
-                            <span className="text-sm md:text-base font-bold uppercase tracking-widest">{timeStr}</span>
+                            <span className="text-xs md:text-base font-bold uppercase tracking-widest">{timeStr}</span>
                         </span>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="relative z-10 flex-1 flex items-center justify-center p-4 md:p-8 overflow-y-auto min-h-0">
+                <div className="relative z-10 flex-1 flex items-start md:items-center justify-center p-3 md:p-8 overflow-y-auto min-h-0">
                     {/* Step: Service Selection */}
                     {step === 'service' && (
-                        <div className="w-full max-w-xl space-y-6 md:space-y-8">
-                            <div className="text-center space-y-1 md:space-y-2">
-                                <h2 className="text-2xl md:text-4xl font-black text-foreground tracking-tight">
+                        <div className="w-full max-w-xl space-y-4 md:space-y-8">
+                            <div className="text-center space-y-0.5 md:space-y-2">
+                                <h2 className="text-xl md:text-4xl font-black text-foreground tracking-tight">
                                     Chọn dịch vụ
                                 </h2>
-                                <p className="text-base md:text-lg text-muted-foreground">
+                                <p className="hidden md:block text-lg text-muted-foreground">
                                     Chạm vào dịch vụ bạn cần
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 md:gap-5">
-                                {services.map((service) => (
-                                    <button
-                                        key={service.id}
-                                        onClick={() => {
-                                            unlockAudio();
-                                            setSelectedService(service);
-                                            setStep('scan');
-                                        }}
-                                        className="group relative flex flex-col items-center gap-3 md:gap-4 p-4 md:p-8 sketch-radius riso-paper-card glass-card rounded-2xl md:rounded-3xl bg-card border-2 border-border 
-                                            hover:border-primary hover:shadow-xl hover:shadow-primary/10 
-                                            active:scale-[0.97] transition-all duration-200 cursor-pointer"
-                                    >
-                                        <div
-                                            className="w-14 h-14 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black text-2xl md:text-3xl 
-                                                group-hover:scale-110 transition-transform duration-200"
-                                            style={{ backgroundColor: service.color }}
-                                        >
-                                            {service.prefix}
-                                        </div>
-                                        <div className="text-center min-w-0 overflow-hidden w-full">
-                                            <p className="text-base md:text-xl font-bold text-foreground truncate">{service.name}</p>
-                                            {service.description && (
-                                                <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1 truncate">{service.description}</p>
-                                            )}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
+                            <ServiceActionCards
+                                services={services}
+                                mode="kiosk"
+                                compact
+                                onQuick={() => undefined}
+                                onManual={(service, name) => {
+                                    unlockAudio();
+                                    setScanError(null);
+                                    if (name !== undefined) {
+                                        void handleCreateTicket(service, name.trim());
+                                    }
+                                }}
+                                onQr={(service) => {
+                                    unlockAudio();
+                                    setSelectedService(service);
+                                                                setScanError(null);
+                                    setStep('scan');
+                                }}
+                            />
+
+                            <KioskQueuePeek />
 
                             {services.length === 0 && (
                                 <div className="text-center py-10 md:py-16 text-muted-foreground text-lg md:text-xl">
@@ -215,7 +213,7 @@ export default function KioskPage() {
 
                     {/* Step: QR Scan */}
                     {step === 'scan' && selectedService && (
-                        <div className="w-full max-w-xl space-y-4 md:space-y-6">
+                        <div className="w-full h-full max-w-xl flex flex-col gap-2 md:h-auto md:space-y-6 md:block">
                             <button
                                 onClick={() => { setStep('service'); setSelectedService(null); setScanError(null); }}
                                 className="flex items-center gap-2 text-muted-foreground hover:text-muted-foreground active:scale-95 transition-all"
@@ -224,7 +222,7 @@ export default function KioskPage() {
                                 <span className="font-medium text-sm md:text-base">Đổi dịch vụ</span>
                             </button>
 
-                            <div className="text-center space-y-2">
+                            <div className="hidden md:block text-center space-y-2">
                                 <div
                                     className="w-12 h-12 md:w-16 md:h-16 rounded-xl mx-auto flex items-center justify-center text-white font-black text-xl md:text-2xl"
                                     style={{ backgroundColor: selectedService.color }}
@@ -239,7 +237,7 @@ export default function KioskPage() {
                                 </p>
                             </div>
 
-                            <div className="relative w-full aspect-[4/3] max-h-[50vh] rounded-2xl md:rounded-3xl overflow-hidden bg-black shadow-2xl">
+                            <div className="relative w-full flex-1 min-h-0 md:flex-none md:aspect-[4/3] md:min-h-0 md:max-h-[50vh] rounded-2xl md:rounded-3xl overflow-hidden bg-black shadow-2xl">
                                 <QRScanner
                                     onScanSuccess={handleScanSuccess}
                                     onScanError={handleScanError}
@@ -260,17 +258,6 @@ export default function KioskPage() {
                                 </div>
                             )}
 
-                            <div className="text-center">
-                                <p className="text-xs md:text-sm text-muted-foreground">
-                                    Hoặc{' '}
-                                    <button
-                                        onClick={() => handleCreateTicket()}
-                                        className="text-primary font-bold underline underline-offset-2 hover:no-underline"
-                                    >
-                                        lấy số nhanh không cần quét
-                                    </button>
-                                </p>
-                            </div>
                         </div>
                     )}
 
@@ -310,7 +297,7 @@ export default function KioskPage() {
             </div>
 
             {/* RIGHT PANEL — Display Board */}
-            <div className="h-48 sm:h-64 md:h-auto md:w-[45%] flex flex-col bg-card border-t md:border-t-0 md:border-l border-border overflow-hidden min-h-0">
+            <div className="hidden md:flex md:h-auto md:w-[45%] flex-col bg-card border-l border-border overflow-hidden min-h-0">
                 <DisplayBoard variant="compact" />
             </div>
         </div>
