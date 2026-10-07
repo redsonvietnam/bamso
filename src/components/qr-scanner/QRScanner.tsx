@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import type { Html5Qrcode } from 'html5-qrcode';
 import { logger } from '@/lib/logger';
+import { isIRCamera, resolveCameraSelection } from './camera-selection';
 
 type QRScannerProps = {
     onScanSuccess: (decodedText: string) => void;
@@ -10,10 +10,154 @@ type QRScannerProps = {
     debugMode?: boolean;
 };
 
+type CameraZoomRange = { min: number; max: number; step: number };
+type QRBoundingBox = { width: number };
+const INITIAL_CAMERA_ZOOM = 2;
+
+function hasUsableVideoGeometry(video: HTMLVideoElement): boolean {
+    return video.videoWidth > 0 && video.videoHeight > 0 && video.clientWidth > 0 && video.clientHeight > 0;
+}
+
+export function getCameraZoomRange(track: MediaStreamTrack): CameraZoomRange | null {
+    if (!track.getCapabilities) return null;
+    const capabilities = track.getCapabilities() as MediaTrackCapabilities & {
+        zoom?: { min?: number; max?: number; step?: number };
+    };
+    const zoom = capabilities.zoom;
+    if (!zoom || typeof zoom.min !== 'number' || typeof zoom.max !== 'number' || zoom.max <= zoom.min) return null;
+    const step = typeof zoom.step === 'number' && zoom.step > 0 ? zoom.step : 0.1;
+    return { min: zoom.min, max: zoom.max, step };
+}
+
+function normalizeZoom(value: number, range: CameraZoomRange): number {
+    const clamped = Math.min(range.max, Math.max(range.min, value));
+    const stepped = range.min + Math.round((clamped - range.min) / range.step) * range.step;
+    return Number(Math.min(range.max, Math.max(range.min, stepped)).toFixed(2));
+}
+
+export function createCameraZoomController(
+    track: MediaStreamTrack,
+    video: HTMLVideoElement,
+    log: (message: string, data?: unknown) => void
+) {
+    const range = getCameraZoomRange(track);
+    let currentZoom = (track.getSettings() as MediaTrackSettings & { zoom?: number }).zoom ?? range?.min ?? 1;
+    let updateInFlight = false;
+
+    const applyZoom = async (requestedZoom: number) => {
+        if (!range || updateInFlight) return;
+        const nextZoom = normalizeZoom(requestedZoom, range);
+        if (Math.abs(nextZoom - currentZoom) < range.step / 2) return;
+        updateInFlight = true;
+        try {
+            await track.applyConstraints({ advanced: [{ zoom: nextZoom } as MediaTrackConstraintSet] });
+            currentZoom = nextZoom;
+            log('Camera zoom updated:', { zoom: currentZoom });
+        } catch (error) {
+            log('Camera zoom is unavailable on this device:', error);
+        } finally {
+            updateInFlight = false;
+        }
+    };
+
+    return {
+        supported: Boolean(range),
+        async initialise() {
+            if (!range) return;
+            await applyZoom(Math.max(currentZoom, Math.min(range.max, INITIAL_CAMERA_ZOOM)));
+            log('Camera zoom capability:', range);
+        },
+        observe(boundingBox: QRBoundingBox) {
+            if (!range || !video.videoWidth || !boundingBox.width) return;
+            const relativeWidth = boundingBox.width / video.videoWidth;
+            if (relativeWidth < 0.2) void applyZoom(currentZoom + range.step);
+            if (relativeWidth > 0.55) void applyZoom(currentZoom - range.step);
+        },
+    };
+}
+
+export async function waitForFirstUsableFrame(video: HTMLVideoElement, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    if (!hasUsableVideoGeometry(video)) {
+        await new Promise<void>((resolve, reject) => {
+            let frameId = 0;
+            const onAbort = () => {
+                cancelAnimationFrame(frameId);
+                signal.removeEventListener('abort', onAbort);
+                reject(new DOMException('Aborted', 'AbortError'));
+            };
+            const checkGeometry = () => {
+                if (signal.aborted) {
+                    onAbort();
+                    return;
+                }
+                if (hasUsableVideoGeometry(video)) {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve();
+                    return;
+                }
+                frameId = requestAnimationFrame(checkGeometry);
+            };
+            signal.addEventListener('abort', onAbort, { once: true });
+            frameId = requestAnimationFrame(checkGeometry);
+        });
+    }
+
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA || video.videoWidth === 0 || video.videoHeight === 0) {
+        await new Promise<void>((resolve, reject) => {
+            const onMetadata = () => { cleanup(); resolve(); };
+            const onAbort = () => { cleanup(); reject(new DOMException('Aborted', 'AbortError')); };
+            const cleanup = () => {
+                video.removeEventListener('loadedmetadata', onMetadata);
+                signal.removeEventListener('abort', onAbort);
+            };
+            video.addEventListener('loadedmetadata', onMetadata, { once: true });
+            signal.addEventListener('abort', onAbort, { once: true });
+        });
+    }
+
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        if ('requestVideoFrameCallback' in video) {
+            await new Promise<void>((resolve, reject) => {
+                const onAbort = () => {
+                    signal.removeEventListener('abort', onAbort);
+                    reject(new DOMException('Aborted', 'AbortError'));
+                };
+                signal.addEventListener('abort', onAbort, { once: true });
+                video.requestVideoFrameCallback(() => {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve();
+                });
+            });
+        } else {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        }
+    } else {
+        await new Promise<void>((resolve, reject) => {
+            const onCanPlay = () => { cleanup(); resolve(); };
+            const onAbort = () => { cleanup(); reject(new DOMException('Aborted', 'AbortError')); };
+            const cleanup = () => {
+                video.removeEventListener('canplay', onCanPlay);
+                signal.removeEventListener('abort', onAbort);
+            };
+            video.addEventListener('canplay', onCanPlay, { once: true });
+            signal.addEventListener('abort', onAbort, { once: true });
+        });
+    }
+
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+}
+
 async function tryBarcodeDetector(
     video: HTMLVideoElement,
     signal: AbortSignal,
     onSuccess: (text: string) => void,
+    onDetection: (boundingBox: QRBoundingBox) => void,
     _onError: () => void
 ): Promise<() => void> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,6 +174,7 @@ async function tryBarcodeDetector(
                 const barcodes = await barcodeDetector.detect(video);
 
                 for (const barcode of barcodes) {
+                    if (barcode.boundingBox?.width) onDetection({ width: barcode.boundingBox.width });
                     if (barcode.rawValue) {
                         running = false;
                         onSuccess(barcode.rawValue);
@@ -49,41 +194,19 @@ async function tryBarcodeDetector(
     return () => { running = false; };
 }
 
-const IR_KEYWORDS = ['ir', 'infrared', 'depth', 'hello', 'face', 'windows hello'];
-const RGB_KEYWORDS = ['integrated', 'webcam', 'rgb', 'hd', 'front', 'camera', 'built-in'];
-
-function isIRCamera(label: string): boolean {
-    const lower = label.toLowerCase();
-    return IR_KEYWORDS.some(k => lower.includes(k));
-}
-
-function isRGBCamera(label: string): boolean {
-    const lower = label.toLowerCase();
-    return RGB_KEYWORDS.some(k => lower.includes(k));
-}
-
-function pickBestDevice(devices: MediaDeviceInfo[]): MediaDeviceInfo | null {
-    const rgb = devices.find(d => d.label && isRGBCamera(d.label) && !isIRCamera(d.label));
-    if (rgb) return rgb;
-    const nonIR = devices.find(d => d.label && !isIRCamera(d.label));
-    if (nonIR) return nonIR;
-    const anyLabeled = devices.find(d => d.label);
-    if (anyLabeled) return anyLabeled;
-    return devices[0] ?? null;
-}
-
 const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, forceFallback = false, debugMode = false }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const availableDevicesRef = useRef<MediaDeviceInfo[]>([]);
     const cleanupRef = useRef<(() => void) | null>(null);
     const aborterRef = useRef<AbortController | null>(null);
-    const fallbackContainerRef = useRef<HTMLDivElement>(null);
     const [useFallback, setUseFallback] = useState(false);
     const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
     const [autoSelected, setAutoSelected] = useState(false);
     const [isIRMode, setIsIRMode] = useState(false);
+    const [isFirstFrameReady, setIsFirstFrameReady] = useState(false);
 
     const log = useCallback((msg: string, data?: unknown) => {
         if (debugMode) {
@@ -95,6 +218,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
         if (!navigator.mediaDevices?.enumerateDevices) return;
         navigator.mediaDevices.enumerateDevices().then(devices => {
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            availableDevicesRef.current = videoDevices;
             setAvailableDevices(videoDevices);
             log('Enumerated video devices:', videoDevices.map(d => ({ deviceId: d.deviceId, label: d.label, groupId: d.groupId })));
         }).catch(err => log('enumerateDevices failed:', err));
@@ -103,34 +227,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
     useEffect(() => {
         refreshDevices();
     }, [refreshDevices]);
-
-    // Apply crop to fallback video when IR mode changes
-    useEffect(() => {
-        if (!isIRMode || !fallbackContainerRef.current) return;
-        
-        const applyCrop = () => {
-            const video = fallbackContainerRef.current?.querySelector('video');
-            if (video) {
-                video.style.position = 'absolute';
-                video.style.top = '0';
-                video.style.left = '0';
-                video.style.width = '100%';
-                video.style.height = '200%';
-                video.style.objectFit = 'cover';
-                video.style.transform = 'scaleY(0.5)';
-                video.style.transformOrigin = 'top center';
-            }
-        };
-        
-        // Try immediately
-        applyCrop();
-        
-        // Also watch for dynamically added video (html5-qrcode creates it async)
-        const observer = new MutationObserver(applyCrop);
-        observer.observe(fallbackContainerRef.current, { childList: true, subtree: true });
-        
-        return () => observer.disconnect();
-    }, [isIRMode]);
 
     const stopAll = useCallback(() => {
         cleanupRef.current?.();
@@ -144,10 +240,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
     }, []);
 
     useEffect(() => {
-        let fallbackHtml5Qrcode: Html5Qrcode | null = null;
         let cancelled = false;
+        let video: HTMLVideoElement | null = null;
 
         const start = async () => {
+            setIsFirstFrameReady(false);
             if (!window.isSecureContext) {
                 const msg = 'Camera yêu cầu HTTPS hoặc localhost. Đang truy cập qua HTTP IP — camera bị trình duyệt chặn.';
                 toast.error(msg);
@@ -170,11 +267,12 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
             if (selectedDeviceId) {
                 videoConstraints.deviceId = { exact: selectedDeviceId };
                 log('Using explicit deviceId:', selectedDeviceId);
-            } else if (!forceFallback) {
+            } else {
                 videoConstraints.facingMode = 'environment';
                 log('Using facingMode: environment');
             }
 
+            let zoomController: ReturnType<typeof createCameraZoomController> | null = null;
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: videoConstraints,
@@ -192,55 +290,70 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
                     facingMode: settings.facingMode,
                 });
 
-                const isIR = track.label && isIRCamera(track.label);
-                const deviceCount = availableDevices.length;
-                
-                // Heuristic: if only 1 device OR label suggests IR OR label is empty → likely laptop IR camera
-                const shouldCrop = isIR || deviceCount <= 1 || !track.label || track.label.trim() === '';
-                
-                if (shouldCrop && !selectedDeviceId && !autoSelected) {
-                    if (isIR) {
-                        log('Detected IR camera (label match), enabling crop mode');
-                    } else if (deviceCount <= 1) {
-                        log(`Only ${deviceCount} device(s) available, enabling crop mode (heuristic)`);
-                    } else if (!track.label || track.label.trim() === '') {
+                let cameraDevices = availableDevicesRef.current;
+                if (isIRCamera(track.label) && !selectedDeviceId && !autoSelected) {
+                    try {
+                        cameraDevices = (await navigator.mediaDevices.enumerateDevices())
+                            .filter(device => device.kind === 'videoinput');
+                    } catch {
+                        cameraDevices = availableDevicesRef.current;
+                    }
+                }
+
+                const selection = resolveCameraSelection({
+                    currentLabel: track.label,
+                    currentDeviceId: settings.deviceId,
+                    devices: cameraDevices,
+                    selectedDeviceId,
+                    autoSelected,
+                });
+
+                if (selection.action === 'switch') {
+                    log('Detected IR camera, switching to better camera:', {
+                        deviceId: selection.device.deviceId,
+                        label: selection.device.label,
+                    });
+                    setSelectedDeviceId(selection.device.deviceId);
+                    setAutoSelected(true);
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+
+                if (selection.action === 'crop') {
+                    if (isIRCamera(track.label)) {
+                        log('Detected IR camera, enabling crop mode');
+                    } else if (availableDevicesRef.current.length <= 1) {
+                        log(`Only ${availableDevicesRef.current.length} device(s) available, enabling crop mode (heuristic)`);
+                    } else if (!track.label.trim()) {
                         log('Camera label is empty, enabling crop mode (heuristic)');
                     }
-                    setIsIRMode(true);
-                } else if (isIR && !selectedDeviceId && !autoSelected) {
-                    log('Detected IR camera, trying to find RGB camera...');
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                    const best = pickBestDevice(videoDevices);
-                    if (best && best.deviceId !== settings.deviceId) {
-                        log('Switching to better camera:', { deviceId: best.deviceId, label: best.label });
-                        setSelectedDeviceId(best.deviceId);
-                        setAutoSelected(true);
-                        stream.getTracks().forEach(t => t.stop());
-                        return;
-                    }
-                    log('Only IR camera available, enabling crop mode');
                     setIsIRMode(true);
                 }
 
                 refreshDevices();
 
                 streamRef.current = stream;
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                }
+                video = videoRef.current;
+                if (!video) throw new Error('QR video element is unavailable');
+
+                video.srcObject = stream;
+                zoomController = createCameraZoomController(track, video, log);
+                await zoomController.initialise();
 
                 const hasNative = 'BarcodeDetector' in window;
                 if (hasNative && !forceFallback) {
-                    const ac = new AbortController();
-                    aborterRef.current = ac;
+                    const frameAborter = new AbortController();
+                    aborterRef.current = frameAborter;
+                    await waitForFirstUsableFrame(video, frameAborter.signal);
+                    setIsFirstFrameReady(true);
                     const stop = await tryBarcodeDetector(
-                        videoRef.current!,
-                        ac.signal,
+                        video,
+                        frameAborter.signal,
                         (text) => {
                             stopAll();
                             onScanSuccess(text);
                         },
+                        zoomController.observe,
                         () => {}
                     );
                     if (cancelled) return;
@@ -255,27 +368,35 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
             if (cancelled) return;
 
             setUseFallback(true);
-            log('Starting html5-qrcode fallback');
+            log('Starting ZXing fallback');
             try {
-                const Html5Qrcode = (await import('html5-qrcode')).Html5Qrcode;
+                if (!video) throw new Error('QR video element is unavailable');
+                const fallbackAborter = new AbortController();
+                aborterRef.current = fallbackAborter;
+                await waitForFirstUsableFrame(video, fallbackAborter.signal);
+                setIsFirstFrameReady(true);
+                const { BrowserQRCodeReader } = await import('@zxing/browser');
                 if (cancelled) return;
-                const html5QrCode = new Html5Qrcode('reader-fallback');
-                fallbackHtml5Qrcode = html5QrCode;
-                await html5QrCode.start(
-                    selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: 'environment' },
-                    { 
-                        fps: 10, 
-                        qrbox: (w: number, h: number) => ({ 
-                            width: Math.max(50, w), 
-                            height: Math.max(50, h) 
-                        }) 
-                    },
-                    (text: string) => {
+                if (!zoomController) throw new Error('Camera zoom controller is unavailable');
+                const reader = new BrowserQRCodeReader();
+                const controls = await reader.decodeFromVideoElement(video, (result, _error, callbackControls) => {
+                    const points = result?.getResultPoints?.() ?? [];
+                    if (points.length > 1) {
+                        const xs = points.map(point => point.getX());
+                        zoomController.observe({ width: Math.max(...xs) - Math.min(...xs) });
+                    }
+                    const text = result?.getText();
+                    if (text) {
+                        callbackControls.stop();
                         stopAll();
                         onScanSuccess(text);
-                    },
-                    () => {}
-                );
+                    }
+                });
+                if (cancelled) {
+                    controls.stop();
+                    return;
+                }
+                cleanupRef.current = () => controls.stop();
             } catch {
                 if (cancelled) return;
                 stopAll();
@@ -290,16 +411,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
         return () => {
             cancelled = true;
             stopAll();
-            if (fallbackHtml5Qrcode) {
-                const qr = fallbackHtml5Qrcode;
-                qr.stop().then(() => {
-                    qr.clear();
-                }).catch(() => {
-                    qr.clear();
-                });
-            }
         };
-    }, [onScanSuccess, onScanError, stopAll, forceFallback, selectedDeviceId, autoSelected, log, refreshDevices, retryKey, availableDevices.length]);
+    }, [onScanSuccess, onScanError, stopAll, forceFallback, selectedDeviceId, autoSelected, log, refreshDevices, retryKey]);
 
     const handleForceFallbackRetry = useCallback(() => {
         setSelectedDeviceId(null);
@@ -330,28 +443,13 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
 
     return (
         <div className="relative w-full h-full bg-black overflow-hidden">
-            {!useFallback && (
-                <>
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={videoStyle}
-                    />
-                    <div id="reader-fallback" className="absolute inset-0 w-full h-full hidden" />
-                </>
-            )}
-            {useFallback && (
-                <>
-                    <video ref={videoRef} className="hidden" />
-                    <div 
-                        id="reader-fallback" 
-                        ref={fallbackContainerRef}
-                        style={{ position: 'absolute', inset: 0 }}
-                    />
-                </>
-            )}
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ ...videoStyle, visibility: isFirstFrameReady ? 'visible' : 'hidden' }}
+            />
             
             {/* Debug panel */}
             {debugMode && availableDevices.length > 0 && (
@@ -373,7 +471,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, force
                         </select>
                     </div>
                     <div className="text-[10px] text-muted-foreground">
-                        Current: {useFallback ? 'Fallback (html5-qrcode)' : 'Native (BarcodeDetector)'}
+                        Current: {useFallback ? 'Fallback (ZXing)' : 'Native (BarcodeDetector)'}
                         {isIRMode && ' | IR Crop: ON'}
                     </div>
                     <button 

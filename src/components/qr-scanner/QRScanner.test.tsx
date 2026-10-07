@@ -5,30 +5,25 @@ import { createRoot, type Root } from 'react-dom/client';
 const {
     mockToastError,
     mockLoggerDebug,
-    mockHtml5Start,
-    mockHtml5Stop,
-    mockHtml5Clear,
-    MockHtml5Qrcode,
+    mockZxingDecode,
+    mockZxingStop,
+    MockBrowserQRCodeReader,
 } = vi.hoisted(() => {
     const mockToastError = vi.fn();
     const mockLoggerDebug = vi.fn();
-    const mockHtml5Start = vi.fn();
-    const mockHtml5Stop = vi.fn().mockResolvedValue(undefined);
-    const mockHtml5Clear = vi.fn();
+    const mockZxingDecode = vi.fn();
+    const mockZxingStop = vi.fn();
 
-    class Html5QrcodeMock {
-        start = mockHtml5Start;
-        stop = mockHtml5Stop;
-        clear = mockHtml5Clear;
+    class BrowserQRCodeReaderMock {
+        decodeFromVideoElement = mockZxingDecode;
     }
 
     return {
         mockToastError,
         mockLoggerDebug,
-        mockHtml5Start,
-        mockHtml5Stop,
-        mockHtml5Clear,
-        MockHtml5Qrcode: Html5QrcodeMock,
+        mockZxingDecode,
+        mockZxingStop,
+        MockBrowserQRCodeReader: BrowserQRCodeReaderMock,
     };
 });
 
@@ -45,11 +40,11 @@ vi.mock('@/lib/logger', () => ({
     },
 }));
 
-vi.mock('html5-qrcode', () => ({
-    Html5Qrcode: MockHtml5Qrcode,
+vi.mock('@zxing/browser', () => ({
+    BrowserQRCodeReader: MockBrowserQRCodeReader,
 }));
 
-import QRScanner from './QRScanner';
+import QRScanner, { createCameraZoomController, waitForFirstUsableFrame } from './QRScanner';
 
 type MockTrack = MediaStreamTrack & {
     stop: ReturnType<typeof vi.fn>;
@@ -160,6 +155,13 @@ describe('QRScanner', () => {
         originalBarcodeDetector = (window as Window & { BarcodeDetector?: unknown }).BarcodeDetector;
         setSecureContext(true);
         installMediaDevices();
+        Object.defineProperties(HTMLVideoElement.prototype, {
+            videoWidth: { configurable: true, value: 1280 },
+            videoHeight: { configurable: true, value: 720 },
+            clientWidth: { configurable: true, value: 640 },
+            clientHeight: { configurable: true, value: 480 },
+            readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+        });
         Reflect.deleteProperty(window, 'BarcodeDetector');
         container = document.createElement('div');
         document.body.appendChild(container);
@@ -194,6 +196,51 @@ describe('QRScanner', () => {
         return container;
     }
 
+    it('waits for rendered video geometry before allowing frame readiness', async () => {
+        const video = document.createElement('video');
+        let renderedWidth = 0;
+        const originalRequestFrame = window.requestAnimationFrame;
+        const originalCancelFrame = window.cancelAnimationFrame;
+        window.requestAnimationFrame = (callback: FrameRequestCallback) =>
+            window.setTimeout(() => callback(performance.now()), 0) as unknown as number;
+        window.cancelAnimationFrame = (id: number) => window.clearTimeout(id);
+        Object.defineProperties(video, {
+            videoWidth: { configurable: true, value: 1280 },
+            videoHeight: { configurable: true, value: 720 },
+            readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+            clientWidth: { configurable: true, get: () => renderedWidth },
+            clientHeight: { configurable: true, value: 480 },
+        });
+        const controller = new AbortController();
+        const ready = waitForFirstUsableFrame(video, controller.signal);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(renderedWidth).toBe(0);
+        renderedWidth = 640;
+        await ready;
+        window.requestAnimationFrame = originalRequestFrame;
+        window.cancelAnimationFrame = originalCancelFrame;
+    });
+
+    it('uses supported camera zoom and adapts when the QR is too small', async () => {
+        const track = {
+            getCapabilities: vi.fn(() => ({ zoom: { min: 1, max: 2, step: 0.1 } })),
+            getSettings: vi.fn(() => ({})),
+            applyConstraints: vi.fn().mockResolvedValue(undefined),
+        } as unknown as MediaStreamTrack;
+        const video = document.createElement('video');
+        Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1000 });
+        const controller = createCameraZoomController(track, video, vi.fn());
+
+        expect(controller.supported).toBe(true);
+        await controller.initialise();
+        controller.observe({ width: 600 });
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 2 }] });
+        expect(track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 1.9 }] });
+    });
+
     it('reports insecure-context errors without requesting camera access', async () => {
         setSecureContext(false);
         const mediaDevices = installMediaDevices();
@@ -220,7 +267,7 @@ describe('QRScanner', () => {
 
         await renderScanner({ onScanError });
 
-        expect(mockHtml5Start).not.toHaveBeenCalled();
+        expect(mockZxingDecode).not.toHaveBeenCalled();
         expect(onScanError).toHaveBeenCalledWith('Trình duyệt không hỗ trợ truy cập camera.');
         expect(mockToastError).toHaveBeenCalledWith('Trình duyệt không hỗ trợ truy cập camera.');
     });
@@ -232,9 +279,23 @@ describe('QRScanner', () => {
         });
         const onScanSuccess = vi.fn();
         const detect = vi.fn().mockResolvedValue([{ rawValue: '040123456789' }]);
+        Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', { configurable: true, value: 1280 });
+        Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', { configurable: true, value: 720 });
+        Object.defineProperty(HTMLVideoElement.prototype, 'clientWidth', { configurable: true, value: 640 });
+        Object.defineProperty(HTMLVideoElement.prototype, 'clientHeight', { configurable: true, value: 480 });
+        Object.defineProperty(HTMLVideoElement.prototype, 'readyState', { configurable: true, value: 4 });
+        const frameCallback = vi.fn((callback: (now: number, metadata: { mediaTime: number; expectedDisplayTime: number; width: number; height: number }) => void) => {
+            callback(0, { mediaTime: 0, expectedDisplayTime: 0, width: 1280, height: 720 });
+            return 1;
+        });
+        Object.defineProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback', {
+            configurable: true,
+            value: frameCallback,
+        });
 
+        let detectorInstances = 0;
         class BarcodeDetectorMock {
-            constructor(_options: unknown) {}
+            constructor(_options: unknown) { detectorInstances += 1; }
             detect = detect;
         }
 
@@ -254,36 +315,34 @@ describe('QRScanner', () => {
                 facingMode: 'environment',
             },
         });
+        expect(frameCallback).toHaveBeenCalled();
+        const video = container?.querySelector('video');
+        expect(video?.style.visibility).toBe('visible');
         expect(detect).toHaveBeenCalled();
+        expect(detectorInstances).toBe(1);
         expect(onScanSuccess).toHaveBeenCalledWith('040123456789');
         expect(track.stop).toHaveBeenCalled();
-        expect(mockHtml5Start).not.toHaveBeenCalled();
+        expect(mockZxingDecode).not.toHaveBeenCalled();
     });
 
-    it('falls back to html5-qrcode and forwards a successful scan', async () => {
+    it('uses ZXing fallback and forwards a successful scan', async () => {
         const { stream, track } = createVideoStream();
         installMediaDevices({
             getUserMedia: vi.fn().mockResolvedValue(stream),
         });
         const onScanSuccess = vi.fn();
 
-        mockHtml5Start.mockImplementationOnce(async (_camera, _config, onSuccess) => {
-            onSuccess('FALLBACK-QR-001');
+        mockZxingDecode.mockImplementationOnce(async (_video, onResult) => {
+            onResult({ getText: () => 'ZXING-QR-001' }, undefined, { stop: mockZxingStop });
+            return { stop: mockZxingStop };
         });
 
         await renderScanner({ forceFallback: true, onScanSuccess });
         await flushAsyncWork();
 
-        expect(mockHtml5Start).toHaveBeenCalledWith(
-            { facingMode: 'environment' },
-            expect.objectContaining({
-                fps: 10,
-                qrbox: expect.any(Function),
-            }),
-            expect.any(Function),
-            expect.any(Function)
-        );
-        expect(onScanSuccess).toHaveBeenCalledWith('FALLBACK-QR-001');
+        expect(mockZxingDecode).toHaveBeenCalledWith(expect.any(HTMLVideoElement), expect.any(Function));
+        expect(onScanSuccess).toHaveBeenCalledWith('ZXING-QR-001');
+        expect(mockZxingStop).toHaveBeenCalled();
         expect(track.stop).toHaveBeenCalled();
     });
 
@@ -294,29 +353,23 @@ describe('QRScanner', () => {
         });
         const onScanError = vi.fn();
 
-        mockHtml5Start.mockRejectedValueOnce(new Error('fallback failed'));
+        mockZxingDecode.mockRejectedValueOnce(new Error('fallback failed'));
 
         await renderScanner({ forceFallback: true, onScanError });
         await flushAsyncWork();
 
-        expect(mockHtml5Start).toHaveBeenCalled();
+        expect(mockZxingDecode).not.toHaveBeenCalled();
         expect(onScanError).toHaveBeenCalledWith('Không thể mở camera. Vui lòng kiểm tra quyền truy cập.');
         expect(mockToastError).toHaveBeenCalledWith('Không thể mở camera. Vui lòng kiểm tra quyền truy cập.');
     });
 
     it('stops fallback scanner resources during component unmount', async () => {
-        const { track } = createVideoStream();
+        const { stream, track } = createVideoStream();
         installMediaDevices({
-            getUserMedia: vi.fn().mockRejectedValue(new Error('native camera unavailable')),
+            getUserMedia: vi.fn().mockResolvedValue(stream),
         });
 
-        let resolveStart!: () => void;
-        mockHtml5Start.mockImplementationOnce(
-            () =>
-                new Promise<void>(resolve => {
-                    resolveStart = resolve;
-                })
-        );
+        mockZxingDecode.mockResolvedValueOnce({ stop: mockZxingStop });
 
         await renderScanner({ forceFallback: true });
         await flushAsyncWork();
@@ -326,10 +379,6 @@ describe('QRScanner', () => {
         });
         await flushAsyncWork();
 
-        expect(mockHtml5Stop).toHaveBeenCalled();
-        expect(mockHtml5Clear).toHaveBeenCalled();
-        expect(track.stop).not.toHaveBeenCalled();
-
-        resolveStart();
+        expect(track.stop).toHaveBeenCalled();
     });
 });

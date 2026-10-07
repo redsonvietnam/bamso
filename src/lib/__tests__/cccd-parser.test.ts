@@ -3,6 +3,7 @@ import { parseCCCDName, parseFullCCCDData } from '../cccd-parser';
 
 describe('cccd-parser', () => {
     const validQr = '012345678901|NGUYỄN VĂN A|01011990|Nam|Việt Nam|01012021';
+    const currentCccdQr = '012345678901||TRẦN THỊ B|02021992|Nữ|HÀ NỘI|02022022';
     const validQrWithSpaces = ' 012345678901 | NGUYỄN VĂN A | 01011990 | Nam | Việt Nam | 01012021 ';
 
     describe('parseCCCDName', () => {
@@ -12,6 +13,14 @@ describe('cccd-parser', () => {
 
         it('should handle extra spaces in the QR string', () => {
             expect(parseCCCDName(validQrWithSpaces)).toBe('NGUYỄN VĂN A');
+        });
+
+        it('should read the name from field[2] in the current seven-field CCCD format', () => {
+            expect(parseCCCDName(currentCccdQr)).toBe('TRẦN THỊ B');
+        });
+
+        it('should ignore a BOM and line endings around the QR payload', () => {
+            expect(parseCCCDName(`\uFEFF\r\n${currentCccdQr}\r\n`)).toBe('TRẦN THỊ B');
         });
 
         it('should return null if the string is empty', () => {
@@ -34,6 +43,15 @@ describe('cccd-parser', () => {
         it('should return null if the name field is empty', () => {
             expect(parseCCCDName('012345678901||01011990|Nam|Việt Nam|01012021')).toBeNull();
         });
+
+        it('should return null when the current-format name field is missing', () => {
+            expect(parseCCCDName('012345678901|| |02021992|Nữ|HÀ NỘI|02022022')).toBeNull();
+        });
+
+        it('should return null for a malformed payload instead of treating a field as a name', () => {
+            expect(parseCCCDName('not-an-id|RÁC|01011990|Nam|HÀ NỘI|01012021')).toBeNull();
+            expect(parseCCCDName('012345678901|RÁC')).toBeNull();
+        });
     });
 
     describe('parseFullCCCDData', () => {
@@ -47,6 +65,17 @@ describe('cccd-parser', () => {
                 issueDate: '01012021',
             };
             expect(parseFullCCCDData(validQr)).toEqual(expected);
+        });
+
+        it('should map the current seven-field format without treating old ID as the name', () => {
+            expect(parseFullCCCDData(currentCccdQr)).toEqual({
+                idNumber: '012345678901',
+                fullName: 'TRẦN THỊ B',
+                dateOfBirth: '02021992',
+                gender: 'Nữ',
+                nationality: 'HÀ NỘI',
+                issueDate: '02022022',
+            });
         });
 
         it('should return null if the format is invalid', () => {
