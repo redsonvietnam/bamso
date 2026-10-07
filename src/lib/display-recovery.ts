@@ -17,6 +17,36 @@ export type RecoveredDisplayEvent = {
     nextTicketNumber: string | null;
 };
 
+export type DisplayCallState = {
+    currentCalls: Record<string, { ticketNumber: string; pos: string; customerName?: string | null; timestamp: number }>;
+    lastCalledTicket: { ticketNumber: string; pos: string; customerName?: string | null; timestamp: number } | null;
+    counters: string[];
+};
+
+export function shouldAnnounceDisplayEvent(historicalReplay: boolean | undefined): boolean {
+    return historicalReplay !== true;
+}
+
+export function applyDisplayCallEvent(
+    state: DisplayCallState,
+    event: Pick<RecoveredDisplayEvent, 'ticketNumber' | 'pos' | 'customerName'>,
+    timestamp: number,
+): DisplayCallState {
+    const newCall = {
+        ticketNumber: event.ticketNumber,
+        pos: event.pos,
+        customerName: event.customerName,
+        timestamp,
+    };
+    return {
+        currentCalls: { ...state.currentCalls, [event.pos]: newCall },
+        lastCalledTicket: newCall,
+        counters: state.counters.includes(event.pos)
+            ? state.counters
+            : [...state.counters, event.pos].sort(),
+    };
+}
+
 /**
  * CORE-06: recover today's pending display events in deterministic presentation order.
  * The caller must emit the returned events before calling markDelivered().

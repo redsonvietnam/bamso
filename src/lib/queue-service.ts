@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 import { TicketStatus } from '@/lib/constants';
 import { writeAuditLog, AuditActor } from '@/lib/audit-service';
@@ -67,12 +68,22 @@ interface CallNextDisplayEventOptions {
     includeDisplayEvent: true;
 }
 
+type TicketWithService = Prisma.TicketGetPayload<{ include: { service: true } }>;
+
 /**
  * Calls the next pending ticket for a given service at a specific counter.
  * Uses a per-counter lock plus conditional updateMany to prevent race conditions.
  */
-export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor): Promise<any>;
-export async function callNextTicket(serviceId: string, pos: string, actor: AuditActor | undefined, options: CallNextDisplayEventOptions): Promise<any>;
+export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor): Promise<TicketWithService>;
+export async function callNextTicket(
+    serviceId: string,
+    pos: string,
+    actor: AuditActor | undefined,
+    options: CallNextDisplayEventOptions
+): Promise<{
+    ticket: TicketWithService;
+    displayEvent: Prisma.DisplayCallEventGetPayload<Prisma.DisplayCallEventDefaultArgs>;
+}>;
 export async function callNextTicket(serviceId: string, pos: string, actor?: AuditActor, options?: CallNextDisplayEventOptions) {
     return withPosLock(pos, async () => {
         const { startOfDay, endOfDay } = getTodayBounds();

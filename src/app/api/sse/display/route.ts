@@ -12,6 +12,7 @@ export async function GET() {
             for (const event of events) {
                 const payload = JSON.stringify({
                     type: 'DISPLAY_CALL',
+                    historicalReplay: true,
                     eventId: event.eventId,
                     ticketNumber: event.ticketNumber,
                     pos: event.pos,

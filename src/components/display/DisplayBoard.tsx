@@ -3,16 +3,23 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ticket } from '@prisma/client';
 import { TicketStatus } from '@/lib/constants';
-import { Users, Bell, Clock, WifiOff } from 'lucide-react';
+import { Users, Bell, Clock, WifiOff, Vibrate } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useSpeech } from '@/hooks/useSpeech';
 import { apiClient } from '@/lib/api-client';
+import { shouldAnnounceDisplayEvent } from '@/lib/display-recovery';
 import { logger } from '@/lib/logger';
 import { PageWatermark } from '@/components/ui/dong-son-motif';
-import { markDisplayCallEventSeen } from '@/lib/display-vibration';
+import {
+    loadDisplayVibrationPreference,
+    markDisplayCallEventSeen,
+    saveDisplayVibrationPreference,
+    vibrateDisplayCall,
+} from '@/lib/display-vibration';
 
 interface DisplayCallEvent {
     type: 'DISPLAY_CALL';
+    historicalReplay?: boolean;
     eventId?: string;
     ticketNumber: string;
     pos: string;
@@ -53,12 +60,21 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [agencyName, setAgencyName] = useState('CÔNG AN XÃ NÂM NUNG');
     const [time, setTime] = useState(new Date());
+    const [vibrationEnabled, setVibrationEnabled] = useState(false);
     const reduceMotion = useReducedMotion();
 
     const PREVIOUS_CALL_TTL = 60000;
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const { speakAnnouncement, speakPrepare } = useSpeech();
     const seenEventIds = useRef<Set<string>>(new Set());
+    const vibrationEnabledRef = useRef(false);
+
+    useEffect(() => {
+        const enabled = loadDisplayVibrationPreference();
+        vibrationEnabledRef.current = enabled;
+        const syncTimer = window.setTimeout(() => setVibrationEnabled(enabled), 0);
+        return () => window.clearTimeout(syncTimer);
+    }, []);
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -123,6 +139,9 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                 if (data.type === 'DISPLAY_CALL') {
                     if (data.eventId) {
                         if (!markDisplayCallEventSeen(data.eventId, seenEventIds.current)) return;
+                        if (!data.historicalReplay) {
+                            vibrateDisplayCall(vibrationEnabledRef.current);
+                        }
                     }
                     const newCall: CurrentCall = { ticketNumber: data.ticketNumber, pos: data.pos, customerName: data.customerName, timestamp: Date.now() };
                     setCurrentCalls(prev => ({ ...prev, [data.pos]: newCall }));
@@ -130,13 +149,15 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
 
                     setCounters(prev => prev.includes(data.pos) ? prev : [...prev, data.pos].sort());
 
-                    audioRef.current?.play().catch(() => {
-                        logger.warn('Audio autoplay blocked. Ensure browser is configured for autoplay in kiosk mode.');
-                    });
-                    speakAnnouncement(data.ticketNumber, data.pos);
+                    if (shouldAnnounceDisplayEvent(data.historicalReplay)) {
+                        audioRef.current?.play().catch(() => {
+                            logger.warn('Audio autoplay blocked. Ensure browser is configured for autoplay in kiosk mode.');
+                        });
+                        speakAnnouncement(data.ticketNumber, data.pos);
 
-                    if (data.nextTicketNumber) {
-                        speakPrepare(data.nextTicketNumber);
+                        if (data.nextTicketNumber) {
+                            speakPrepare(data.nextTicketNumber);
+                        }
                     }
 
                     setTimeout(() => setLastCalledTicket(null), 7000);
@@ -261,7 +282,7 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
     const timeStr = time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <div className={`relative flex flex-col ${compact ? 'h-full w-full' : 'h-screen w-screen'} bg-background text-foreground font-sans overflow-hidden selection:bg-[color:var(--display-accent-20)]`}>
+        <div className={`relative flex flex-col ${compact ? 'h-full w-full' : 'h-dvh w-screen'} bg-background text-foreground font-sans overflow-hidden selection:bg-[color:var(--display-accent-20)]`}>
             {/* Brand accent line */}
             <div className="absolute top-0 left-0 w-full h-2 bg-[color:var(--display-red)]" />
             {!compact && <PageWatermark className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[31.25rem] w-[31.25rem] opacity-[0.15]" />}
@@ -284,6 +305,25 @@ export default function DisplayBoard({ variant = 'full' }: DisplayBoardProps) {
                     </div>
                 </div>
                 <div className={`flex items-center gap-3 md:gap-6 shrink-0 ${compact ? 'min-w-0' : ''}`}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !vibrationEnabled;
+                            setVibrationEnabled(next);
+                            vibrationEnabledRef.current = next;
+                            saveDisplayVibrationPreference(next);
+                        }}
+                        className={`inline-flex items-center justify-center rounded-full border transition-colors ${compact ? 'h-7 w-7' : 'h-9 w-9'} ${
+                            vibrationEnabled
+                                ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)] text-foreground'
+                                : 'bg-white/70 border-border text-muted-foreground'
+                        }`}
+                        aria-label={vibrationEnabled ? 'Tắt rung khi gọi số' : 'Bật rung khi gọi số'}
+                        aria-pressed={vibrationEnabled}
+                        title={vibrationEnabled ? 'Tắt rung khi gọi số' : 'Bật rung khi gọi số'}
+                    >
+                        <Vibrate className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} aria-hidden="true" />
+                    </button>
                     <div className={`flex items-center gap-2 sticker rounded-full border transition-colors ${compact ? 'px-2 py-0.5' : 'px-2 py-0.5 md:px-3 md:py-1'} ${isConnected ? 'bg-[color:var(--display-accent-10)] border-[color:var(--display-accent-30)]' : 'bg-red-50 border-red-300'}`}>
                         <span className={`inline-block rounded-full ${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} ${isConnected ? 'bg-[color:var(--display-accent)] animate-pulse' : 'bg-red-500'}`} />
                         <span className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs'} font-bold uppercase tracking-widest ${isConnected ? 'text-foreground' : 'text-red-600'}`}>
