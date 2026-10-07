@@ -69,10 +69,13 @@ This checklist verifies that BAMSO can be deployed and operated on a real Window
 - [ ] `.env` file created from `.env.example`
 - [ ] `NODE_ENV=production` set
 - [ ] `JWT_SECRET` set to unique value (>= 32 chars, NOT dev value)
-- [ ] `DATABASE_URL` correct
+- [ ] Production `DATABASE_URL` supplied externally and verified
+- [ ] `DATABASE_URL` does **not** target `dev.db` or `prisma/dev.db`
 - [ ] `RATE_LIMIT_DISABLED` removed or set to `false`
 - [ ] `DEMO_MODE_ENABLED` removed or set to `false`
 - [ ] `.env` file permissions: only BAMSO account can read
+
+> **Current state:** the actual production `DATABASE_URL` remains unresolved. `scripts/start-production.ps1` now rejects obvious development database targets and defaults this startup path to production mode when `NODE_ENV` is unset.
 
 ### B3. Seed / Default Passwords
 
@@ -94,10 +97,15 @@ This checklist verifies that BAMSO can be deployed and operated on a real Window
 
 ### B5. Database
 
-- [ ] `prisma/dev.db` exists
+- [ ] Actual production database target identified on the production host
+- [ ] Production `DATABASE_URL` points to the approved production database and is not a development `dev.db` target
+- [ ] Production database has passed the required read-only schema/integrity preflight
+- [ ] Production database backup is created and verified before any migration
 - [ ] Database has correct schema
-- [ ] Database has seed data
-- [ ] `prisma/dev.db` permissions: BAMSO account only
+- [ ] Database has seed data as required
+- [ ] Database permissions: BAMSO account only
+
+> **Migration gate:** `20260923180827_adopt_actual_database_schema`, `20260923191500_reconcile_legacy_schema`, and `20260925072000_remove_ticket_phone` remain subject to production DB preflight and human approval.
 
 ---
 
@@ -280,9 +288,23 @@ This checklist verifies that BAMSO can be deployed and operated on a real Window
 
 ---
 
-## CODE-VERIFIED ITEMS (from WS-55B through WS-59)
+## CODE-VERIFIED ITEMS (historical WS-55B through WS-59 baseline)
 
-These items have been verified from source code, scripts, or unit tests:
+The checklist below is historical evidence from the earlier rehearsal workstream. It is not a current full-suite result.
+
+## CURRENT VERIFICATION SNAPSHOT — 2026-10-07
+
+- [x] Current production build passes: `npm run build`
+- [x] Current type check passes: `npm run type-check`
+- [x] Current recent-workstream focused suite passes: 13 files / 133 tests
+- [x] Current lint passes: `npm run lint` (0 errors, 0 warnings)
+- [x] Reproducible Prisma migration chain is committed; migration proof and data preservation passed locally
+- [ ] Full test suite is intermittently not green: `KioskQueuePeek.test.tsx` times out at 5000ms under full-suite parallel load (passes in isolation); `audit-service.test.ts` has a known shared-database isolation flake
+- [ ] Physical/on-site acceptance remains required
+- [ ] Phone/camera/LAN/TLS acceptance remains pending
+- [ ] Production host/database target remains unresolved
+
+The checklist below is historical evidence from the earlier rehearsal workstream:
 
 - [x] HTTPS server implementation (`server.js`)
 - [x] Certificate generation (`scripts/generate-cert.ps1`)
