@@ -19,10 +19,6 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
     let testServiceId: string;
 
     beforeEach(async () => {
-        // Clear audit logs and tickets created during tests
-        await prisma.auditLog.deleteMany({});
-        await prisma.ticket.deleteMany({});
-
         // Ensure at least one active test service exists
         const service = await prisma.service.upsert({
             where: { code: 'AUDIT_SVC' },
@@ -37,6 +33,9 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             },
         });
         testServiceId = service.id;
+
+        // Isolate cleanup to this test service; never delete another worker's data.
+        await prisma.ticket.deleteMany({ where: { serviceId: testServiceId } });
     });
 
     describe('Audit Helper & Metadata Sanitization', () => {
@@ -95,6 +94,11 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
 
     describe('Bounded reasonCode Validation', () => {
         it('persists valid reasonCodes including production codes CLIENT_ERROR and INTERNAL_ERROR', async () => {
+            // Remove leftovers from previous runs of this same test (scoped to its actor)
+            await prisma.auditLog.deleteMany({
+                where: { actorId: 'u-1', reasonCode: { in: ['CLIENT_ERROR', 'INTERNAL_ERROR'] } },
+            });
+
             const clientErrRecord = await writeAuditLog(prisma, {
                 actor: { actorType: 'USER', actorId: 'u-1', actorRole: 'STAFF' },
                 action: 'CALL_NEXT',
@@ -116,13 +120,20 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             expect(internalErrRecord?.reasonCode).toBe('INTERNAL_ERROR');
 
             const dbLogs = await prisma.auditLog.findMany({
-                where: { reasonCode: { in: ['CLIENT_ERROR', 'INTERNAL_ERROR'] } },
+                where: {
+                    reasonCode: { in: ['CLIENT_ERROR', 'INTERNAL_ERROR'] },
+                    actorId: 'u-1',
+                },
             });
             expect(dbLogs).toHaveLength(2);
         });
 
         it('rejects invalid reasonCode and does not persist to database', async () => {
-            const initialCount = await prisma.auditLog.count();
+            const scopedCount = () =>
+                prisma.auditLog.count({
+                    where: { reasonCode: 'ARBITRARY_UNALLOWED_REASON_CODE' },
+                });
+            const initialCount = await scopedCount();
 
             await expect(
                 writeAuditLog(prisma, {
@@ -135,7 +146,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
                 })
             ).rejects.toThrow(/Invalid audit reasonCode: ARBITRARY_UNALLOWED_REASON_CODE/);
 
-            const postCount = await prisma.auditLog.count();
+            const postCount = await scopedCount();
             expect(postCount).toBe(initialCount);
         });
     });
@@ -213,8 +224,10 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
 
             await callNextTicket(testServiceId, 'Quầy 1', staffActor);
 
-            // Clear audit log from ticket1 call
-            await prisma.auditLog.deleteMany({});
+            // Clear audit log from ticket1 call (scoped — never wipe other workers' rows)
+            await prisma.auditLog.deleteMany({
+                where: { entityId: { in: [ticket1.id, ticket2.id] } },
+            });
 
             // Calling next will auto-complete ticket1 at Quầy 1 and claim ticket2
             const called2 = await callNextTicket(testServiceId, 'Quầy 1', staffActor);
@@ -224,8 +237,10 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const updated1 = await prisma.ticket.findUnique({ where: { id: ticket1.id } });
             expect(updated1?.status).toBe(TicketStatus.COMPLETED);
 
-            // Audit verification
-            const logs = await prisma.auditLog.findMany();
+            // Audit verification (scoped to this test's tickets)
+            const logs = await prisma.auditLog.findMany({
+                where: { entityId: { in: [ticket1.id, ticket2.id] } },
+            });
             expect(logs).toHaveLength(1); // Only ONE audit log emitted
 
             const callNextLog = logs[0];
@@ -240,7 +255,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
 
             // Crucial assertion: no separate COMPLETE action logged
             const completeLogs = await prisma.auditLog.findMany({
-                where: { action: 'COMPLETE' },
+                where: { action: 'COMPLETE', entityId: { in: [ticket1.id, ticket2.id] } },
             });
             expect(completeLogs).toHaveLength(0);
         });
@@ -251,7 +266,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const ticket = await createTicket({ serviceId: testServiceId });
             await callNextTicket(testServiceId, 'Quầy 2');
 
-            await prisma.auditLog.deleteMany({});
+            await prisma.auditLog.deleteMany({ where: { entityId: ticket.id } });
 
             const staffActor: AuditActor = {
                 actorType: 'USER',
@@ -276,7 +291,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const ticket = await createTicket({ serviceId: testServiceId });
             await callNextTicket(testServiceId, 'Quầy 3');
 
-            await prisma.auditLog.deleteMany({});
+            await prisma.auditLog.deleteMany({ where: { entityId: ticket.id } });
 
             const staffActor: AuditActor = {
                 actorType: 'USER',
@@ -307,7 +322,7 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
                 data: { status: TicketStatus.MISSED },
             });
 
-            await prisma.auditLog.deleteMany({});
+            await prisma.auditLog.deleteMany({ where: { entityId: ticket.id } });
 
             const staffActor: AuditActor = {
                 actorType: 'USER',
@@ -359,12 +374,18 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             const oldDate = new Date();
             oldDate.setDate(now.getDate() - 400); // 400 days old
 
-            // Insert old record directly
+            // Remove leftovers from previous runs of this same test (scoped to its markers)
+            await prisma.auditLog.deleteMany({
+                where: { entityId: { in: ['purge-old', 'purge-recent'] } },
+            });
+
+            // Insert old record directly (scoped marker — worker-safe)
             await prisma.auditLog.create({
                 data: {
                     actorType: 'SYSTEM',
                     action: 'LOGIN',
                     entityType: 'AUTH',
+                    entityId: 'purge-old',
                     success: true,
                     createdAt: oldDate,
                 },
@@ -376,20 +397,23 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
                     actorType: 'SYSTEM',
                     action: 'LOGIN',
                     entityType: 'AUTH',
+                    entityId: 'purge-recent',
                     success: true,
                     createdAt: now,
                 },
             });
 
-            const initialCount = await prisma.auditLog.count();
+            const purgeScope = { entityId: { in: ['purge-old', 'purge-recent'] } };
+            const initialCount = await prisma.auditLog.count({ where: purgeScope });
             expect(initialCount).toBe(2);
 
             // Execute 365-day purge
             const result = await purgeAuditLogs({ olderThanDays: 365 });
             expect(result.deletedCount).toBe(1);
 
-            const remaining = await prisma.auditLog.findMany();
+            const remaining = await prisma.auditLog.findMany({ where: purgeScope });
             expect(remaining).toHaveLength(1);
+            expect(remaining[0].entityId).toBe('purge-recent');
             expect(remaining[0].createdAt.getTime()).toBeCloseTo(now.getTime(), -3);
         });
     });
@@ -406,8 +430,10 @@ describe('Audit Logging System (WS-BAMSO-AUDIT-LOGGING-01)', () => {
             await callNextTicket(testServiceId, 'Quầy 1');
             await completeTicket(ticket.id);
 
-            // Fetch all audit rows
-            const logs = await prisma.auditLog.findMany();
+            // Fetch audit rows created by this test only (scoped — worker-safe)
+            const logs = await prisma.auditLog.findMany({
+                where: { entityId: ticket.id },
+            });
             expect(logs.length).toBeGreaterThanOrEqual(3);
 
             const allSerialized = JSON.stringify(logs);
