@@ -11,6 +11,6 @@ export async function GET() {
     } catch (error) {
         logger.error('Database connection failed:', error);
         // Return a 500 status code if the database connection fails
-        return NextResponse.json({ ok: false, db: 'disconnected', error: (error as Error).message }, { status: 500 });
+        return NextResponse.json({ ok: false, db: 'disconnected', error: 'Database unavailable' }, { status: 500 });
     }
 }

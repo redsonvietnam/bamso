@@ -51,9 +51,17 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // Certificate paths — PFX (preferred) or PEM pair
 const PFX_PATH = process.env.HTTPS_PFX_PATH || path.join(process.cwd(), 'certs', 'bamso.pfx');
-const PFX_PASSWORD = process.env.HTTPS_PFX_PASSWORD || 'bamso2026';
+const PFX_PASSWORD = process.env.HTTPS_PFX_PASSWORD;
 const KEY_PATH = process.env.HTTPS_KEY_PATH || path.join(process.cwd(), 'certs', 'localhost-key.pem');
 const CERT_PATH = process.env.HTTPS_CERT_PATH || path.join(process.cwd(), 'certs', 'localhost.pem');
+const BUILD_ID_PATH = path.join(process.cwd(), '.next', 'BUILD_ID');
+const BUILD_ID = (() => {
+  try {
+    return fs.readFileSync(BUILD_ID_PATH, 'utf8').trim() || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 
 // --- Production startup security checks ---
 function validateProductionSecrets() {
@@ -79,9 +87,10 @@ function validateProductionSecrets() {
     process.exit(1);
   }
 
-  // Warn about default PFX password
-  if (PFX_PASSWORD === 'bamso2026') {
-    log.warn('WARNING: HTTPS_PFX_PASSWORD is the default value. Set a unique password for production.');
+  // PFX certificates must have an explicitly configured production password.
+  if (fs.existsSync(PFX_PATH) && !PFX_PASSWORD) {
+    log.error('FATAL: HTTPS_PFX_PASSWORD is required when the production PFX certificate is used.');
+    process.exit(1);
   }
 }
 
@@ -115,6 +124,7 @@ function loadCredentials() {
 validateProductionSecrets();
 
 app.prepare().then(() => {
+  log.info(`BAMSO Next build identity: ${BUILD_ID}`);
   const credentials = loadCredentials();
   const servers = [];
 

@@ -52,9 +52,58 @@ try {
 Write-Host ""
 Write-Host "Step 2: Checking environment..." -ForegroundColor Yellow
 
+# --- NODE_ENV HARDENING ---
+# Production startup must run in production mode.
+# If NODE_ENV is explicitly set to development, fail closed.
 $nodeEnv = $env:NODE_ENV
-if (-not $nodeEnv) { $nodeEnv = "development" }
-Write-Host "  NODE_ENV: $nodeEnv" -ForegroundColor Gray
+if ($nodeEnv -eq "development") {
+    Write-Host "  FATAL: NODE_ENV must be 'production' for production startup." -ForegroundColor Red
+    Write-Host "  Set NODE_ENV=production or use 'npm run dev' for development." -ForegroundColor Gray
+    exit 1
+} elseif (-not $nodeEnv) {
+    # If NODE_ENV not set, default to production for this startup path
+    $nodeEnv = "production"
+    Write-Host "  NODE_ENV: production (default for production startup)" -ForegroundColor Green
+} else {
+    # NODE_ENV is set to something other than development/production; proceed but log it
+    Write-Host "  NODE_ENV: $nodeEnv" -ForegroundColor Gray
+}
+
+# --- DATABASE_URL REQUIREMENT ---
+if ($nodeEnv -eq "production") {
+    $dbUrl = $env:DATABASE_URL
+    if (-not $dbUrl) {
+        Write-Host "  FATAL: DATABASE_URL is required for production startup." -ForegroundColor Red
+        Write-Host "  Production DATABASE_URL must be set as an environment variable." -ForegroundColor Gray
+        exit 1
+    }
+
+# Reject development database targets. Normalize slash direction first.
+# SQLite file URLs are matched by their path; bare relative dev.db paths are
+# also rejected, while non-SQLite URLs are left untouched.
+$dbUrlNormalized = $dbUrl.Trim().ToLower().Replace([char]92, [char]47)
+$isDevDb = $false
+if ($dbUrlNormalized.StartsWith("file:")) {
+    $sqlitePath = $dbUrlNormalized.Substring(5)
+    $normalizedSqlitePath = $sqlitePath.TrimStart("./")
+    $isDevDb = $normalizedSqlitePath -eq "dev.db" -or
+        $normalizedSqlitePath -eq "prisma/dev.db"
+} elseif ($dbUrlNormalized -eq "dev.db" -or
+    $dbUrlNormalized -eq "./dev.db" -or
+    $dbUrlNormalized -eq "prisma/dev.db") {
+    $isDevDb = $true
+}
+
+if ($isDevDb) {
+        Write-Host "  FATAL: production DATABASE_URL must not target the development database." -ForegroundColor Red
+        Write-Host "  DATABASE_URL must point to a production database, not dev.db." -ForegroundColor Gray
+        exit 1
+    }
+
+    Write-Host "  DATABASE_URL: configured" -ForegroundColor Green
+} else {
+    Write-Host "  DATABASE_URL: $(if ($env:DATABASE_URL) { 'configured' } else { 'not set (development mode)' })" -ForegroundColor Gray
+}
 
 $jwtSecret = $env:JWT_SECRET
 if ($nodeEnv -eq "production") {
@@ -92,18 +141,16 @@ if ($hasPfx) {
     Write-Host "  Run: powershell -ExecutionPolicy Bypass -File scripts/generate-cert.ps1" -ForegroundColor Gray
 }
 
-# --- Step 4: Check database ---
+# --- Step 4: Safe database configuration logging ---
 Write-Host ""
-Write-Host "Step 4: Checking database..." -ForegroundColor Yellow
+Write-Host "Step 4: Validating database configuration..." -ForegroundColor Yellow
 
-$dbPath = Join-Path $ProjectRoot "prisma\dev.db"
-if (Test-Path $dbPath) {
-    $dbSize = (Get-Item $dbPath).Length
-    Write-Host "  Database: $dbPath ($dbSize bytes)" -ForegroundColor Green
-} else {
-    Write-Host "  WARNING: Database not found at $dbPath" -ForegroundColor Yellow
-    Write-Host "  The server will start but may fail on first request." -ForegroundColor Yellow
-}
+# DATABASE_URL validation already performed in Step 2 (Phase 2-3).
+# No need to re-check prisma\dev.db file — that was misleading;
+# we now validate the actual DATABASE_URL environment variable.
+# Log only that configuration is validated; never print the URL value.
+Write-Host "  DATABASE_URL: configured" -ForegroundColor Green
+Write-Host "  Production database configuration validated" -ForegroundColor Green
 
 # --- Step 5: Check port availability ---
 Write-Host ""
