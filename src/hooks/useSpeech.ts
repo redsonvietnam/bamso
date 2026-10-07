@@ -3,19 +3,7 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { logger } from '@/lib/logger';
 import { apiClient } from '@/lib/api-client';
-
-const DIGIT_MAP: Record<string, string> = {
-    '0': 'không',
-    '1': 'một',
-    '2': 'hai',
-    '3': 'ba',
-    '4': 'bốn',
-    '5': 'năm',
-    '6': 'sáu',
-    '7': 'bảy',
-    '8': 'tám',
-    '9': 'chín',
-};
+import { formatTextForSpeech, formatTemplateMessage } from '@/lib/tts-service';
 
 export interface TtsSettings {
     tts_enabled: string;
@@ -133,29 +121,6 @@ export function useSpeech() {
             setSettings(s);
             settingsRef.current = s;
         });
-    }, []);
-
-    /**
-     * Định dạng văn bản: Chỉ xử lý các CHỮ SỐ (0-9), giữ nguyên chữ cái và dấu câu.
-     * - "A001" → "A không không một" (số được tách từng chữ số)
-     * - "Mời số A001 đến Quầy 1" → "Mời số A không không một đến Quầy một" (chữ vẫn liên tục)
-     */
-    const formatTextForSpeech = (text: string) => {
-        return text.replace(/\d+/g, (digitBlock) => {
-            return digitBlock
-                .split('')
-                .map((digit) => DIGIT_MAP[digit])
-                .join(' ');
-        });
-    };
-
-    /**
-     * Áp dụng template để tạo câu thông báo.
-     */
-    const applyTemplate = useCallback((template: string, ticketNumber: string, pos: string) => {
-        return template
-            .replace('{ticketNumber}', ticketNumber)
-            .replace('{pos}', pos);
     }, []);
 
     /**
@@ -284,9 +249,9 @@ export function useSpeech() {
      */
     const speakAnnouncement = useCallback((ticketNumber: string, pos: string) => {
         const template = settingsRef.current.tts_announcement_template || DEFAULT_TTS_SETTINGS.tts_announcement_template;
-        const text = applyTemplate(template, ticketNumber, pos);
+        const text = formatTemplateMessage(template, { ticketNumber, pos });
         speak(text);
-    }, [speak, applyTemplate]);
+    }, [speak]);
 
     /**
      * Phát thông báo chuẩn bị đến lượt.

@@ -29,8 +29,8 @@ export function loadStaffSelection(userId: string): StoredSelection | null {
             parsed === null ||
             typeof parsed.serviceId !== 'string' ||
             typeof parsed.pos !== 'string' ||
-            parsed.serviceId.length === 0 ||
-            parsed.pos.length === 0
+            parsed.serviceId.trim().length === 0 ||
+            parsed.pos.trim().length === 0
         ) {
             clearStaffSelection(userId);
             return null;

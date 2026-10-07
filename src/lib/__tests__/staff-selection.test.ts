@@ -83,4 +83,11 @@ describe('staff-selection persistence', () => {
         const result = loadStaffSelection(userId);
         expect(result).toEqual({ serviceId: 'svc-2', pos: 'Counter 2' });
     });
+
+    it('rejects whitespace-only service and position values', () => {
+        setStoredValue(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify({ serviceId: '   ', pos: '\\t\\n' }));
+        const result = loadStaffSelection(userId);
+        expect(result).toBeNull();
+        expect(localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`)).toBeNull();
+    });
 });

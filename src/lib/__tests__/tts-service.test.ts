@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { formatNumberForTTS, formatTemplateMessage, loadTTSSettings, DEFAULT_TTS_SETTINGS } from '@/lib/tts-service';
+import {
+  formatNumberForTTS,
+  formatTemplateMessage,
+  formatTextForSpeech,
+  loadTTSSettings,
+  DEFAULT_TTS_SETTINGS,
+} from '@/lib/tts-service';
 import { apiClient } from '@/lib/api-client';
 
 vi.mock('@/lib/api-client', () => ({
@@ -40,7 +46,7 @@ describe('formatNumberForTTS', () => {
     expect(formatNumberForTTS('5')).toBe('năm');
   });
 
-  it('replaces each digit in multi-digit numbers', () => {
+  it('keeps the generic number formatter digit-by-digit', () => {
     expect(formatNumberForTTS('12')).toBe('một hai');
   });
 
@@ -58,6 +64,36 @@ describe('formatNumberForTTS', () => {
 
   it('returns text unchanged when no digits', () => {
     expect(formatNumberForTTS('ABC')).toBe('ABC');
+  });
+});
+
+describe('formatTextForSpeech ticket pronunciation', () => {
+  it.each([
+    ['A18', 'a mười tám'],
+    ['A20', 'a hai mươi'],
+    ['A21', 'a hai mươi mốt'],
+    ['B34', 'bê ba mươi tư'],
+    ['A11', 'a mười một'],
+    ['A14', 'a mười bốn'],
+    ['A15', 'a mười lăm'],
+    ['A24', 'a hai mươi tư'],
+    ['A25', 'a hai mươi lăm'],
+    ['A0', 'a không'],
+    ['A7', 'a bảy'],
+    ['A10', 'a mười'],
+    ['A30', 'a ba mươi'],
+    ['A99', 'a chín mươi chín'],
+  ])('reads ticket code %s naturally', (input, expected) => {
+    expect(formatTextForSpeech(input)).toBe(expected);
+  });
+
+  it('keeps the existing digit-by-digit pronunciation', () => {
+    expect(formatTextForSpeech('Số 120')).toBe('Số một hai không');
+  });
+
+  it('uses an explicit fallback for unknown and mixed prefixes', () => {
+    expect(formatTextForSpeech('C12')).toBe('mã C một hai');
+    expect(formatTextForSpeech('AB12')).toBe('mã AB một hai');
   });
 });
 
@@ -81,6 +117,39 @@ describe('formatTemplateMessage', () => {
     const msg = formatTemplateMessage('Số {ticketNumber} mời đến {pos}', { ticketNumber: 'A001', pos: 'Quầy 1' });
     expect(msg).toContain('A001');
     expect(msg).toContain('Quầy 1');
+  });
+
+  it.each(['1', 'quầy 1', 'Quầy số 1', 'Q1'])('normalizes counter value %s without duplicating quầy', (pos) => {
+    const msg = formatTemplateMessage('Mời số {ticketNumber} đến quầy {pos} để phục vụ', {
+      ticketNumber: 'A001',
+      pos,
+    });
+
+    expect(msg).toContain('A001');
+    expect(msg).toContain('Quầy 1');
+    expect(msg.match(/quầy/gi)).toHaveLength(1);
+  });
+
+  it('gives a bare counter number exactly one quầy in the default announcement template', () => {
+    const msg = formatTemplateMessage('Mời số {ticketNumber} đến {pos} để phục vụ', {
+      ticketNumber: 'A12',
+      pos: '1',
+    });
+
+    expect(msg).toBe('Mời số A12 đến Quầy 1 để phục vụ');
+    expect(msg.match(/quầy/gi)).toHaveLength(1);
+  });
+
+  it('keeps one quầy after full TTS formatting', () => {
+    const msg = formatTextForSpeech(
+      formatTemplateMessage('Mời số {ticketNumber} đến {pos} để phục vụ', {
+        ticketNumber: 'A12',
+        pos: 'Q1',
+      })
+    );
+
+    expect(msg).toBe('Mời số a mười hai đến Quầy một để phục vụ');
+    expect(msg.match(/quầy/gi)).toHaveLength(1);
   });
 
   it('returns template unchanged when data is empty', () => {
