@@ -13,7 +13,7 @@
 
 ## Canonical Git State
 
-- **Active branch:** `agent/bamso-core06-audit-snapshot-20261005` (pushed to origin through `fcdf562`).
+- **Active branch:** `agent/bamso-core06-audit-snapshot-20261005` (pushed to origin through `16e7ad0`).
 - The working tree may contain multiple workstreams; do not infer that every dirty file belongs to the customer/kiosk/UI workstream.
 - Current source and tests are authoritative over historical handoff commit references.
 
@@ -75,6 +75,13 @@ npx prisma studio    # Visual DB browser
 - Test stderr still contains React act(...) warnings in UI tests; they do not fail tests.
 - No physical phone/kiosk/camera/vibration/TTS hardware UAT was performed.
 - **Classification:** snapshot verified (code/tests/build/lint) · **production pending** · **physical UAT pending**.
+
+### Fresh verification — 2026-10-08 (skip P2002 fix + E2E full green)
+
+- `skipTicket` bulk `position:{increment}` → SQLite unique-index transient **P2002** with ≥2 pending contiguous tickets; fixed with per-row **descending** shift — commit `d1a2777`, regression test `48f7751`.
+- E2E script had stale `CUSTOMER_PHONE` assertions (phone column removed in `a03b8da`) — `16e7ad0`.
+- Gates: full suite **625/625 GREEN**, lint 0, type-check 0, build PASS, `node scratch/e2e-test.mjs` **FULL PASS** (Lấy số → Gọi số → Bỏ qua → Gọi lại → Hoàn tất + PII 4a–4d).
+- **Local env hazard:** this machine's `:6379` is a black-hole listener (svchost, no real Redis). An awaited `redis.publish` never settles → skip/restore routes stall ~5 min. `.env` (gitignored) has `REDIS_HOST` commented out locally → single-instance fail-open mode as designed. With real Redis configured, `broadcastQueueUpdate` still has no publish timeout (known gap, Redis deferred per ROADMAP).
 
 ### UAT / stale-runtime handling
 
