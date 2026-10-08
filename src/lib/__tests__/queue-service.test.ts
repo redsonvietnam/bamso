@@ -322,19 +322,34 @@ describe('skipTicket', () => {
         mockedPrisma.settings.findUnique.mockResolvedValueOnce(null);
         mockedPrisma.ticket.findMany.mockResolvedValueOnce(otherPending);
         mockedPrisma.ticket.updateMany
-            .mockResolvedValueOnce({ count: 3 }) // đẩy lùi các vé position >= targetPos
-            .mockResolvedValueOnce({ count: 1 }); // guard update vé đang skip
+            .mockResolvedValueOnce({ count: 1 }) // p3: 5 → 6 (shift GIẢM DẦN — tránh P2002 unique tạm thời)
+            .mockResolvedValueOnce({ count: 1 }) // p2: 4 → 5
+            .mockResolvedValueOnce({ count: 1 }); // guard update vé đang skip → position 4
         mockedPrisma.ticket.findUnique.mockResolvedValueOnce(finalTicket);
 
         const result = await skipTicket('t1');
 
         expect(result).toEqual(finalTicket);
-        // targetPos phải bằng position của vé thứ pushBackBy (index 0) + 1 = 3 + 1 = 4
+        // targetPos = position vé thứ pushBackBy (index 0) + 1 = 4; shift từng dòng giảm dần
         expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({
-                where: expect.objectContaining({ position: { gte: 4 } }),
-                data: { position: { increment: 1 } },
+                where: expect.objectContaining({ id: 'p3' }),
+                data: { position: 6 },
+            })
+        );
+        expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: expect.objectContaining({ id: 'p2' }),
+                data: { position: 5 },
+            })
+        );
+        expect(mockedPrisma.ticket.updateMany).toHaveBeenNthCalledWith(
+            3,
+            expect.objectContaining({
+                where: { id: 't1', status: TicketStatus.CALLED },
+                data: expect.objectContaining({ position: 4, status: TicketStatus.PENDING }),
             })
         );
     });
