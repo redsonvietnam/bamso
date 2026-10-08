@@ -79,16 +79,15 @@ async function runTests() {
         await new Promise(r => setTimeout(r, 500));
 
         // 4. Tạo một vé mới (Lấy số nhanh) — hành động này trigger broadcastQueueUpdate
+        //    (Ticket không còn trường phone từ a03b8da — PII còn lại cần check là customerName)
         console.log('\n🔄 4. Giả lập khách hàng lấy số mới (trong lúc SSE đang lắng nghe)...');
         const CUSTOMER_NAME = 'Kiểm thử tự động';
-        const CUSTOMER_PHONE = '0909999999';
         const ticketRes = await fetch(`${BASE_URL}/api/tickets`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 serviceId: serviceA.id,
-                customerName: CUSTOMER_NAME,
-                phone: CUSTOMER_PHONE
+                customerName: CUSTOMER_NAME
             })
         });
         const ticket = await ticketRes.json();
@@ -106,12 +105,12 @@ async function runTests() {
                 `không thể kết luận việc redact có hoạt động hay không (test không có ý nghĩa nếu không bắt được sự kiện thật).`
             );
         }
-        if (anonSseBuffer.includes(CUSTOMER_NAME) || anonSseBuffer.includes(CUSTOMER_PHONE)) {
+        if (anonSseBuffer.includes(CUSTOMER_NAME)) {
             throw new Error(
-                `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName/phone thật của khách trong broadcast của vé ${ticket.id}.`
+                `❌ LEAK PII qua SSE! Stream ẩn danh chứa customerName thật của khách trong broadcast của vé ${ticket.id}.`
             );
         }
-        console.log(`   👉 OK — SSE ẩn danh nhận được broadcast của vé (đã bắt được event thật) và không lộ PII (${anonSseBuffer.length} ký tự).`);
+        console.log(`   👉 OK — SSE ẩn danh nhận được broadcast của vé (đã bắt được event thật) và không lộ customerName (${anonSseBuffer.length} ký tự).`);
 
         // 4b. [PII TEST] SSE với quyền STAFF: PHẢI thấy vé VÀ PHẢI thấy PII thật (regression
         //     check chống over-redaction — không chỉ REST mà cả SSE cũng phải phân biệt theo role).
@@ -122,12 +121,12 @@ async function runTests() {
                 `không thể kết luận việc redact có hoạt động đúng theo role hay không.`
             );
         }
-        if (!staffSseBuffer.includes(CUSTOMER_NAME) || !staffSseBuffer.includes(CUSTOMER_PHONE)) {
+        if (!staffSseBuffer.includes(CUSTOMER_NAME)) {
             throw new Error(
-                `❌ OVER-REDACT qua SSE! STAFF lẽ ra phải thấy PII thật qua SSE nhưng bị ẩn trong broadcast của vé ${ticket.id}.`
+                `❌ OVER-REDACT qua SSE! STAFF lẽ ra phải thấy customerName thật qua SSE nhưng bị ẩn trong broadcast của vé ${ticket.id}.`
             );
         }
-        console.log(`   👉 OK — SSE STAFF nhận được broadcast của vé và vẫn thấy đầy đủ customerName/phone thật (${staffSseBuffer.length} ký tự).`);
+        console.log(`   👉 OK — SSE STAFF nhận được broadcast của vé và vẫn thấy customerName thật (${staffSseBuffer.length} ký tự).`);
 
         // 4c. [PII TEST] Anonymous GET /api/tickets KHÔNG được thấy customerName/phone
         console.log('\n🔄 4c. [PII] Kiểm tra GET /api/tickets ẩn danh (không cookie)...');
@@ -141,13 +140,13 @@ async function runTests() {
         if (!anonTicket) {
             throw new Error('Không tìm thấy vé vừa tạo trong response GET /api/tickets ẩn danh — không thể verify redaction.');
         }
-        if (anonTicket.customerName === CUSTOMER_NAME || anonTicket.phone === CUSTOMER_PHONE) {
+        if (anonTicket.customerName === CUSTOMER_NAME) {
             throw new Error(
-                `❌ LEAK PII! Anonymous GET /api/tickets vẫn trả customerName/phone thật: ` +
-                JSON.stringify({ customerName: anonTicket.customerName, phone: anonTicket.phone })
+                `❌ LEAK PII! Anonymous GET /api/tickets vẫn trả customerName thật: ` +
+                JSON.stringify({ customerName: anonTicket.customerName })
             );
         }
-        console.log(`   👉 OK — anonymous thấy customerName=${JSON.stringify(anonTicket.customerName)}, phone=${JSON.stringify(anonTicket.phone)} (đã redact)`);
+        console.log(`   👉 OK — anonymous thấy customerName=${JSON.stringify(anonTicket.customerName)} (đã redact)`);
 
         // 4d. [PII TEST] STAFF GET /api/tickets PHẢI vẫn thấy customerName/phone thật
         //     (regression check — đảm bảo redact đúng theo role, không redact luôn cho STAFF/ADMIN)
@@ -164,13 +163,13 @@ async function runTests() {
         if (!staffTicket) {
             throw new Error('Không tìm thấy vé vừa tạo trong response GET /api/tickets (STAFF).');
         }
-        if (staffTicket.customerName !== CUSTOMER_NAME || staffTicket.phone !== CUSTOMER_PHONE) {
+        if (staffTicket.customerName !== CUSTOMER_NAME) {
             throw new Error(
-                `❌ OVER-REDACT! STAFF lẽ ra phải thấy PII thật nhưng bị ẩn: ` +
-                JSON.stringify({ customerName: staffTicket.customerName, phone: staffTicket.phone })
+                `❌ OVER-REDACT! STAFF lẽ ra phải thấy customerName thật nhưng bị ẩn: ` +
+                JSON.stringify({ customerName: staffTicket.customerName })
             );
         }
-        console.log('   👉 OK — STAFF vẫn thấy đầy đủ customerName/phone như thiết kế.');
+        console.log('   👉 OK — STAFF vẫn thấy đầy đủ customerName như thiết kế.');
 
         // 5. Cán bộ gọi số tiếp theo (Call Next)
         console.log('\n🔄 5. Cán bộ Quầy 5 bấm "Gọi số tiếp theo" (Call Next)...');
