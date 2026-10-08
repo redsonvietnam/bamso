@@ -313,17 +313,25 @@ export async function skipTicket(ticketId: string, actor?: AuditActor) {
                 const targetTicket = pendingTickets[pushBackBy - 1];
                 targetPos = targetTicket.position + 1;
 
-                await tx.ticket.updateMany({
-                    where: {
-                        serviceId: ticket.serviceId,
-                        status: TicketStatus.PENDING,
-                        dayKey,
-                        position: { gte: targetPos },
-                        id: { not: ticketId },
-                        createdAt: { gte: startOfDay, lte: endOfDay },
-                    },
-                    data: { position: { increment: 1 } },
-                });
+                // Shift row-by-row in DESCENDING position order. A bulk
+                // `position + 1` update makes SQLite check the
+                // (serviceId, dayKey, position) unique index per row and can
+                // throw P2002 on a transient duplicate before the higher row
+                // has moved out of the way.
+                const toShift = pendingTickets
+                    .filter((t) => t.position >= targetPos)
+                    .sort((a, b) => b.position - a.position);
+                for (const pending of toShift) {
+                    await tx.ticket.updateMany({
+                        where: {
+                            id: pending.id,
+                            status: TicketStatus.PENDING,
+                            serviceId: ticket.serviceId,
+                            dayKey,
+                        },
+                        data: { position: pending.position + 1 },
+                    });
+                }
             }
 
             const result = await tx.ticket.updateMany({
